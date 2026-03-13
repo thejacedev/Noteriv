@@ -1,0 +1,249 @@
+/* ─── Frontmatter Editor ─── */
+
+.fm-editor {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+/* "Add properties" button when no frontmatter exists */
+.fm-add-frontmatter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.fm-add-frontmatter-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+/* Header row */
+.fm-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.fm-header:hover {
+  background: var(--bg-hover);
+}
+
+.fm-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.fm-chevron-open {
+  transform: rotate(90deg);
+}
+
+.fm-header-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.fm-header-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 18px;
+  margin-left: auto;
+}
+
+/* Body / properties list */
+.fm-body {
+  padding: 4px 0 8px;
+}
+
+.fm-empty {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Individual property row */
+.fm-property {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px 3px 16px;
+  min-height: 28px;
+  transition: background 0.1s;
+}
+
+.fm-property:hover {
+  background: var(--bg-hover);
+}
+
+.fm-property:hover .fm-delete-btn {
+  opacity: 1;
+}
+
+.fm-property-key {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 70px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fm-property-value-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.fm-property-value {
+  display: block;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: text;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-height: 20px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.fm-property-value:hover {
+  background: var(--bg-primary);
+}
+
+.fm-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.fm-property-input {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  line-height: 20px;
+  outline: none;
+  font-family: inherit;
+}
+
+/* Delete button */
+.fm-delete-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.fm-delete-btn:hover {
+  color: #e53e3e;
+  background: var(--bg-primary);
+}
+
+/* Add property button */
+.fm-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 16px;
+  margin-top: 2px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+  width: 100%;
+}
+
+.fm-add-btn:hover {
+  color: var(--accent);
+}
+
+/* Add new property row */
+.fm-add-row {
+  position: relative;
+  padding: 4px 12px 4px 16px;
+}
+
+.fm-new-key-input {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.fm-new-key-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Suggestions dropdown */
+.fm-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  right: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.fm-suggestion-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.fm-suggestion-item:hover {
+  background: var(--bg-hover);
+}

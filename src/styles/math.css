@@ -1,0 +1,81 @@
+/* ─── KaTeX Math Rendering ─── */
+
+/* Inline math: rendered KaTeX inside the editor */
+.md-math-rendered {
+  display: inline;
+}
+
+.md-math-rendered .katex {
+  font-size: 1em;
+  color: var(--text-primary);
+}
+
+.md-math-rendered .katex-display {
+  margin: 0;
+  padding: 0;
+}
+
+/* Inline math widget */
+.math-inline-widget {
+  display: inline;
+  vertical-align: baseline;
+}
+
+.math-inline-widget .katex {
+  font-size: 1em;
+  color: var(--text-primary);
+}
+
+/* Block math widget */
+.math-block-widget {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.5em 0;
+  margin: 0.25em 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mauve, #cba6f7) 4%, transparent);
+}
+
+.math-block-widget .katex-display {
+  margin: 0;
+  padding: 0;
+}
+
+.math-block-widget .katex {
+  font-size: 1.1em;
+  color: var(--text-primary);
+}
+
+/* Error state for invalid LaTeX */
+.math-error {
+  display: inline-block;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  color: var(--red, #f38ba8);
+  background: color-mix(in srgb, var(--red, #f38ba8) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red, #f38ba8) 20%, transparent);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+}
+
+.math-error-indicator {
+  margin-right: 0.3em;
+  opacity: 0.7;
+}
+
+/* KaTeX color overrides for dark theme */
+.math-inline-widget .katex .mord,
+.math-block-widget .katex .mord {
+  color: var(--text-primary);
+}
+
+.math-inline-widget .katex .mrel,
+.math-block-widget .katex .mrel {
+  color: var(--accent, #89b4fa);
+}
+
+.math-inline-widget .katex .mop,
+.math-block-widget .katex .mop {
+  color: var(--mauve, #cba6f7);
+}

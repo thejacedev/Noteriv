@@ -1,0 +1,542 @@
+/* ─── Canvas (Infinite Whiteboard) ─── */
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  user-select: none;
+}
+
+/* Dot-grid background */
+.canvas-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.canvas-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.canvas-viewport.is-connecting {
+  cursor: crosshair;
+}
+
+/* Transform layer: all nodes live inside this */
+.canvas-transform {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* ─── Toolbar ─── */
+.canvas-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.canvas-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-size: 13px;
+}
+
+.canvas-toolbar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.canvas-toolbar-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.canvas-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.canvas-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.canvas-toolbar-zoom {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.canvas-toolbar-zoom:hover {
+  color: var(--text-primary);
+}
+
+/* ─── Nodes (shared) ─── */
+.canvas-node {
+  position: absolute;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.12s;
+  cursor: move;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.canvas-node:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+}
+
+.canvas-node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.canvas-node.is-dragging {
+  opacity: 0.88;
+  z-index: 50;
+}
+
+/* ─── Text Node ─── */
+.canvas-node-text .canvas-node-body {
+  flex: 1;
+  padding: 10px 12px;
+  overflow: auto;
+}
+
+.canvas-node-text .canvas-node-body textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  cursor: text;
+}
+
+.canvas-node-text .canvas-node-body .node-text-display {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  min-height: 20px;
+}
+
+/* ─── File Node ─── */
+.canvas-node-file .canvas-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: move;
+}
+
+.canvas-node-file .canvas-node-header svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.canvas-node-file .canvas-node-header .file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node-file .canvas-node-body {
+  flex: 1;
+  padding: 8px 10px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Group Node ─── */
+.canvas-node-group {
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  box-shadow: none;
+  z-index: -1;
+}
+
+.canvas-node-group.selected {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
+.canvas-node-group .canvas-group-label {
+  position: absolute;
+  top: -24px;
+  left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  background: var(--bg-surface);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: text;
+  white-space: nowrap;
+}
+
+.canvas-node-group .canvas-group-label input {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+  width: auto;
+  min-width: 40px;
+}
+
+/* Colored nodes */
+.canvas-node[data-color="red"]    { border-color: #e55; background: rgba(238,85,85,0.08); }
+.canvas-node[data-color="orange"] { border-color: #e93; background: rgba(238,153,51,0.08); }
+.canvas-node[data-color="yellow"] { border-color: #ec5; background: rgba(238,204,85,0.08); }
+.canvas-node[data-color="green"]  { border-color: #5b5; background: rgba(85,187,85,0.08); }
+.canvas-node[data-color="blue"]   { border-color: #58c; background: rgba(85,136,204,0.08); }
+.canvas-node[data-color="purple"] { border-color: #a6e; background: rgba(170,102,238,0.08); }
+
+.canvas-node-group[data-color="red"]    { border-color: #e55; background: rgba(238,85,85,0.04); }
+.canvas-node-group[data-color="orange"] { border-color: #e93; background: rgba(238,153,51,0.04); }
+.canvas-node-group[data-color="yellow"] { border-color: #ec5; background: rgba(238,204,85,0.04); }
+.canvas-node-group[data-color="green"]  { border-color: #5b5; background: rgba(85,187,85,0.04); }
+.canvas-node-group[data-color="blue"]   { border-color: #58c; background: rgba(85,136,204,0.04); }
+.canvas-node-group[data-color="purple"] { border-color: #a6e; background: rgba(170,102,238,0.04); }
+
+/* ─── Resize Handles ─── */
+.canvas-resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border: 2px solid var(--bg-surface);
+  border-radius: 3px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.canvas-node.selected .canvas-resize-handle {
+  opacity: 1;
+}
+
+.canvas-resize-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+.canvas-resize-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+.canvas-resize-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+.canvas-resize-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+
+/* ─── Edge Connection Points (hot zones on node edges) ─── */
+.canvas-edge-anchor {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-surface);
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: crosshair;
+}
+
+.canvas-node:hover .canvas-edge-anchor,
+.canvas-node.selected .canvas-edge-anchor {
+  opacity: 0.7;
+}
+
+.canvas-edge-anchor:hover {
+  opacity: 1 !important;
+  transform: scale(1.3);
+}
+
+.canvas-edge-anchor.top    { top: -7px; left: calc(50% - 7px); }
+.canvas-edge-anchor.bottom { bottom: -7px; left: calc(50% - 7px); }
+.canvas-edge-anchor.left   { left: -7px; top: calc(50% - 7px); }
+.canvas-edge-anchor.right  { right: -7px; top: calc(50% - 7px); }
+
+/* ─── SVG Edges ─── */
+.canvas-edges-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.canvas-edge-line {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  fill: none;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.canvas-edge-line:hover {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.canvas-edge-line.selected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.canvas-edge-arrowhead {
+  fill: var(--text-muted);
+}
+
+.canvas-edge-line:hover + .canvas-edge-arrowhead,
+.canvas-edge-line.selected + .canvas-edge-arrowhead {
+  fill: var(--accent);
+}
+
+.canvas-edge-label {
+  font-size: 11px;
+  fill: var(--text-secondary);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* In-progress edge being drawn */
+.canvas-edge-drawing {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  fill: none;
+  pointer-events: none;
+}
+
+/* ─── Context Menu ─── */
+.canvas-context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.canvas-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.canvas-context-item:hover {
+  background: var(--bg-hover);
+}
+
+.canvas-context-item.danger {
+  color: #e55;
+}
+
+.canvas-context-item.danger:hover {
+  background: rgba(238,85,85,0.1);
+}
+
+.canvas-context-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.canvas-context-submenu {
+  display: flex;
+  gap: 4px;
+  padding: 4px 10px;
+}
+
+.canvas-color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.canvas-color-dot:hover {
+  transform: scale(1.25);
+}
+
+.canvas-color-dot.active {
+  border-color: var(--text-primary);
+}
+
+/* ─── File Picker Overlay ─── */
+.canvas-file-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+
+.canvas-file-picker-inner {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 400px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.canvas-file-picker-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.canvas-file-picker-header input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.canvas-file-picker-header input::placeholder {
+  color: var(--text-muted);
+}
+
+.canvas-file-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.canvas-file-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.canvas-file-picker-item:hover,
+.canvas-file-picker-item.active {
+  background: var(--bg-hover);
+}
+
+.canvas-file-picker-item .file-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ─── Minimap ─── */
+.canvas-minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 90;
+  width: 160px;
+  height: 100px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.canvas-minimap:hover {
+  opacity: 1;
+}
+
+.canvas-minimap-node {
+  position: absolute;
+  background: var(--text-muted);
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+.canvas-minimap-viewport {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}

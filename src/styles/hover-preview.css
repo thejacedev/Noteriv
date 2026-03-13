@@ -1,0 +1,102 @@
+/* ─── Hover Preview ─── */
+
+.hp-container {
+  position: fixed;
+  z-index: 9500;
+  width: 320px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 12px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  pointer-events: auto;
+  animation: hp-fade-in 0.12s ease;
+}
+
+@keyframes hp-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--bg-hover) 50%, var(--bg-surface));
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hp-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.hp-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  min-height: 40px;
+  max-height: 220px;
+}
+
+.hp-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.hp-body::-webkit-scrollbar-thumb {
+  background: rgba(205, 214, 244, 0.1);
+  border-radius: 4px;
+}
+
+.hp-preview-text {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.hp-loading {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+  padding: 4px 0;
+}
+
+.hp-not-found {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+  padding: 4px 0;
+}

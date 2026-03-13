@@ -1,0 +1,79 @@
+{
+  "name": "noteriv",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main/main.js",
+  "scripts": {
+    "dev:next": "next dev --port 3456",
+    "dev:electron": "wait-on http://localhost:3456 && electron .",
+    "dev": "concurrently --kill-others \"npm run dev:next\" \"npm run dev:electron\"",
+    "build": "next build && electron-builder",
+    "build:next": "next build",
+    "start": "electron .",
+    "lint": "eslint"
+  },
+  "build": {
+    "appId": "com.noteriv.app",
+    "productName": "Noteriv",
+    "files": [
+      "main/**/*",
+      ".next/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office"
+    }
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1008.0",
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.2",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.39.16",
+    "@lezer/highlight": "^1.2.3",
+    "@replit/codemirror-vim": "^6.3.0",
+    "concurrently": "^9.2.1",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
+    "electron-serve": "^3.0.1",
+    "katex": "^0.16.38",
+    "mermaid": "^11.13.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "wait-on": "^9.0.4",
+    "webdav": "^5.9.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/katex": "^0.16.8",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

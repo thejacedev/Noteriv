@@ -1,0 +1,60 @@
+/* ─── Split Pane ─── */
+
+.split-pane-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.split-pane-container.split-horizontal {
+  flex-direction: row;
+}
+
+.split-pane-container.split-vertical {
+  flex-direction: column;
+}
+
+.split-pane-panel {
+  overflow: hidden;
+  position: relative;
+}
+
+/* Divider */
+.split-pane-divider {
+  flex-shrink: 0;
+  background: var(--border);
+  transition: background 0.15s ease;
+  position: relative;
+  z-index: 10;
+}
+
+/* Horizontal (side by side): divider is a vertical bar */
+.split-horizontal > .split-pane-divider {
+  width: 4px;
+  cursor: col-resize;
+}
+
+/* Vertical (top/bottom): divider is a horizontal bar */
+.split-vertical > .split-pane-divider {
+  height: 4px;
+  cursor: row-resize;
+}
+
+.split-pane-divider:hover,
+.split-pane-divider-active {
+  background: var(--accent);
+}
+
+/* Prevent text selection and pointer events on panels while dragging */
+.split-dragging {
+  user-select: none;
+}
+
+.split-dragging .split-pane-panel {
+  pointer-events: none;
+}
+
+.split-dragging .split-pane-divider {
+  background: var(--accent);
+}

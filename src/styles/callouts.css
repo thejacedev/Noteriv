@@ -1,0 +1,103 @@
+/* ── Callout / Admonition Styles ── */
+
+/* Line-level styling applied to all callout lines (header + body) */
+.cm-callout-line {
+  border-left: 4px solid var(--callout-color, var(--accent));
+  background: color-mix(in srgb, var(--callout-color, var(--accent)) 8%, transparent);
+  padding-left: 0.75em !important;
+}
+
+/* Header line (first line of callout) */
+.cm-callout-line.cm-callout-line-header {
+  border-radius: 6px 6px 0 0;
+  padding-top: 0.25em;
+}
+
+/* Body lines */
+.cm-callout-line.cm-callout-line-body {
+  border-radius: 0;
+}
+
+/* Last body line gets bottom radius — handled via adjacent sibling */
+.cm-callout-line.cm-callout-line-body:not(:has(+ .cm-callout-line)) {
+  border-radius: 0 0 6px 6px;
+  padding-bottom: 0.25em;
+}
+
+/* When a header has no body lines, round all corners */
+.cm-callout-line.cm-callout-line-header:not(:has(+ .cm-callout-line-body)) {
+  border-radius: 6px;
+  padding-bottom: 0.25em;
+}
+
+/* Collapsed body lines */
+.cm-callout-line.cm-callout-collapsed {
+  display: none;
+}
+
+/* ── Callout Header Widget ── */
+
+.cm-callout-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-weight: 600;
+}
+
+.cm-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.cm-callout-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cm-callout-title {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.cm-callout-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  padding: 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.cm-callout-fold:hover {
+  opacity: 1;
+  background: rgba(205, 214, 244, 0.08);
+}
+
+/* ── Callout Body Widget ── */
+
+.cm-callout-body-text {
+  display: inline;
+  color: var(--text-secondary, #a6adc8);
+  line-height: 1.7;
+}
+
+/* ── Color reference ──
+   All callout colors are applied dynamically via the
+   --callout-color CSS variable set inline per line:
+
+   Blue:   #89b4fa (note, info, todo, abstract)
+   Green:  #a6e3a1 (tip, hint, success)
+   Purple: #cba6f7 (important, example)
+   Yellow: #f9e2af (warning, caution, question)
+   Red:    #f38ba8 (danger, error, bug, failure)
+   Gray:   #a6adc8 (quote)
+*/

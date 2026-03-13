@@ -1,0 +1,326 @@
+/* ─── Audio Recorder Modal ─── */
+
+.ar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.ar-modal {
+  width: 440px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+
+.ar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ar-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ar-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Body ── */
+
+.ar-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 20px;
+  gap: 20px;
+}
+
+/* ── Waveform canvas ── */
+
+.ar-waveform {
+  width: 100%;
+  height: 80px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+/* ── Timer display ── */
+
+.ar-timer {
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  letter-spacing: 0.04em;
+}
+
+/* ── Recording indicator ── */
+
+.ar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ar-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ar-status-dot-recording {
+  background: var(--red);
+  animation: ar-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Controls row ── */
+
+.ar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ar-record-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--red);
+  background: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  position: relative;
+}
+
+.ar-record-btn:hover {
+  background: rgba(243, 139, 168, 0.1);
+}
+
+.ar-record-btn:active {
+  transform: scale(0.95);
+}
+
+.ar-record-inner {
+  width: 24px;
+  height: 24px;
+  background: var(--red);
+  border-radius: 50%;
+  transition: border-radius 0.2s, width 0.2s, height 0.2s;
+}
+
+.ar-record-btn-active .ar-record-inner {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+/* ── Playback preview section ── */
+
+.ar-playback {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ar-playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ar-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  color: var(--bg-primary);
+  flex-shrink: 0;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.ar-play-btn:hover {
+  background: var(--accent-hover);
+}
+
+.ar-play-btn:active {
+  transform: scale(0.95);
+}
+
+.ar-seek-bar {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ar-seek-bar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+
+.ar-playback-time {
+  font-size: 12px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  color: var(--text-muted);
+  min-width: 38px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Action buttons (Save / Discard) ── */
+
+.ar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ar-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+}
+
+.ar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ar-btn-save {
+  background: var(--green);
+  color: var(--bg-primary);
+}
+
+.ar-btn-save:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ar-btn-discard {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.ar-btn-discard:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Error display ── */
+
+.ar-error {
+  font-size: 12px;
+  color: var(--red);
+  text-align: center;
+  padding: 4px 8px;
+  background: rgba(243, 139, 168, 0.08);
+  border-radius: 6px;
+  width: 100%;
+}
+
+/* ── Permission prompt ── */
+
+.ar-permission {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.ar-permission-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.ar-permission-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ar-permission-btn:hover {
+  background: var(--accent-hover);
+}

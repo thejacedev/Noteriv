@@ -1,0 +1,35 @@
+/* ─── Wiki Links ─── */
+
+.wl-link {
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: all 0.12s ease;
+  padding: 0 1px;
+}
+
+.wl-link:hover {
+  color: var(--accent-hover, var(--accent));
+  border-bottom-style: solid;
+  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 2px;
+}
+
+.wl-resolved {
+  color: var(--accent);
+}
+
+.wl-unresolved {
+  color: var(--text-muted);
+  opacity: 0.7;
+  border-bottom-style: dotted;
+  border-bottom-color: color-mix(in srgb, var(--text-muted) 40%, transparent);
+}
+
+.wl-unresolved:hover {
+  color: var(--text-secondary);
+  opacity: 1;
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  border-bottom-color: var(--text-muted);
+}

@@ -1,0 +1,340 @@
+/* ─── File Recovery Modal ─── */
+
+.fr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  display: flex;
+  justify-content: center;
+  padding-top: 8vh;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.fr-modal {
+  width: 720px;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+/* ── Header ── */
+
+.fr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(205, 214, 244, 0.06);
+  flex-shrink: 0;
+}
+
+.fr-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fr-header-left svg {
+  color: var(--accent);
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.fr-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fr-file-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: rgba(205, 214, 244, 0.04);
+  border-radius: 4px;
+}
+
+.fr-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.fr-close-btn:hover {
+  color: var(--text-primary);
+  background: rgba(205, 214, 244, 0.06);
+}
+
+/* ── Body (split panes) ── */
+
+.fr-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Snapshot list pane ── */
+
+.fr-list-pane {
+  width: 260px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(205, 214, 244, 0.06);
+}
+
+.fr-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(205, 214, 244, 0.04);
+  flex-shrink: 0;
+}
+
+.fr-list-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.fr-list-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.fr-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.fr-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.fr-list::-webkit-scrollbar-thumb {
+  background: rgba(205, 214, 244, 0.1);
+  border-radius: 4px;
+}
+
+/* Snapshot item */
+
+.fr-snapshot-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.08s ease;
+  gap: 6px;
+}
+
+.fr-snapshot-item:hover {
+  background: rgba(205, 214, 244, 0.06);
+  color: var(--text-primary);
+}
+
+.fr-snapshot-item.fr-snapshot-active {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-primary);
+}
+
+.fr-snapshot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fr-snapshot-date {
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.fr-snapshot-time {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.fr-snapshot-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.fr-snapshot-age {
+  /* inherits from meta */
+}
+
+.fr-snapshot-size {
+  /* inherits from meta */
+}
+
+.fr-snapshot-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.fr-snapshot-item:hover .fr-snapshot-delete {
+  opacity: 0.5;
+}
+
+.fr-snapshot-delete:hover {
+  opacity: 1 !important;
+  color: var(--red);
+  background: rgba(243, 139, 168, 0.08);
+}
+
+/* ── Preview pane ── */
+
+.fr-preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fr-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(205, 214, 244, 0.04);
+  flex-shrink: 0;
+}
+
+.fr-preview-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.fr-restore-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.fr-restore-btn:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.fr-restore-btn svg {
+  flex-shrink: 0;
+}
+
+.fr-preview-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  min-height: 0;
+}
+
+.fr-preview-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.fr-preview-content::-webkit-scrollbar-thumb {
+  background: rgba(205, 214, 244, 0.1);
+  border-radius: 4px;
+}
+
+.fr-preview-text {
+  font-size: 12px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.fr-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ── Empty state ── */
+
+.fr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  gap: 4px;
+}
+
+.fr-empty-hint {
+  font-size: 11px;
+  opacity: 0.7;
+}
