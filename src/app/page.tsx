@@ -469,32 +469,40 @@ export default function Home() {
   // Tab / editor operations
   // ============================================================
 
-  const openFile = useCallback(async (filePath: string) => {
-    // Check if already open using current state via ref
-    let alreadyOpen = false;
-    setTabs((prev) => {
-      if (prev.some((t) => t.filePath === filePath)) {
-        alreadyOpen = true;
-        return prev; // no change
-      }
-      return prev; // will add below after reading
-    });
+  const openingFilesRef = useRef(new Set<string>());
 
-    if (alreadyOpen) {
+  const openFile = useCallback(async (filePath: string) => {
+    // Already being opened — block duplicate calls
+    if (openingFilesRef.current.has(filePath)) {
       setActiveTab(filePath);
       return;
     }
 
-    if (!window.electronAPI) return;
-    const fileContent = await window.electronAPI.readFile(filePath);
-    if (fileContent === null) return;
-
+    // Check current tabs via functional updater (always up to date)
+    let found = false;
     setTabs((prev) => {
-      // Double-check to prevent race conditions
-      if (prev.some((t) => t.filePath === filePath)) return prev;
-      return [...prev, { filePath, content: fileContent, savedContent: fileContent }];
+      found = prev.some((t) => t.filePath === filePath);
+      return prev;
     });
-    setActiveTab(filePath);
+    if (found) {
+      setActiveTab(filePath);
+      return;
+    }
+
+    openingFilesRef.current.add(filePath);
+    try {
+      if (!window.electronAPI) return;
+      const fileContent = await window.electronAPI.readFile(filePath);
+      if (fileContent === null) return;
+
+      setTabs((prev) => {
+        if (prev.some((t) => t.filePath === filePath)) return prev;
+        return [...prev, { filePath, content: fileContent, savedContent: fileContent }];
+      });
+      setActiveTab(filePath);
+    } finally {
+      openingFilesRef.current.delete(filePath);
+    }
   }, []);
 
   const closeTab = useCallback((filePath: string) => {
