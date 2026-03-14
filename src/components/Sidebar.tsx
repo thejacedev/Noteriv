@@ -23,6 +23,7 @@ interface SidebarProps {
   onExpandedFoldersChange: (folders: string[]) => void;
   fileOrder: Record<string, string[]>;
   onFileOrderChange: (order: Record<string, string[]>) => void;
+  refreshTrigger?: number;
 }
 
 interface ContextMenuData {
@@ -307,6 +308,7 @@ export default function Sidebar({
   onExpandedFoldersChange,
   fileOrder,
   onFileOrderChange,
+  refreshTrigger,
 }: SidebarProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -326,7 +328,8 @@ export default function Sidebar({
 
   useEffect(() => {
     refreshEntries();
-  }, [refreshEntries]);
+    setRefreshKey((k) => k + 1);
+  }, [refreshEntries, refreshTrigger]);
 
   const toggleFolder = useCallback((folderPath: string) => {
     onExpandedFoldersChange(
@@ -487,7 +490,7 @@ export default function Sidebar({
     const success = entry.isDirectory
       ? await window.electronAPI.deleteDir(entry.path)
       : await window.electronAPI.deleteFile(entry.path);
-    if (success) { onFileDelete(entry.path); await refreshEntries(); }
+    if (success) { onFileDelete(entry.path); await refreshEntries(); setRefreshKey((k) => k + 1); }
   }, [onFileDelete, refreshEntries]);
 
   const handleNewFileIn = useCallback(async (dirPath: string) => {

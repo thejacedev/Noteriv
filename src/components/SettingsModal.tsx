@@ -154,7 +154,6 @@ export default function SettingsModal({
         </div>
       </Row>
       <div className="st-divider" />
-      <div className="st-group-label">Theme</div>
       <ThemePicker
         currentThemeId={settings.theme}
         vaultPath={vaultPath}
@@ -515,7 +514,7 @@ export default function SettingsModal({
         </svg>
       </div>
 
-      <div className="st-ecosystem-card" style={{ opacity: 0.5, cursor: "default" }}>
+      <div className="st-ecosystem-card" onClick={() => setActive("appearance")}>
         <div className="st-ecosystem-icon">
           <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
@@ -526,6 +525,9 @@ export default function SettingsModal({
           <span className="st-ecosystem-title">Community Themes</span>
           <span className="st-ecosystem-desc">Browse and install community themes. Available in Appearance &gt; Theme.</span>
         </div>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="st-ecosystem-arrow">
+          <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </div>
     </div>
   );

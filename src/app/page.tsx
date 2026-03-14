@@ -87,6 +87,7 @@ export default function Home() {
   // UI
   const [viewMode, setViewMode] = useState<ViewMode>("live");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [fileOrder, setFileOrder] = useState<Record<string, string[]>>({});
   const [platform, setPlatform] = useState("linux");
@@ -117,10 +118,13 @@ export default function Home() {
   const [showCSSSnippets, setShowCSSSnippets] = useState(false);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
+  const [pluginUITick, setPluginUITick] = useState(0);
   const pluginManagerRef = useRef<PluginManager | null>(null);
 
   // Editor view ref (for formatting commands)
   const editorViewRef = useRef<EditorView | null>(null);
+  const contentRef = useRef<string>("");
+  const activeTabRef = useRef<string | null>(null);
 
   // Sync status
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -142,6 +146,8 @@ export default function Home() {
   const currentTab = tabs.find((t) => t.filePath === activeTab) || null;
   const content = currentTab?.content || "";
   const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
+  contentRef.current = content;
+  activeTabRef.current = activeTab;
 
   const tabInfos = tabs.map((t) => ({
     filePath: t.filePath,
@@ -267,7 +273,37 @@ export default function Home() {
 
         // Initialize plugin manager
         try {
-          const pm = new PluginManager(vault.path, () => null);
+          const pm = new PluginManager(vault.path, () => {
+            const view = editorViewRef.current;
+            return {
+              content: contentRef.current,
+              currentFile: activeTabRef.current,
+              insertAtCursor: (text: string) => {
+                if (!view) return;
+                const pos = view.state.selection.main.head;
+                view.dispatch({ changes: { from: pos, insert: text } });
+              },
+              getSelection: () => {
+                if (!view) return "";
+                return view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
+              },
+              replaceSelection: (text: string) => {
+                if (!view) return;
+                view.dispatch(view.state.replaceSelection(text));
+              },
+              getCursorPosition: () => {
+                if (!view) return { line: 0, ch: 0 };
+                const pos = view.state.selection.main.head;
+                const line = view.state.doc.lineAt(pos);
+                return { line: line.number, ch: pos - line.from };
+              },
+              setContent: (newContent: string) => {
+                if (!view) return;
+                view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: newContent } });
+              },
+            };
+          });
+          pm.setUIChangeHandler(() => setPluginUITick((t) => t + 1));
           pluginManagerRef.current = pm;
           await pm.loadAllEnabled();
           setPluginInstances(pm.getPlugins());
@@ -431,9 +467,17 @@ export default function Home() {
   // ============================================================
 
   const openFile = useCallback(async (filePath: string) => {
-    // If already open, just switch to it
-    const existing = tabs.find((t) => t.filePath === filePath);
-    if (existing) {
+    // Check if already open using current state via ref
+    let alreadyOpen = false;
+    setTabs((prev) => {
+      if (prev.some((t) => t.filePath === filePath)) {
+        alreadyOpen = true;
+        return prev; // no change
+      }
+      return prev; // will add below after reading
+    });
+
+    if (alreadyOpen) {
       setActiveTab(filePath);
       return;
     }
@@ -442,9 +486,13 @@ export default function Home() {
     const fileContent = await window.electronAPI.readFile(filePath);
     if (fileContent === null) return;
 
-    setTabs((prev) => [...prev, { filePath, content: fileContent, savedContent: fileContent }]);
+    setTabs((prev) => {
+      // Double-check to prevent race conditions
+      if (prev.some((t) => t.filePath === filePath)) return prev;
+      return [...prev, { filePath, content: fileContent, savedContent: fileContent }];
+    });
     setActiveTab(filePath);
-  }, [tabs]);
+  }, []);
 
   const closeTab = useCallback((filePath: string) => {
     setTabs((prev) => {
@@ -506,12 +554,21 @@ export default function Home() {
     if (!window.electronAPI || !currentTab) return;
     const oldPath = currentTab.filePath;
     const dir = oldPath.substring(0, oldPath.lastIndexOf("/"));
-    const ext = oldPath.match(/\.(md|markdown)$/i)?.[0] || "";
-    const newPath = `${dir}/${newName}${ext}`;
+    const oldFileName = oldPath.split("/").pop() || "";
+    const ext = oldFileName.match(/\.(md|markdown)$/i)?.[0] || ".md";
+    const newFileName = newName + ext;
+    const newPath = `${dir}/${newFileName}`;
     if (newPath === oldPath) return;
     const success = await window.electronAPI.rename(oldPath, newPath);
     if (success) {
       handleFileRename(oldPath, newPath);
+      // Update file order
+      setFileOrder((prev) => {
+        if (!prev[dir]) return prev;
+        const updated = prev[dir].map((n) => n === oldFileName ? newFileName : n);
+        return { ...prev, [dir]: updated };
+      });
+      setSidebarRefresh((k) => k + 1);
     }
   }, [currentTab, handleFileRename]);
 
@@ -594,6 +651,7 @@ export default function Home() {
     await window.electronAPI.createFile(filePath);
     setTabs((prev) => [...prev, { filePath, content: "", savedContent: "" }]);
     setActiveTab(filePath);
+    setSidebarRefresh((k) => k + 1);
   }, [activeVault]);
 
   const handleNewFolder = useCallback(async () => {
@@ -609,6 +667,7 @@ export default function Home() {
     }
     const dirPath = `${activeVault.path}/${name}`;
     await window.electronAPI.createDir(dirPath);
+    setSidebarRefresh((k) => k + 1);
   }, [activeVault]);
 
   const handleOpenFile = useCallback(async () => {
@@ -658,6 +717,34 @@ export default function Home() {
     editorViewRef.current = view;
   }, []);
 
+  // Wiki link click handler — global mousedown capture
+  useEffect(() => {
+    const handleWikiClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest(".md-wikilink, .wl-link, [data-target]") as HTMLElement | null;
+      if (!link) return;
+
+      const linkTarget = link.getAttribute("data-target") || link.textContent?.trim();
+      if (!linkTarget || !window.electronAPI || !activeVault) return;
+
+      e.stopImmediatePropagation();
+      e.preventDefault();
+
+      const normalized = linkTarget.replace(/\.md$/i, "").toLowerCase();
+      window.electronAPI.listAllFiles(activeVault.path).then((files) => {
+        const match = files.find((f) => {
+          const rel = f.relativePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
+          const name = (f.filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "").toLowerCase();
+          return name === normalized || rel === normalized;
+        });
+        if (match) openFile(match.filePath);
+      });
+    };
+
+    document.addEventListener("mousedown", handleWikiClick, true);
+    return () => document.removeEventListener("mousedown", handleWikiClick, true);
+  }, [activeVault, openFile]);
+
   const handleDailyNote = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
     const now = new Date();
@@ -677,6 +764,7 @@ export default function Home() {
     }
 
     openFile(filePath);
+    setSidebarRefresh((k) => k + 1);
   }, [activeVault, openFile]);
 
   const handleHeadingClick = useCallback((line: number) => {
@@ -952,6 +1040,66 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden">
         {!zenMode && (
+          <div className="ribbon">
+            <div className="ribbon-top">
+              <button className="ribbon-btn" title="Quick Open" onClick={() => setShowQuickOpen(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="New note" onClick={handleNewFile}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 2h5l3 3v9H4V2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                  <path d="M8 6v4M6 8h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Daily note" onClick={handleDailyNote}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M2 6.5h12" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Graph view" onClick={() => setShowGraphView(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
+                  <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.2" />
+                  <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M6 7.2l4-2.4M6 8.8l4 2.4" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Command palette" onClick={() => setShowCommandPalette(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 5l4 3-4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M9 11h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Search in vault" onClick={() => setShowVaultSearch(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M14 13l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Presentation" onClick={() => setShowSlidePresentation(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="8" rx="1" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M8 11v3M5 14h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="ribbon-bottom">
+              <button className="ribbon-btn" title="Settings" onClick={() => setShowSettings(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+        {!zenMode && (
           <Sidebar
             vault={activeVault}
             currentFile={activeTab}
@@ -966,6 +1114,7 @@ export default function Home() {
             onExpandedFoldersChange={setExpandedFolders}
             fileOrder={fileOrder}
             onFileOrderChange={setFileOrder}
+            refreshTrigger={sidebarRefresh}
           />
         )}
 
@@ -975,17 +1124,15 @@ export default function Home() {
             <>
               <DocumentTitle
                 filePath={currentTab.filePath}
-                viewMode={viewMode}
                 onRename={handleRenameCurrentFile}
-                onViewModeChange={setViewMode}
               />
               <div className="flex-1 overflow-hidden">
                 {viewMode === "view" ? (
                   <ReadOnlyView content={content} />
                 ) : viewMode === "source" ? (
-                  <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} />
+                  <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
                 ) : (
-                  <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} />
+                  <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
                 )}
               </div>
             </>
@@ -1069,6 +1216,16 @@ export default function Home() {
             )}
             <span>{content.split("\n").length} lines</span>
             <span>{content.length} chars</span>
+            {pluginManagerRef.current?.getStatusBarItems().map((item) => (
+              <span
+                key={item.id}
+                className={item.onClick ? "cursor-pointer hover:text-[var(--text-secondary)]" : ""}
+                onClick={item.onClick}
+                title={item.title}
+              >
+                {item.text}
+              </span>
+            ))}
           </div>
         </div>
       )}

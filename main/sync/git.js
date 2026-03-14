@@ -205,12 +205,25 @@ async function sync(dir, commitMessage, token = null) {
 
 async function pull(dir, token = null) {
   const branch = await git(["branch", "--show-current"], dir).catch(() => "main");
-  if (token) {
-    const remote = await git(["remote", "get-url", "origin"], dir);
-    const authUrl = makeAuthUrl(remote, token);
-    await git(["pull", authUrl, branch, "--rebase"], dir, token);
-  } else {
-    await git(["pull", "origin", branch, "--rebase"], dir);
+  const hasChanges = await git(["status", "--porcelain"], dir).catch(() => "");
+  const needsStash = !!hasChanges;
+
+  if (needsStash) {
+    await git(["stash", "push", "-m", "noteriv-pull-stash"], dir);
+  }
+
+  try {
+    if (token) {
+      const remote = await git(["remote", "get-url", "origin"], dir);
+      const authUrl = makeAuthUrl(remote, token);
+      await git(["pull", authUrl, branch, "--rebase"], dir, token);
+    } else {
+      await git(["pull", "origin", branch, "--rebase"], dir);
+    }
+  } finally {
+    if (needsStash) {
+      await git(["stash", "pop"], dir).catch(() => {});
+    }
   }
   return true;
 }

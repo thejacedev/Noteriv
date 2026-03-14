@@ -65,6 +65,8 @@ export default function ReadOnlyView({ content, className = "" }: ReadOnlyViewPr
     }
   }, [content]);
 
+  // Wiki link click handling is done in page.tsx
+
   return (
     <div ref={editorRef} className={`h-full overflow-hidden ${className}`} />
   );

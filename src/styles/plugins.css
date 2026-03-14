@@ -282,32 +282,142 @@
   font-weight: 500;
 }
 
-.pm-community {
+/* ── Community tab ── */
+
+.pm-community-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pm-community-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.pm-community-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border, #45475a);
+  transition: background 0.1s;
+}
+.pm-community-card:last-child {
+  border-bottom: none;
+}
+.pm-community-card:hover {
+  background: var(--bg-secondary, #181825);
+}
+
+.pm-community-install-btn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent, #89b4fa);
+  background: color-mix(in srgb, var(--accent, #89b4fa) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #89b4fa) 25%, transparent);
+  border-radius: 6px;
+  padding: 5px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.pm-community-install-btn:hover {
+  background: color-mix(in srgb, var(--accent, #89b4fa) 15%, transparent);
+  border-color: var(--accent, #89b4fa);
+}
+.pm-community-install-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pm-community-installed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--green, #a6e3a1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Status / loading / error */
+
+.pm-community-status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 50px 20px;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 0;
   color: var(--text-muted, #6c7086);
-}
-.pm-community-icon { margin-bottom: 16px; }
-.pm-community-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-secondary, #bac2de);
-  margin: 0 0 8px;
-}
-.pm-community-desc {
   font-size: 12px;
-  max-width: 300px;
-  line-height: 1.5;
-  margin: 0 0 16px;
+  text-align: center;
 }
-.pm-community-badge {
-  background: var(--bg-tertiary, #313244);
-  color: var(--accent, #89b4fa);
+.pm-community-status-err {
+  color: var(--red, #f38ba8);
+}
+
+.pm-community-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(205, 214, 244, 0.1);
+  border-top-color: var(--accent, #89b4fa);
+  border-radius: 50%;
+  animation: pm-spin 0.6s linear infinite;
+}
+@keyframes pm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.pm-community-retry {
   font-size: 11px;
-  font-weight: 500;
-  padding: 4px 14px;
-  border-radius: 12px;
+  color: var(--text-muted, #6c7086);
+  background: rgba(205, 214, 244, 0.04);
+  border: 1px solid rgba(205, 214, 244, 0.1);
+  padding: 5px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pm-community-retry:hover {
+  border-color: var(--accent, #89b4fa);
+  color: var(--accent, #89b4fa);
+}
+
+/* GitHub link */
+
+.pm-community-gh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #6c7086);
+  text-decoration: none;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border, #45475a);
+  transition: color 0.15s;
+  cursor: pointer;
+}
+.pm-community-gh:hover {
+  color: var(--accent, #89b4fa);
+}
+
+/* Inline link in empty state */
+
+.pm-inline-link {
+  background: none;
+  border: none;
+  color: var(--accent, #89b4fa);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pm-inline-link:hover {
+  opacity: 0.8;
 }

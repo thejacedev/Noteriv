@@ -377,3 +377,45 @@ export function importTheme(json: string): ThemeDefinition | null {
 export function getDefaultTheme(): ThemeDefinition {
   return BUILT_IN_THEMES[0]; // Catppuccin Mocha
 }
+
+// ── Community themes ──
+
+const COMMUNITY_REPO_BASE =
+  "https://raw.githubusercontent.com/thejacedev/NoterivThemes/main";
+
+export interface CommunityThemeEntry {
+  id: string;
+  name: string;
+  author: string;
+  file: string;
+  type: "dark" | "light";
+}
+
+export interface CommunityManifest {
+  name: string;
+  description: string;
+  version: string;
+  themes: CommunityThemeEntry[];
+}
+
+export async function fetchCommunityManifest(): Promise<CommunityManifest | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_REPO_BASE}/manifest.json`);
+    if (!res.ok) return null;
+    return (await res.json()) as CommunityManifest;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCommunityTheme(file: string): Promise<ThemeDefinition | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_REPO_BASE}/${file}`);
+    if (!res.ok) return null;
+    const theme = (await res.json()) as ThemeDefinition;
+    if (!theme.id || !theme.name || !theme.colors) return null;
+    return theme;
+  } catch {
+    return null;
+  }
+}

@@ -10,6 +10,7 @@ import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
+import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 
 const sourceHighlight = HighlightStyle.define([
   { tag: tags.heading1, color: "var(--accent)", fontWeight: "bold", fontSize: "1.2em" },
@@ -46,10 +47,11 @@ interface SourceEditorProps {
   content: string;
   onChange: (value: string) => void;
   onViewReady?: (view: EditorView) => void;
+  vaultPath?: string;
   className?: string;
 }
 
-export default function SourceEditor({ content, onChange, onViewReady, className = "" }: SourceEditorProps) {
+export default function SourceEditor({ content, onChange, onViewReady, vaultPath, className = "" }: SourceEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -67,6 +69,7 @@ export default function SourceEditor({ content, onChange, onViewReady, className
         drawSelection(),
         closeBrackets(),
         history(),
+        ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(sourceHighlight),
         sourceTheme,

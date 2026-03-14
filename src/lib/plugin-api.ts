@@ -132,11 +132,20 @@ export class PluginManager {
   private settingsTabs: Map<string, SettingsTab> = new Map();
   private eventHandlers: Map<string, Set<(...args: any[]) => void>> = new Map();
   private noticeHandler: ((msg: string, dur?: number) => void) | null = null;
+  private uiChangeHandler: (() => void) | null = null;
 
   constructor(
     private vaultPath: string,
     private getEditorState: () => EditorState | null
   ) {}
+
+  setUIChangeHandler(handler: () => void): void {
+    this.uiChangeHandler = handler;
+  }
+
+  private notifyUIChange(): void {
+    if (this.uiChangeHandler) this.uiChangeHandler();
+  }
 
   // ── Installed plugins ──
 
@@ -466,9 +475,11 @@ export class PluginManager {
         addStatusBarItem: (item: StatusBarItem) => {
           const fullId = `${prefix}${item.id}`;
           manager.statusBarItems.set(fullId, { ...item, id: fullId });
+          manager.notifyUIChange();
         },
         removeStatusBarItem: (id: string) => {
           manager.statusBarItems.delete(`${prefix}${id}`);
+          manager.notifyUIChange();
         },
         addSidebarPanel: (panel: SidebarPanel) => {
           const fullId = `${prefix}${panel.id}`;
@@ -628,4 +639,68 @@ export class PluginManager {
       }
     }
   }
+}
+
+// ── Community plugins ──
+
+const COMMUNITY_PLUGINS_BASE =
+  "https://raw.githubusercontent.com/thejacedev/NoterivPlugins/master";
+
+export interface CommunityPluginEntry {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  dir: string;
+}
+
+export interface CommunityPluginManifest {
+  name: string;
+  description: string;
+  version: string;
+  plugins: CommunityPluginEntry[];
+}
+
+export async function fetchCommunityPluginManifest(): Promise<CommunityPluginManifest | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_PLUGINS_BASE}/manifest.json`);
+    if (!res.ok) return null;
+    return (await res.json()) as CommunityPluginManifest;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCommunityPluginFile(filePath: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_PLUGINS_BASE}/${filePath}`);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+export async function installCommunityPlugin(
+  vaultPath: string,
+  entry: CommunityPluginEntry
+): Promise<boolean> {
+  if (!window.electronAPI) return false;
+
+  // Fetch manifest.json and main.js from the community repo
+  const manifestContent = await fetchCommunityPluginFile(`${entry.dir}/manifest.json`);
+  const mainContent = await fetchCommunityPluginFile(`${entry.dir}/main.js`);
+
+  if (!manifestContent || !mainContent) return false;
+
+  const pluginDir = `${vaultPath}/${PLUGINS_DIR}/${entry.id}`;
+  await window.electronAPI.createDir(`${vaultPath}/.noteriv`);
+  await window.electronAPI.createDir(`${vaultPath}/${PLUGINS_DIR}`);
+  await window.electronAPI.createDir(pluginDir);
+
+  await window.electronAPI.writeFile(`${pluginDir}/manifest.json`, manifestContent);
+  await window.electronAPI.writeFile(`${pluginDir}/main.js`, mainContent);
+
+  return true;
 }

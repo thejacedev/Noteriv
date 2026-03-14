@@ -23,6 +23,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 500,
     title: "Noteriv",
+    icon: path.join(__dirname, "../public/icon.png"),
     backgroundColor: "#1e1e2e",
     frame: false,
     titleBarStyle: "hidden",

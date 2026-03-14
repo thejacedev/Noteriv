@@ -17,7 +17,7 @@ export const wikilinkRenderer: InlineRenderer = {
       results.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,
-        html: `<span class="md-wikilink">${display}</span>`,
+        html: `<span class="md-wikilink" data-target="${target}">${display}</span>`,
         className: "md-wikilink-wrapper",
       });
     }

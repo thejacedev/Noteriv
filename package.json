@@ -27,17 +27,20 @@
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "icon": "public/macos/icon.icns"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "public/windows/icon.ico"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Office"
+      "category": "Office",
+      "icon": "public/linux/icons"
     }
   },
   "dependencies": {

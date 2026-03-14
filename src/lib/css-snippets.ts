@@ -118,3 +118,62 @@ export function refreshSnippets(snippets: CSSSnippet[]): void {
   removeAllSnippets();
   applySnippets(snippets);
 }
+
+// ── Community snippets ──
+
+const COMMUNITY_SNIPPETS_BASE =
+  "https://raw.githubusercontent.com/thejacedev/NoterivSnippets/master";
+
+export interface CommunitySnippetEntry {
+  id: string;
+  name: string;
+  description: string;
+  file: string;
+  category: string;
+}
+
+export interface CommunitySnippetManifest {
+  name: string;
+  description: string;
+  version: string;
+  snippets: CommunitySnippetEntry[];
+}
+
+export async function fetchSnippetManifest(): Promise<CommunitySnippetManifest | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_SNIPPETS_BASE}/manifest.json`);
+    if (!res.ok) return null;
+    return (await res.json()) as CommunitySnippetManifest;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCommunitySnippetContent(file: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${COMMUNITY_SNIPPETS_BASE}/${file}`);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+export async function installCommunitySnippet(
+  vaultPath: string,
+  entry: CommunitySnippetEntry,
+  content: string
+): Promise<CSSSnippet> {
+  const dir = `${vaultPath}/${SNIPPETS_DIR}`;
+  if (window.electronAPI) {
+    await window.electronAPI.createDir(dir);
+    await window.electronAPI.writeFile(`${dir}/${entry.id}.css`, content);
+  }
+  return {
+    id: entry.id,
+    name: entry.name,
+    filename: `${entry.id}.css`,
+    enabled: false,
+    content,
+  };
+}

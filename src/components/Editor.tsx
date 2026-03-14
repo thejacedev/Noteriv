@@ -15,15 +15,17 @@ import {
   mdHighlightStyle,
   editorTheme,
 } from "./markdown";
+import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 
 interface EditorProps {
   content: string;
   onChange: (value: string) => void;
   onViewReady?: (view: EditorView) => void;
+  vaultPath?: string;
   className?: string;
 }
 
-export default function Editor({ content, onChange, onViewReady, className = "" }: EditorProps) {
+export default function Editor({ content, onChange, onViewReady, vaultPath, className = "" }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -39,6 +41,7 @@ export default function Editor({ content, onChange, onViewReady, className = "" 
         drawSelection(),
         closeBrackets(),
         history(),
+        ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(mdHighlightStyle),
         editorTheme,
@@ -80,6 +83,8 @@ export default function Editor({ content, onChange, onViewReady, className = "" 
       });
     }
   }, [content]);
+
+  // Wiki link click handling is done in page.tsx
 
   return (
     <div ref={editorRef} className={`h-full overflow-hidden ${className}`} />

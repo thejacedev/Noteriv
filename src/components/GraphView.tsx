@@ -36,11 +36,12 @@ interface TooltipInfo {
 
 // ── Constants ──
 
-const REPULSION_STRENGTH = 800;
-const ATTRACTION_STRENGTH = 0.015;
-const CENTER_GRAVITY = 0.01;
-const DAMPING = 0.92;
-const MIN_NODE_RADIUS = 5;
+const REPULSION_STRENGTH = 300;
+const ATTRACTION_STRENGTH = 0.008;
+const CENTER_GRAVITY = 0.005;
+const ORPHAN_GRAVITY = 0.015;
+const DAMPING = 0.82;
+const MIN_NODE_RADIUS = 6;
 const MAX_NODE_RADIUS = 22;
 const LABEL_FONT_SIZE = 11;
 const LINK_REGEX = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
@@ -117,7 +118,7 @@ export default function GraphView({
 
       try {
         const files = await window.electronAPI.listAllFiles(vaultPath);
-        const mdFiles = files.filter((f) => f.fileName.endsWith(".md"));
+        const mdFiles = files.filter((f) => f.filePath.endsWith(".md") || f.filePath.endsWith(".markdown"));
 
         // Read all file contents in parallel
         const contents = await Promise.all(
@@ -291,9 +292,10 @@ export default function GraphView({
           a.vy += fy;
         }
 
-        // Center gravity
-        a.vx += (centerX - a.x) * CENTER_GRAVITY;
-        a.vy += (centerY - a.y) * CENTER_GRAVITY;
+        // Center gravity (stronger for orphan nodes)
+        const gravity = a.connections === 0 ? ORPHAN_GRAVITY : CENTER_GRAVITY;
+        a.vx += (centerX - a.x) * gravity;
+        a.vy += (centerY - a.y) * gravity;
       }
 
       // Attraction along edges

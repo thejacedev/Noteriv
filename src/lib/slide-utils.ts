@@ -36,7 +36,7 @@ export function parseSlides(content: string): Slide[] {
  * Split markdown content by `---` horizontal rules, respecting fenced code blocks.
  */
 function splitByHorizontalRules(content: string): string[] {
-  const lines = content.split("\n");
+  const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const slides: string[] = [];
   let currentSlide: string[] = [];
   let inCodeBlock = false;
@@ -65,8 +65,8 @@ function splitByHorizontalRules(content: string): string[] {
       continue;
     }
 
-    // Check for horizontal rule separator (--- on its own line)
-    if (line.match(/^-{3,}\s*$/) && !inCodeBlock) {
+    // Check for horizontal rule separator (---, ***, ___ on its own line)
+    if (line.trim().match(/^(-{3,}|\*{3,}|_{3,})$/) && !inCodeBlock) {
       slides.push(currentSlide.join("\n"));
       currentSlide = [];
       continue;

@@ -189,6 +189,7 @@ export default function SlidePresentation({
       {/* ── Slide Counter ───────────────────────────────────────────── */}
       <div className="slide-counter">
         {currentIndex + 1} / {totalSlides}
+        {totalSlides <= 1 && " — Use --- on its own line to separate slides"}
       </div>
 
       {/* ── Progress Bar ────────────────────────────────────────────── */}
