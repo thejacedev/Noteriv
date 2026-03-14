@@ -43,14 +43,6 @@ export default function CSSSnippets({
   const [communityLoaded, setCommunityLoaded] = useState(false);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [communityFilter, setCommunityFilter] = useState("all");
-  const [communitySearch, setCommunitySearch] = useState("");
-
-  // Load community when tab first activated
-  useEffect(() => {
-    if (activeTab === "community" && !communityLoaded && !communityLoading) {
-      loadCommunity();
-    }
-  }, [activeTab]);
 
   const loadCommunity = async () => {
     setCommunityLoading(true);
@@ -65,6 +57,14 @@ export default function CSSSnippets({
     setCommunityLoaded(true);
     setCommunityLoading(false);
   };
+
+  // Load community when tab first activated
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (activeTab === "community" && !communityLoaded && !communityLoading) {
+      loadCommunity();
+    }
+  }, [activeTab, communityLoaded, communityLoading]);
 
   const handleToggle = useCallback(
     async (id: string, enabled: boolean) => {

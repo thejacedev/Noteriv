@@ -118,6 +118,7 @@ export default function Home() {
   const [showCSSSnippets, setShowCSSSnippets] = useState(false);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [pluginUITick, setPluginUITick] = useState(0);
   const pluginManagerRef = useRef<PluginManager | null>(null);
 
@@ -146,8 +147,11 @@ export default function Home() {
   const currentTab = tabs.find((t) => t.filePath === activeTab) || null;
   const content = currentTab?.content || "";
   const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
-  contentRef.current = content;
-  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    contentRef.current = content;
+    activeTabRef.current = activeTab;
+  });
 
   const tabInfos = tabs.map((t) => ({
     filePath: t.filePath,
@@ -366,8 +370,7 @@ export default function Home() {
       if (settings.extraSyncProvider !== "none") {
         const config =
           settings.extraSyncProvider === "folder" ? settings.folderSync :
-          settings.extraSyncProvider === "webdav" ? settings.webdavSync :
-          settings.extraSyncProvider === "s3" ? settings.s3Sync : null;
+          settings.extraSyncProvider === "webdav" ? settings.webdavSync : null;
         if (config) {
           await window.electronAPI.syncProviderSync(
             activeVault.path,
@@ -388,7 +391,7 @@ export default function Home() {
       setSyncStatus("error");
       setTimeout(() => setSyncStatus("idle"), 3000);
     }
-  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync, settings.s3Sync]);
+  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync]);
 
   const handleGitSync = performSync;
 

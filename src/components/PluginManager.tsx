@@ -62,13 +62,6 @@ export default function PluginManagerModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose, confirmUninstall]);
 
-  // Load community when tab first activated
-  useEffect(() => {
-    if (activeTab === "community" && !communityLoaded && !communityLoading) {
-      loadCommunity();
-    }
-  }, [activeTab]);
-
   // Backdrop click
   const handleBackdrop = useCallback(
     (e: React.MouseEvent) => {
@@ -90,6 +83,14 @@ export default function PluginManagerModal({
     setCommunityLoaded(true);
     setCommunityLoading(false);
   };
+
+  // Load community when tab first activated
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (activeTab === "community" && !communityLoaded && !communityLoading) {
+      loadCommunity();
+    }
+  }, [activeTab, communityLoaded, communityLoading]);
 
   const handleInstallCommunity = useCallback(
     async (entry: CommunityPluginEntry) => {

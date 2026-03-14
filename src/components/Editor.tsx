@@ -8,7 +8,7 @@ import { languages } from "@codemirror/language-data";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { search, searchKeymap, openSearchPanel } from "@codemirror/search";
+import { search, searchKeymap } from "@codemirror/search";
 import {
   liveMarkdownPlugin,
   markdownRenderTheme,
@@ -29,7 +29,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => { onChangeRef.current = onChange; });
 
   const createEditor = useCallback(() => {
     if (!editorRef.current) return;

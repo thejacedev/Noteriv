@@ -10,10 +10,9 @@ export interface AppSettings {
   syncOnSave: boolean;     // git sync after every manual save
   pullOnOpen: boolean;     // git pull when opening a vault
   commitMessageFormat: string; // template: {date}, {time}, {count}
-  extraSyncProvider: "none" | "folder" | "webdav" | "s3";
+  extraSyncProvider: "none" | "folder" | "webdav";
   folderSync: { targetPath: string; direction: "push" | "pull" | "both" };
   webdavSync: { url: string; username: string; password: string; remotePath: string };
-  s3Sync: { endpoint: string; bucket: string; accessKey: string; secretKey: string; region: string; prefix: string };
   theme: string; // theme ID
 }
 
@@ -32,7 +31,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   extraSyncProvider: "none",
   folderSync: { targetPath: "", direction: "both" },
   webdavSync: { url: "", username: "", password: "", remotePath: "/Noteriv" },
-  s3Sync: { endpoint: "", bucket: "", accessKey: "", secretKey: "", region: "us-east-1", prefix: "noteriv/" },
   theme: "catppuccin-mocha",
 };
 

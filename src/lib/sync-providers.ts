@@ -1,4 +1,4 @@
-export type SyncProviderType = "none" | "folder" | "webdav" | "s3";
+export type SyncProviderType = "none" | "folder" | "webdav";
 
 export interface FolderSyncConfig {
   targetPath: string;
@@ -12,15 +12,6 @@ export interface WebDAVSyncConfig {
   remotePath: string;
 }
 
-export interface S3SyncConfig {
-  endpoint: string;
-  bucket: string;
-  accessKey: string;
-  secretKey: string;
-  region: string;
-  prefix: string;
-}
-
 export const DEFAULT_FOLDER_CONFIG: FolderSyncConfig = {
   targetPath: "",
   direction: "both",
@@ -31,15 +22,6 @@ export const DEFAULT_WEBDAV_CONFIG: WebDAVSyncConfig = {
   username: "",
   password: "",
   remotePath: "/Noteriv",
-};
-
-export const DEFAULT_S3_CONFIG: S3SyncConfig = {
-  endpoint: "",
-  bucket: "",
-  accessKey: "",
-  secretKey: "",
-  region: "us-east-1",
-  prefix: "noteriv/",
 };
 
 export interface SyncProviderInfo {
@@ -63,11 +45,6 @@ export const SYNC_PROVIDERS: SyncProviderInfo[] = [
     type: "webdav",
     name: "WebDAV",
     description: "Nextcloud, ownCloud, or any WebDAV server",
-  },
-  {
-    type: "s3",
-    name: "S3 Storage",
-    description: "AWS S3, Backblaze B2, Cloudflare R2, MinIO",
   },
 ];
 

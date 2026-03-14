@@ -1,8 +1,7 @@
 const folder = require("./folder");
 const webdav = require("./webdav");
-const s3 = require("./s3");
 
-const providers = { folder, webdav, s3 };
+const providers = { folder, webdav };
 
 async function performSync(vaultPath, providerType, config) {
   const provider = providers[providerType];

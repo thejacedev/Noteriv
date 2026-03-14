@@ -271,8 +271,7 @@ export default function SettingsModal({
       const provider = settings.extraSyncProvider as SyncProviderType;
       const config =
         provider === "folder" ? settings.folderSync :
-        provider === "webdav" ? settings.webdavSync :
-        provider === "s3" ? settings.s3Sync : null;
+        provider === "webdav" ? settings.webdavSync : null;
       if (!config) return;
       const result = await window.electronAPI.syncProviderTest(provider, config);
       setTestResult(result);
@@ -396,64 +395,6 @@ export default function SettingsModal({
               value={settings.webdavSync.remotePath}
               onChange={(e) => update({ webdavSync: { ...settings.webdavSync, remotePath: e.target.value } })}
               placeholder="/Noteriv"
-            />
-          </Row>
-        </>
-      )}
-
-      {/* S3 config */}
-      {settings.extraSyncProvider === "s3" && (
-        <>
-          <Row label="Endpoint" desc="Leave empty for AWS. For MinIO/R2/B2, enter the endpoint URL.">
-            <input
-              type="text"
-              className="st-text-input"
-              value={settings.s3Sync.endpoint}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, endpoint: e.target.value } })}
-              placeholder="https://s3.us-east-1.amazonaws.com"
-            />
-          </Row>
-          <Row label="Bucket" desc="S3 bucket name.">
-            <input
-              type="text"
-              className="st-text-input"
-              value={settings.s3Sync.bucket}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, bucket: e.target.value } })}
-              placeholder="my-notes-bucket"
-            />
-          </Row>
-          <Row label="Access key" desc="Your S3 access key ID.">
-            <input
-              type="text"
-              className="st-text-input"
-              value={settings.s3Sync.accessKey}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, accessKey: e.target.value } })}
-            />
-          </Row>
-          <Row label="Secret key" desc="Your S3 secret access key.">
-            <input
-              type="password"
-              className="st-text-input"
-              value={settings.s3Sync.secretKey}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, secretKey: e.target.value } })}
-            />
-          </Row>
-          <Row label="Region" desc="AWS region (e.g. us-east-1).">
-            <input
-              type="text"
-              className="st-text-input"
-              value={settings.s3Sync.region}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, region: e.target.value } })}
-              placeholder="us-east-1"
-            />
-          </Row>
-          <Row label="Key prefix" desc="Object key prefix in the bucket.">
-            <input
-              type="text"
-              className="st-text-input"
-              value={settings.s3Sync.prefix}
-              onChange={(e) => update({ s3Sync: { ...settings.s3Sync, prefix: e.target.value } })}
-              placeholder="noteriv/"
             />
           </Row>
         </>
