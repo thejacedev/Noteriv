@@ -111,7 +111,8 @@ function buildDecorations(view: EditorView): DecorationSet {
     // Code blocks are special — they span multiple lines
     const codeResult = codeTracker.process(
       { builder, line, text, lineNumber: i },
-      cursorLines.has(i)
+      cursorLines.has(i),
+      cursorLines
     );
     if (codeResult) continue;
 

@@ -130,15 +130,23 @@ export class HtmlBlockTracker {
           }
 
           if (!hasCursor) {
-            // Replace entire block with rendered HTML
-            const endLineObj = this.doc.line(info.endLine);
+            // Render the widget on the first line only
             ctx.builder.add(
               ctx.line.from,
-              endLineObj.to,
+              ctx.line.to,
               Decoration.replace({
                 widget: new RenderedMarkdownWidget(info.html, "md-html-inline-block"),
               })
             );
+            // Mark remaining lines to be hidden
+            for (let l = ctx.lineNumber + 1; l <= info.endLine; l++) {
+              const hideLine = this.doc.line(l);
+              ctx.builder.add(
+                hideLine.from,
+                hideLine.from,
+                Decoration.line({ class: "md-html-hidden" })
+              );
+            }
             this.skipUntilLine = info.endLine;
             return "start";
           }

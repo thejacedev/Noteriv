@@ -2,8 +2,8 @@ import { Decoration } from "@codemirror/view";
 import { RenderedMarkdownWidget } from "../widget";
 import type { BlockRenderer, BlockContext } from "../types";
 
-const tableRowRegex = /^\|(.+)\|$/;
-const separatorRegex = /^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|$/;
+const tableRowRegex = /^\|(.+)\|\s*$/;
+const separatorRegex = /^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|\s*$/;
 
 export const tableRenderer: BlockRenderer = {
   name: "tables",

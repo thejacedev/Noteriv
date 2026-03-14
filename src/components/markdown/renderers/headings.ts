@@ -1,7 +1,7 @@
 import { Decoration } from "@codemirror/view";
 import type { BlockRenderer, BlockContext } from "../types";
 
-const headingRegex = /^(#{1,6})\s+(.*)$/;
+const headingRegex = /^(#{1,6})\s+(.*?)[\s]*$/;
 
 export const headingRenderer: BlockRenderer = {
   name: "headings",

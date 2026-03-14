@@ -2,7 +2,7 @@ import { Decoration } from "@codemirror/view";
 import { RenderedMarkdownWidget } from "../widget";
 import type { BlockRenderer, BlockContext } from "../types";
 
-const hrRegex = /^(---|\*\*\*|___)$/;
+const hrRegex = /^(-{3,}|\*{3,}|_{3,})\s*$/;
 
 export const horizontalRuleRenderer: BlockRenderer = {
   name: "horizontal-rule",

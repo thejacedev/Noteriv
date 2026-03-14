@@ -83,7 +83,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     margin: "0.5em 0",
   },
 
-  // Code blocks
+  // Legacy code block classes (kept for compatibility)
   ".md-code-fence": {
     color: "#6c7086",
     fontSize: "0.85em",
@@ -94,19 +94,31 @@ export const markdownRenderTheme = EditorView.baseTheme({
     fontSize: "0.9em",
   },
 
-  // Code block header (language label + copy button)
-  "& .md-code-header": {
+  // New custom code block widget
+  "& .md-codeblock": {
+    borderRadius: "8px",
+    overflow: "hidden",
+    margin: "0.4em 0",
+    border: "1px solid rgba(69, 71, 90, 0.4)",
+    width: "100%",
+  },
+  "& .md-codeblock-header": {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "0.3em 0.75em",
-    background: "rgba(24, 24, 37, 0.85)",
-    borderBottom: "1px solid rgba(69, 71, 90, 0.5)",
-    borderRadius: "6px 6px 0 0",
-    fontSize: "0.85em",
-    width: "100%",
+    padding: "6px 12px",
+    background: "rgba(24, 24, 37, 0.9)",
+    borderBottom: "1px solid rgba(69, 71, 90, 0.4)",
+    fontSize: "12px",
   },
-  "& .md-code-copy": {
+  "& .md-codeblock-lang": {
+    color: "#6c7086",
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: "11px",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  },
+  "& .md-codeblock-copy": {
     display: "inline-flex",
     alignItems: "center",
     gap: "4px",
@@ -115,26 +127,46 @@ export const markdownRenderTheme = EditorView.baseTheme({
     borderRadius: "4px",
     color: "#6c7086",
     cursor: "pointer",
-    padding: "0.15em 0.5em",
-    fontSize: "0.8em",
+    padding: "2px 8px",
+    fontSize: "11px",
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     transition: "all 0.15s ease",
-    lineHeight: "1.4",
   },
-  "& .md-code-copy:hover": {
+  "& .md-codeblock-copy:hover": {
     color: "#cdd6f4",
     borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
     background: "color-mix(in srgb, var(--accent) 8%, transparent)",
   },
-  "& .md-code-copy.copied": {
+  "& .md-codeblock-copy.copied": {
     color: "#a6e3a1",
     borderColor: "rgba(166, 227, 161, 0.4)",
   },
+  ".md-codeblock-hidden": {
+    fontSize: "0 !important",
+    lineHeight: "0 !important",
+    height: "0 !important",
+    padding: "0 !important",
+    margin: "0 !important",
+    overflow: "hidden",
+  },
+  "& .md-codeblock-pre": {
+    margin: "0",
+    padding: "12px 16px",
+    background: "rgba(24, 24, 37, 0.6)",
+    overflow: "auto",
+  },
+  "& .md-codeblock-code": {
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: "13px",
+    lineHeight: "1.6",
+    color: "#cdd6f4",
+    tabSize: "2",
+  },
+  "& .md-codeblock-line": {
+    display: "block",
+  },
 
   // Syntax highlighting tokens
-  "& .md-code-highlighted": {
-    display: "inline",
-  },
   "& .tok-keyword": { color: "#cba6f7" },
   "& .tok-string": { color: "#a6e3a1" },
   "& .tok-comment": { color: "#6c7086", fontStyle: "italic" },
@@ -331,6 +363,14 @@ export const markdownRenderTheme = EditorView.baseTheme({
   },
 
   // Block-level HTML
+  ".md-html-hidden": {
+    fontSize: "0 !important",
+    lineHeight: "0 !important",
+    height: "0 !important",
+    padding: "0 !important",
+    margin: "0 !important",
+    overflow: "hidden",
+  },
   ".md-html-block": {
     background: "rgba(49, 50, 68, 0.15)",
     borderLeft: "2px solid rgba(108, 112, 134, 0.3)",

@@ -20,7 +20,7 @@ const LANG_TOKENS: Record<string, TokenRule[]> = {
     { regex: /\b([A-Z]\w*)\b/g, className: "tok-type" },
     { regex: /(\w+)(?=\s*\()/g, className: "tok-function" },
   ],
-  typescript: [], // filled below
+  typescript: [],
   python: [
     { regex: /#.*$/gm, className: "tok-comment" },
     { regex: /("""[\s\S]*?"""|'''[\s\S]*?''')/gm, className: "tok-string" },
@@ -80,8 +80,8 @@ const LANG_TOKENS: Record<string, TokenRule[]> = {
     { regex: /\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|return|in|export|local|readonly|set|unset|shift|exit|echo|cd|ls|cat|grep|sed|awk|find|mkdir|rm|cp|mv|chmod|chown|sudo|apt|npm|yarn|git|docker|curl|wget)\b/g, className: "tok-keyword" },
     { regex: /\b(\d+)\b/g, className: "tok-number" },
   ],
-  shell: [], // alias for bash
-  sh: [],    // alias for bash
+  shell: [],
+  sh: [],
   java: [
     { regex: /\/\/.*$/gm, className: "tok-comment" },
     { regex: /\/\*[\s\S]*?\*\//gm, className: "tok-comment" },
@@ -101,12 +101,12 @@ const LANG_TOKENS: Record<string, TokenRule[]> = {
     { regex: /\b(\d+\.?\d*(?:e[+-]?\d+)?[fFlLuU]*)\b/g, className: "tok-number" },
     { regex: /(\w+)(?=\s*\()/g, className: "tok-function" },
   ],
-  cpp: [], // alias for c
-  csharp: [], // similar to java
+  cpp: [],
+  csharp: [],
   cs: [],
-  jsx: [],  // alias for javascript
-  tsx: [],  // alias for typescript
-  yml: [],  // alias for yaml
+  jsx: [],
+  tsx: [],
+  yml: [],
   yaml: [
     { regex: /#.*$/gm, className: "tok-comment" },
     { regex: /(["'])(?:(?!\1|\\).|\\.)*\1/g, className: "tok-string" },
@@ -129,7 +129,7 @@ const LANG_TOKENS: Record<string, TokenRule[]> = {
     { regex: /`[^`]+`/g, className: "tok-type" },
     { regex: /\[([^\]]+)\]\([^)]+\)/g, className: "tok-function" },
   ],
-  md: [], // alias for markdown
+  md: [],
 };
 
 // Fill aliases
@@ -149,14 +149,12 @@ function highlightLine(text: string, lang: string): string {
   const rules = LANG_TOKENS[lang.toLowerCase()];
   if (!rules || rules.length === 0) return escapeHtml(text);
 
-  // Build a map of character positions to spans
   const chars = new Array(text.length).fill(null);
 
   for (const rule of rules) {
     const re = new RegExp(rule.regex.source, rule.regex.flags);
     let m;
     while ((m = re.exec(text)) !== null) {
-      // Only apply if no prior rule claimed these chars
       let free = true;
       for (let i = m.index; i < m.index + m[0].length; i++) {
         if (chars[i] !== null) { free = false; break; }
@@ -169,7 +167,6 @@ function highlightLine(text: string, lang: string): string {
     }
   }
 
-  // Build HTML
   let html = "";
   let currentClass: string | null = null;
   for (let i = 0; i < text.length; i++) {
@@ -194,27 +191,44 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Widget for the code block header (language label + copy button) */
-class CodeBlockHeaderWidget extends WidgetType {
-  constructor(readonly lang: string, readonly codeContent: string) {
+// ── Full code block widget ──
+
+interface CodeBlockInfo {
+  lang: string;
+  code: string;
+  openLine: number;
+  closeLine: number;
+}
+
+class CodeBlockWidget extends WidgetType {
+  constructor(readonly lang: string, readonly code: string) {
     super();
   }
 
   toDOM() {
-    const wrap = document.createElement("span");
-    wrap.className = "md-code-header";
+    const container = document.createElement("div");
+    container.className = "md-codeblock";
 
-    // Spacer so copy button aligns right
-    const spacer = document.createElement("span");
-    wrap.appendChild(spacer);
+    // Header
+    const header = document.createElement("div");
+    header.className = "md-codeblock-header";
+
+    if (this.lang) {
+      const langLabel = document.createElement("span");
+      langLabel.className = "md-codeblock-lang";
+      langLabel.textContent = this.lang;
+      header.appendChild(langLabel);
+    } else {
+      header.appendChild(document.createElement("span"));
+    }
 
     const copyBtn = document.createElement("button");
-    copyBtn.className = "md-code-copy";
-    copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" stroke="currentColor" stroke-width="1.3"/></svg><span>Copy</span>';
+    copyBtn.className = "md-codeblock-copy";
+    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" stroke="currentColor" stroke-width="1.3"/></svg><span>Copy</span>';
     copyBtn.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      navigator.clipboard.writeText(this.codeContent).then(() => {
+      navigator.clipboard.writeText(this.code).then(() => {
         const span = copyBtn.querySelector("span")!;
         span.textContent = "Copied!";
         copyBtn.classList.add("copied");
@@ -224,49 +238,51 @@ class CodeBlockHeaderWidget extends WidgetType {
         }, 1500);
       });
     });
-    wrap.appendChild(copyBtn);
+    header.appendChild(copyBtn);
+    container.appendChild(header);
 
-    return wrap;
+    // Code body
+    const pre = document.createElement("pre");
+    pre.className = "md-codeblock-pre";
+    const codeEl = document.createElement("code");
+    codeEl.className = "md-codeblock-code";
+
+    const lines = this.code.split("\n");
+    const hasHighlighting = this.lang && LANG_TOKENS[this.lang.toLowerCase()];
+
+    codeEl.innerHTML = lines
+      .map((line) => {
+        const highlighted = hasHighlighting ? highlightLine(line, this.lang) : escapeHtml(line);
+        return `<span class="md-codeblock-line">${highlighted || " "}</span>`;
+      })
+      .join("\n");
+
+    pre.appendChild(codeEl);
+    container.appendChild(pre);
+
+    return container;
   }
 
   ignoreEvent() { return true; }
 
-  eq(other: CodeBlockHeaderWidget) {
-    return this.lang === other.lang && this.codeContent === other.codeContent;
+  eq(other: CodeBlockWidget) {
+    return this.lang === other.lang && this.code === other.code;
   }
 }
 
-/** Widget for a highlighted code line */
-class HighlightedCodeWidget extends WidgetType {
-  constructor(readonly html: string) {
-    super();
-  }
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "md-code-highlighted";
-    span.innerHTML = this.html;
-    return span;
-  }
-  ignoreEvent() { return false; }
-}
+// ── Code Block Tracker ──
 
-/**
- * Code block state tracker — handles fenced code blocks with
- * syntax highlighting and a copy button.
- *
- * Call preScan() before processing to collect code block content,
- * so the opening fence can show a header with a copy button.
- */
 export class CodeBlockTracker {
-  private codeBlockInfo = new Map<number, { lang: string; code: string }>();
+  private blocks: CodeBlockInfo[] = [];
+  private blockByLine = new Map<number, CodeBlockInfo>();
   inCodeBlock = false;
   currentLang = "";
   codeLines: string[] = [];
   fenceStartLine = 0;
 
-  /** Pre-scan the document to collect code block content for headers */
   preScan(doc: Text) {
-    this.codeBlockInfo.clear();
+    this.blocks = [];
+    this.blockByLine.clear();
     let inBlock = false;
     let lang = "";
     let lines: string[] = [];
@@ -282,7 +298,12 @@ export class CodeBlockTracker {
           openLine = i;
         } else {
           inBlock = false;
-          this.codeBlockInfo.set(openLine, { lang, code: lines.join("\n") });
+          const info: CodeBlockInfo = { lang, code: lines.join("\n"), openLine, closeLine: i };
+          this.blocks.push(info);
+          // Map every line in this block to the info
+          for (let j = openLine; j <= i; j++) {
+            this.blockByLine.set(j, info);
+          }
         }
         continue;
       }
@@ -290,75 +311,65 @@ export class CodeBlockTracker {
     }
   }
 
-  process(ctx: BlockContext, isCursorLine: boolean): "fence" | "inside" | null {
-    const text = ctx.text.trimStart();
+  /** Check if any line in a block has the cursor */
+  private blockHasCursor(info: CodeBlockInfo, cursorLines: Set<number>): boolean {
+    for (let i = info.openLine; i <= info.closeLine; i++) {
+      if (cursorLines.has(i)) return true;
+    }
+    return false;
+  }
 
-    if (text.startsWith("```")) {
-      if (!this.inCodeBlock) {
-        // Opening fence
-        this.inCodeBlock = true;
-        this.currentLang = text.slice(3).trim();
-        this.codeLines = [];
-        this.fenceStartLine = ctx.lineNumber;
+  process(ctx: BlockContext, isCursorLine: boolean, cursorLines?: Set<number>): "fence" | "inside" | null {
+    const info = this.blockByLine.get(ctx.lineNumber);
+    if (!info) {
+      this.inCodeBlock = false;
+      return null;
+    }
 
-        if (!isCursorLine) {
-          const info = this.codeBlockInfo.get(ctx.lineNumber);
-          if (info) {
-            // Replace fence text with header widget (language label + copy button)
-            ctx.builder.add(
-              ctx.line.from,
-              ctx.line.to,
-              Decoration.replace({
-                widget: new CodeBlockHeaderWidget(info.lang, info.code),
-              })
-            );
-          } else {
-            // Unclosed code block — show dimmed fence text
-            ctx.builder.add(
-              ctx.line.from,
-              ctx.line.from,
-              Decoration.line({ class: "md-code-fence" })
-            );
-          }
-        }
-      } else {
-        // Closing fence
-        this.inCodeBlock = false;
+    // If ANY line in this block has the cursor, show raw markdown for the whole block
+    const blockEditing = cursorLines ? this.blockHasCursor(info, cursorLines) : isCursorLine;
 
-        if (!isCursorLine) {
-          ctx.builder.add(
-            ctx.line.from,
-            ctx.line.from,
-            Decoration.line({ class: "md-code-fence md-code-fence-close" })
-          );
-        }
+    if (ctx.lineNumber === info.openLine) {
+      this.inCodeBlock = true;
+
+      if (!blockEditing) {
+        ctx.builder.add(
+          ctx.line.from,
+          ctx.line.to,
+          Decoration.replace({
+            widget: new CodeBlockWidget(info.lang, info.code),
+          })
+        );
       }
+
       return "fence";
     }
 
-    if (this.inCodeBlock) {
-      this.codeLines.push(ctx.text);
+    if (ctx.lineNumber === info.closeLine) {
+      this.inCodeBlock = false;
 
-      if (!isCursorLine) {
+      if (!blockEditing) {
         ctx.builder.add(
           ctx.line.from,
           ctx.line.from,
-          Decoration.line({ class: "md-code-block-line" })
+          Decoration.line({ class: "md-codeblock-hidden" })
         );
-        if (this.currentLang && LANG_TOKENS[this.currentLang.toLowerCase()] && ctx.text.length > 0) {
-          const highlighted = highlightLine(ctx.text, this.currentLang);
-          ctx.builder.add(
-            ctx.line.from,
-            ctx.line.to,
-            Decoration.replace({
-              widget: new HighlightedCodeWidget(highlighted),
-            })
-          );
-        }
       }
-      return "inside";
+
+      return "fence";
     }
 
-    return null;
+    // Inside the code block
+    this.inCodeBlock = true;
+
+    if (!blockEditing) {
+      ctx.builder.add(
+        ctx.line.from,
+        ctx.line.from,
+        Decoration.line({ class: "md-codeblock-hidden" })
+      );
+    }
+
+    return "inside";
   }
 }

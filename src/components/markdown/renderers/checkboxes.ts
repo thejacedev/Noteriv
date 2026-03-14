@@ -1,8 +1,50 @@
-import { Decoration } from "@codemirror/view";
-import { RenderedMarkdownWidget } from "../widget";
+import { Decoration, WidgetType, EditorView } from "@codemirror/view";
 import type { BlockRenderer, BlockContext } from "../types";
 
 const checkboxRegex = /^(\s*[-*+]\s+)\[([xX ])\]\s+(.*)$/;
+
+class CheckboxWidget extends WidgetType {
+  constructor(
+    readonly checked: boolean,
+    readonly pos: number,        // position of [ in the document
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView) {
+    const span = document.createElement("span");
+    span.className = "md-checkbox-wrapper";
+
+    const box = document.createElement("span");
+    box.className = `md-checkbox ${this.checked ? "checked" : ""}`;
+
+    const inner = document.createElement("span");
+    inner.className = "md-cb-box";
+    inner.textContent = this.checked ? "\u2713" : "";
+    box.appendChild(inner);
+
+    box.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Toggle [x] <-> [ ] in the document
+      const newChar = this.checked ? " " : "x";
+      // pos points to [, so pos+1 is the x or space
+      view.dispatch({
+        changes: { from: this.pos + 1, to: this.pos + 2, insert: newChar },
+      });
+    });
+
+    span.appendChild(box);
+    return span;
+  }
+
+  ignoreEvent() { return true; }
+
+  eq(other: CheckboxWidget) {
+    return this.checked === other.checked && this.pos === other.pos;
+  }
+}
 
 export const checkboxRenderer: BlockRenderer = {
   name: "checkboxes",
@@ -14,23 +56,21 @@ export const checkboxRenderer: BlockRenderer = {
 
     ctx.builder.add(ctx.line.from, ctx.line.from, Decoration.line({ class: "md-list-item" }));
 
-    // Replace "- [x] " prefix with a rendered checkbox
-    const prefixEnd = ctx.line.from + match[1].length + 3 + 1; // [x] + trailing space
+    // Position of [ in the document
+    const bracketPos = ctx.line.from + match[1].length;
+    const prefixEnd = bracketPos + 4; // [x] + trailing space
+
     ctx.builder.add(
       ctx.line.from,
       prefixEnd,
       Decoration.replace({
-        widget: new RenderedMarkdownWidget(
-          `<span class="md-checkbox ${checked ? "checked" : ""}"><span class="md-cb-box">${checked ? "&#10003;" : ""}</span></span>`,
-          "md-checkbox-wrapper"
-        ),
+        widget: new CheckboxWidget(checked, bracketPos),
       })
     );
 
     return true;
   },
 
-  /** Get the text content after the checkbox prefix, for inline processing. */
   getContent(text: string): { offset: number; content: string } | null {
     const match = text.match(checkboxRegex);
     if (!match) return null;
