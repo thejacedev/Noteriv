@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const serve = require("electron-serve");
+const _serve = require("electron-serve");
+const serve = _serve.default || _serve;
 const store = require("./store");
 const gitOps = require("./sync/git");
 const auth = require("./auth");
