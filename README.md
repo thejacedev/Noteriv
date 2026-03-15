@@ -52,6 +52,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Auto-save</strong> &mdash; Configurable intervals (10s, 30s, 1m, 5m) or manual</li>
         <li><strong>Spell check</strong> &mdash; Toggle on/off</li>
         <li><strong>Vim mode</strong> &mdash; Optional vim keybindings (desktop)</li>
+        <li><strong>Focus mode</strong> &mdash; Dims all lines except the active one for distraction-free writing. Toggle from command palette</li>
       </ul>
     </td>
     <td width="50%">
@@ -64,7 +65,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li>Tables with alignment</li>
         <li>Fenced code blocks with syntax highlighting</li>
         <li>Block &amp; inline math (LaTeX via KaTeX)</li>
-        <li>Mermaid diagrams</li>
+        <li><strong>Mermaid diagrams</strong> &mdash; Flowcharts, sequence diagrams, Gantt charts, pie charts, and more rendered inline from <code>```mermaid</code> code blocks</li>
         <li>Callouts / admonitions (16+ types)</li>
         <li>Footnotes &amp; definition lists</li>
         <li>Superscript, subscript</li>
@@ -117,6 +118,10 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>File recovery</strong> &mdash; Automatic snapshots (up to 50 per file) with one-tap restore</li>
         <li><strong>Slide presentations</strong> &mdash; Present markdown as slides (split by <code>---</code>), with speaker notes</li>
         <li><strong>PDF export</strong> &mdash; Export notes to PDF (desktop)</li>
+        <li><strong>Table of contents</strong> &mdash; Type <code>[TOC]</code> to auto-generate a clickable table of contents from headings. Supports <code>&lt;!-- toc --&gt;</code> blocks that auto-update on save</li>
+        <li><strong>Dataview queries</strong> &mdash; Query your vault like a database with <code>TABLE</code>, <code>LIST</code>, and <code>TASK</code> queries inside <code>```dataview</code> code blocks. Filter by tags, folders, frontmatter fields, and more</li>
+        <li><strong>Publish as HTML</strong> &mdash; Export notes as standalone HTML pages using your current theme. Live preview, HTML editor, and multi-note publishing &mdash; combine multiple notes into a single page before saving</li>
+        <li><strong>Flashcard review</strong> &mdash; Spaced repetition system using SM-2 algorithm. Add <code>Q:</code>/<code>A:</code> pairs or <code>{{cloze}}</code> deletions to notes, then review with keyboard-driven grading (Again/Hard/OK/Good/Easy). Progress saved per vault</li>
       </ul>
     </td>
     <td width="33%">
@@ -128,6 +133,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Video files</strong> &mdash; MP4, MKV, AVI, MOV</li>
         <li><strong>Audio recorder</strong> &mdash; Record voice notes directly in the app (desktop)</li>
         <li><strong>Canvas</strong> &mdash; Visual whiteboard with nodes and connections (desktop)</li>
+        <li><strong>Drawing editor</strong> &mdash; Built-in drawing canvas with pencil, shapes, arrows, text, and eraser tools. Full color picker, stroke widths, pan &amp; zoom. Drawings saved as <code>.drawing</code> files and embeddable in notes with <code>![[file.drawing]]</code></li>
       </ul>
     </td>
     <td width="33%">
@@ -139,6 +145,67 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Sync on save</strong> &mdash; Push after every manual save</li>
         <li><strong>Folder sync</strong> &mdash; Sync with Google Drive, Dropbox, OneDrive, iCloud (desktop)</li>
         <li><strong>WebDAV sync</strong> &mdash; Sync with Nextcloud, ownCloud, or any WebDAV server (desktop)</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Views
+
+<table>
+  <tr>
+    <td width="50%">
+      <h4>Board View</h4>
+      <p>Turn any note into a drag-and-drop task board. Create <code>.board.md</code> files or add <code>board: true</code> to frontmatter. Columns are H2 headings, cards are checkbox items.</p>
+      <ul>
+        <li>Drag cards between columns</li>
+        <li>Inline card editing (double-click)</li>
+        <li>Tags shown as colored pills</li>
+        <li>Due date badges</li>
+        <li>Auto-saves every 5 seconds</li>
+        <li>Switch to Source mode to edit raw markdown</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h4>Calendar View</h4>
+      <p>Visual month calendar that surfaces your daily notes and tasks with due dates.</p>
+      <ul>
+        <li>Blue dots on days with daily notes</li>
+        <li>Green dots on days with due tasks</li>
+        <li>Click a day to see its notes and tasks</li>
+        <li>Double-click to open or create a daily note</li>
+        <li>Month navigation and "Today" button</li>
+        <li>Accessible from the ribbon or command palette</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Collaboration &amp; Sharing
+
+<table>
+  <tr>
+    <td width="50%">
+      <h4>Live Collaboration</h4>
+      <p>Real-time co-editing using Yjs CRDT over WebRTC &mdash; peer-to-peer, no server required.</p>
+      <ul>
+        <li>Start a session and share the room ID</li>
+        <li>Others join from the command palette</li>
+        <li>Changes sync instantly between all peers</li>
+        <li>Custom display name and cursor color</li>
+        <li>Optional dependency: <code>npm install yjs y-webrtc</code></li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h4>Publish as HTML</h4>
+      <p>Export notes as beautiful standalone web pages using your current theme.</p>
+      <ul>
+        <li>Live preview before saving</li>
+        <li>Edit the raw HTML directly</li>
+        <li>Combine multiple notes into one page</li>
+        <li>Search and select notes from your vault</li>
+        <li>Copy HTML to clipboard or save as <code>.html</code></li>
+        <li>Opens in your default browser after saving</li>
       </ul>
     </td>
   </tr>
@@ -270,7 +337,7 @@ desktop/
 │   │   ├── page.tsx      Main app (90+ state variables)
 │   │   ├── layout.tsx    Next.js root layout
 │   │   └── globals.css   Global styles + CSS variables
-│   ├── components/       32 React components
+│   ├── components/       40 React components
 │   │   ├── Editor.tsx           CodeMirror markdown editor
 │   │   ├── Sidebar.tsx          File tree with drag-drop
 │   │   ├── TitleBar.tsx         Tabs + window controls
@@ -283,6 +350,13 @@ desktop/
 │   │   ├── ThemePicker.tsx      Theme browser + installer
 │   │   ├── PluginManager.tsx    Plugin browser + installer
 │   │   ├── CSSSnippets.tsx      Snippet editor + community
+│   │   ├── DrawingEditor.tsx    Canvas drawing editor (pencil, shapes, arrows, text, eraser)
+│   │   ├── CalendarView.tsx     Month calendar with daily notes + tasks
+│   │   ├── BoardView.tsx        Drag-and-drop task board
+│   │   ├── DataviewBlock.tsx    Vault query result renderer
+│   │   ├── PublishPreview.tsx   HTML export preview + multi-note publish
+│   │   ├── FlashcardReview.tsx  Spaced repetition flashcard review
+│   │   ├── CollabPanel.tsx      Live collaboration session manager
 │   │   └── markdown/            Live rendering engine
 │   │       ├── plugin.ts        CodeMirror ViewPlugin
 │   │       ├── registry.ts      Renderer registration
@@ -293,12 +367,12 @@ desktop/
 │   │       ├── mermaid.ts       Diagram rendering
 │   │       ├── wikilinks.ts     Interactive wiki-links
 │   │       └── slash-commands.ts  / command menu
-│   ├── lib/              23 utility modules
+│   ├── lib/              32 utility modules
 │   │   ├── settings.ts          App settings + defaults
 │   │   ├── theme-utils.ts       10 built-in themes + community
 │   │   ├── plugin-api.ts        Plugin sandbox + API
 │   │   ├── css-snippets.ts      CSS snippet system
-│   │   ├── hotkeys.ts           60+ rebindable shortcuts
+│   │   ├── hotkeys.ts           70+ rebindable shortcuts
 │   │   ├── editor-commands.ts   Formatting commands
 │   │   ├── wiki-link-utils.ts   Link parsing + resolution
 │   │   ├── tag-utils.ts         Tag extraction + aggregation
@@ -312,7 +386,16 @@ desktop/
 │   │   ├── slide-utils.ts       Presentation parser
 │   │   ├── pdf-export.ts        PDF export
 │   │   ├── sync-providers.ts    Folder + WebDAV config
-│   │   └── vim-mode.ts          Vim keybindings
+│   │   ├── vim-mode.ts          Vim keybindings
+│   │   ├── drawing-utils.ts     Drawing file create/parse/serialize/export
+│   │   ├── calendar-utils.ts    Calendar grid, daily note mapping, task extraction
+│   │   ├── board-utils.ts       Board parse/serialize, card/column CRUD
+│   │   ├── dataview.ts          Vault query engine (TABLE, LIST, TASK)
+│   │   ├── toc-utils.ts         Table of contents generation + auto-update
+│   │   ├── publish.ts           HTML export with theme colors
+│   │   ├── flashcard-utils.ts   SM-2 spaced repetition + card extraction
+│   │   ├── collab.ts            Yjs CRDT + WebRTC collaboration
+│   │   └── focus-mode.ts        Focus/typewriter mode extension
 │   └── types/
 │       └── electron.d.ts  IPC type definitions (50+ methods)
 └── public/               App icons (macOS, Windows, Linux)

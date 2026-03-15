@@ -137,8 +137,11 @@ interface ElectronAPI {
   loadSettings: () => Promise<Record<string, any>>;
   saveSettings: (settings: Record<string, any>) => Promise<boolean>;
 
+  saveHtmlDialog: (defaultPath: string) => Promise<string | null>;
+
   // Shell
   openExternal: (url: string) => Promise<void>;
+  openPath: (filePath: string) => Promise<string>;
 
   // Updater
   updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string }>;

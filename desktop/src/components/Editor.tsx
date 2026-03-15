@@ -23,9 +23,10 @@ interface EditorProps {
   onViewReady?: (view: EditorView) => void;
   vaultPath?: string;
   className?: string;
+  focusMode?: boolean;
 }
 
-export default function Editor({ content, onChange, onViewReady, vaultPath, className = "" }: EditorProps) {
+export default function Editor({ content, onChange, onViewReady, vaultPath, className = "", focusMode = false }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -47,6 +48,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
         editorTheme,
         markdownRenderTheme,
         liveMarkdownPlugin,
+
         search({ top: true }),
         keymap.of([
           ...searchKeymap,
@@ -83,6 +85,12 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
       });
     }
   }, [content]);
+
+  // Toggle focus mode via CSS class on editor container
+  useEffect(() => {
+    if (!editorRef.current) return;
+    editorRef.current.classList.toggle("editor-focus-mode", focusMode);
+  }, [focusMode]);
 
   // Wiki link click handling is done in page.tsx
 

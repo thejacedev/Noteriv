@@ -271,14 +271,18 @@ function buildMermaidDecorations(view: EditorView): DecorationSet {
     }
 
     if (!cursorInBlock && block.source.trim().length > 0) {
-      builder.add(
-        block.from,
-        block.to,
-        Decoration.replace({
-          widget: new MermaidWidget(block.source),
-          block: true,
-        })
-      );
+      // Bounds check — ensure positions are valid in the current document
+      const docLen = view.state.doc.length;
+      if (block.from >= 0 && block.to <= docLen && block.from < block.to) {
+        builder.add(
+          block.from,
+          block.to,
+          Decoration.replace({
+            widget: new MermaidWidget(block.source),
+            block: true,
+          })
+        );
+      }
     }
   }
 

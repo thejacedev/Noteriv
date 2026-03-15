@@ -26,6 +26,9 @@ import CalendarView from "@/components/CalendarView";
 import DataviewBlock from "@/components/DataviewBlock";
 import { isBoardContent, isBoardFile, createBoardContent } from "@/lib/board-utils";
 import { isDrawingFile, generateDrawingName, createEmptyDrawing, serializeDrawing } from "@/lib/drawing-utils";
+import PublishPreview from "@/components/PublishPreview";
+import FlashcardReview from "@/components/FlashcardReview";
+import CollabPanel from "@/components/CollabPanel";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
 import { insertAtCursor } from "@/lib/editor-commands";
 import {
@@ -128,6 +131,10 @@ export default function Home() {
   // New features
   const [showCalendarView, setShowCalendarView] = useState(false);
   const [drawingFile, setDrawingFile] = useState<string | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [showCollab, setShowCollab] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -325,9 +332,17 @@ export default function Home() {
           setPluginInstances(pm.getPlugins());
         } catch {}
 
-        // Load custom themes (for theme picker)
+        // Load custom themes and apply if active theme is custom
         try {
-          await loadCustomThemes(vault.path);
+          const customs = await loadCustomThemes(vault.path);
+          if (merged.theme) {
+            const allBuiltIn = BUILT_IN_THEMES;
+            const isBuiltIn = allBuiltIn.some((t) => t.id === merged.theme);
+            if (!isBuiltIn) {
+              const custom = customs.find((t) => t.id === merged.theme);
+              if (custom) applyTheme(custom);
+            }
+          }
         } catch {}
 
         setAppState("app");
@@ -337,6 +352,39 @@ export default function Home() {
     }
     init();
   }, [loadWorkspace]);
+
+  // ============================================================
+  // Re-apply theme & snippets after app is ready
+  // (guards against Next.js hydration clearing injected styles)
+  // ============================================================
+
+  useEffect(() => {
+    if (appState !== "app") return;
+    // Re-apply theme
+    if (settings.theme) {
+      const builtIn = BUILT_IN_THEMES.find((t) => t.id === settings.theme);
+      if (builtIn) {
+        applyTheme(builtIn);
+      } else if (activeVault) {
+        loadCustomThemes(activeVault.path).then((customs) => {
+          const custom = customs.find((t) => t.id === settings.theme);
+          if (custom) applyTheme(custom);
+        });
+      }
+    }
+    // Re-apply CSS snippets
+    if (cssSnippets.length > 0) {
+      refreshSnippets(cssSnippets);
+    }
+    // Re-load enabled plugins
+    const pm = pluginManagerRef.current;
+    if (pm) {
+      pm.loadAllEnabled().then(() => {
+        setPluginInstances(pm.getPlugins());
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appState]);
 
   // ============================================================
   // Auto-save every 30s
@@ -918,6 +966,17 @@ export default function Home() {
     insertAtCursor(view, '```dataview\nTABLE file.name, file.tags FROM "" SORT BY file.modified DESC LIMIT 10\n```');
   }, []);
 
+  // Toggle focus/typewriter mode
+  const handleFocusMode = useCallback(() => {
+    setFocusMode((f) => !f);
+  }, []);
+
+  // Publish note as HTML (show preview first)
+  const handlePublish = useCallback(() => {
+    if (!currentTab) return;
+    setShowPublish(true);
+  }, [currentTab]);
+
   const handleHeadingClick = useCallback((line: number) => {
     const view = editorViewRef.current;
     if (!view) return;
@@ -996,9 +1055,13 @@ export default function Home() {
       insertToc: handleInsertToc,
       updateToc: handleUpdateToc,
       insertDataview: handleInsertDataview,
+      focusMode: handleFocusMode,
+      publishNote: handlePublish,
+      flashcardReview: () => setShowFlashcards(true),
+      startCollab: () => setShowCollab(true),
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish]);
 
   // ============================================================
   // Hotkey settings persistence
@@ -1128,6 +1191,10 @@ export default function Home() {
         insertToc: handleInsertToc,
         updateToc: handleUpdateToc,
         insertDataview: handleInsertDataview,
+        focusMode: handleFocusMode,
+        publishNote: handlePublish,
+        flashcardReview: () => setShowFlashcards(true),
+        startCollab: () => setShowCollab(true),
       };
 
       for (const binding of hotkeys) {
@@ -1144,7 +1211,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish]);
 
   // Electron menu events
   useEffect(() => {
@@ -1307,7 +1374,7 @@ export default function Home() {
                 ) : viewMode === "source" ? (
                   <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
                 ) : (
-                  <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
+                  <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} focusMode={focusMode} />
                 )}
               </div>
             </>
@@ -1604,6 +1671,34 @@ export default function Home() {
           vaultPath={activeVault.path}
           onSave={() => setSidebarRefresh((k) => k + 1)}
           onClose={() => setDrawingFile(null)}
+        />
+      )}
+
+      {/* Publish Preview */}
+      {showPublish && currentTab && activeVault && (
+        <PublishPreview
+          content={content}
+          title={currentTab.filePath.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "note"}
+          vaultPath={activeVault.path}
+          onClose={() => setShowPublish(false)}
+        />
+      )}
+
+      {/* Flashcard Review */}
+      {showFlashcards && activeVault && (
+        <FlashcardReview
+          vaultPath={activeVault.path}
+          onFileSelect={(f) => { openFile(f); setShowFlashcards(false); }}
+          onClose={() => setShowFlashcards(false)}
+        />
+      )}
+
+      {/* Live Collaboration */}
+      {showCollab && (
+        <CollabPanel
+          content={content}
+          onContentChange={handleContentChange}
+          onClose={() => setShowCollab(false)}
         />
       )}
     </div>

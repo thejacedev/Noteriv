@@ -88,7 +88,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listAllFiles: (dir) => ipcRenderer.invoke("fs:listAllFiles", dir),
 
   // Shell
+  saveHtmlDialog: (defaultPath) =>
+    ipcRenderer.invoke("dialog:saveHtml", { defaultPath }),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
+  openPath: (filePath) => ipcRenderer.invoke("shell:openPath", filePath),
 
   // Updater
   updaterCheck: () => ipcRenderer.invoke("updater:check"),

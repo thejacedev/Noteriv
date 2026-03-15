@@ -66,7 +66,11 @@ export type HotkeyAction =
   | "insertDrawing"
   | "insertToc"
   | "updateToc"
-  | "insertDataview";
+  | "insertDataview"
+  | "focusMode"
+  | "publishNote"
+  | "flashcardReview"
+  | "startCollab";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -154,6 +158,10 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "insertToc", label: "Insert Table of Contents", keys: "", category: "Edit" },
   { action: "updateToc", label: "Update Table of Contents", keys: "", category: "Edit" },
   { action: "insertDataview", label: "Insert Dataview Query", keys: "", category: "Edit" },
+  { action: "focusMode", label: "Toggle Focus Mode", keys: "", category: "View" },
+  { action: "publishNote", label: "Publish Note as HTML", keys: "", category: "File" },
+  { action: "flashcardReview", label: "Flashcard Review", keys: "", category: "Navigation" },
+  { action: "startCollab", label: "Live Collaboration", keys: "", category: "Edit" },
 ];
 
 /**

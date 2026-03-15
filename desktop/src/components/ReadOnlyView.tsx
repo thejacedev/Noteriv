@@ -35,6 +35,7 @@ export default function ReadOnlyView({ content, className = "" }: ReadOnlyViewPr
         editorTheme,
         markdownRenderTheme,
         liveMarkdownPlugin,
+
         renderAllLines.of(true),
         EditorView.lineWrapping,
         EditorState.readOnly.of(true),

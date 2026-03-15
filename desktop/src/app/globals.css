@@ -8050,3 +8050,15 @@ body {
   color: var(--text-muted, #6c7086);
   flex-shrink: 0;
 }
+
+/* Focus / Typewriter Mode */
+.editor-focus-mode .cm-line {
+  opacity: 0.25;
+  transition: opacity 0.15s ease;
+}
+.editor-focus-mode .cm-activeLine {
+  opacity: 1 !important;
+}
+.editor-focus-mode .cm-activeLineGutter {
+  opacity: 1 !important;
+}

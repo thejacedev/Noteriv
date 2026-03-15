@@ -112,6 +112,24 @@ ipcMain.handle("shell:openExternal", (_, url) => {
   }
 });
 
+ipcMain.handle("dialog:saveHtml", async (_, { defaultPath }) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath,
+    filters: [
+      { name: "HTML", extensions: ["html"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled) return null;
+  return result.filePath;
+});
+
+ipcMain.handle("shell:openPath", (_, filePath) => {
+  if (typeof filePath === "string") {
+    return shell.openPath(filePath);
+  }
+});
+
 // ============================================================
 // Workspace state IPC handlers
 // ============================================================

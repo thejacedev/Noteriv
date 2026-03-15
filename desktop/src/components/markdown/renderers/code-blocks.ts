@@ -384,6 +384,11 @@ class CodeBlockWidget extends WidgetType {
       return new DataviewWidget(this.code).toDOM();
     }
 
+    // Mermaid blocks get rendered as diagrams
+    if (this.lang === "mermaid") {
+      return this.renderMermaid();
+    }
+
     const container = document.createElement("div");
     container.className = "md-codeblock";
 
@@ -437,6 +442,66 @@ class CodeBlockWidget extends WidgetType {
 
     pre.appendChild(codeEl);
     container.appendChild(pre);
+
+    return container;
+  }
+
+  private renderMermaid(): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "mermaid-widget";
+
+    const header = document.createElement("div");
+    header.className = "mermaid-header";
+    header.innerHTML = '<span class="mermaid-label"><span class="mermaid-label-icon">&#9670;</span> Mermaid</span>';
+    container.appendChild(header);
+
+    const inner = document.createElement("div");
+    inner.className = "mermaid-widget-inner";
+    inner.innerHTML = '<div class="mermaid-loading"><div class="mermaid-loading-spinner"></div>Rendering diagram...</div>';
+    container.appendChild(inner);
+
+    // Lazy-load mermaid and render
+    (async () => {
+      try {
+        const mod = await import("mermaid");
+        const mermaid = mod.default;
+        if (!(mermaid as any).__initialized) {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: "dark",
+            themeVariables: {
+              darkMode: true,
+              primaryColor: "#313244",
+              primaryTextColor: "#cdd6f4",
+              primaryBorderColor: "#89b4fa",
+              lineColor: "#6c7086",
+              secondaryColor: "#45475a",
+              tertiaryColor: "#1e1e2e",
+              background: "#1e1e2e",
+              mainBkg: "#313244",
+              nodeBorder: "#89b4fa",
+              clusterBkg: "#181825",
+              clusterBorder: "#45475a",
+              titleColor: "#cdd6f4",
+              edgeLabelBackground: "#181825",
+              nodeTextColor: "#cdd6f4",
+            },
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+            securityLevel: "loose",
+          });
+          (mermaid as any).__initialized = true;
+        }
+        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const { svg } = await mermaid.render(id, this.code);
+        if (container.isConnected) {
+          inner.innerHTML = svg;
+        }
+      } catch (err: any) {
+        if (container.isConnected) {
+          inner.innerHTML = `<div class="mermaid-error"><div class="mermaid-error-title">&#9888; Diagram Error</div><div class="mermaid-error-message">${escapeHtml(err?.message || String(err))}</div></div>`;
+        }
+      }
+    })();
 
     return container;
   }
