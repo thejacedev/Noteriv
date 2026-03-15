@@ -6,6 +6,9 @@
     A powerful, open-source note-taking app built for writers, developers, and anyone who thinks in plain text.<br />
     Available on <strong>desktop</strong> (Windows, macOS, Linux) and <strong>mobile</strong> (Android, iOS).
   </p>
+  <p>
+    <strong>Note:</strong> The mobile app is a work in progress. All features ship to desktop first.
+  </p>
 
   <p>
     <a href="#-features"><strong>Features</strong></a> &middot;
@@ -320,8 +323,10 @@ desktop/
 ## 📱 Mobile App
 
 > **Expo + React Native** &mdash; Android, iOS
+>
+> **Work in progress.** All features come to desktop first, then mobile.
 
-The mobile app has full feature parity with the desktop, adapted for touch interfaces. Notes are stored in the app's document directory and synced via the GitHub REST API.
+The mobile app aims for feature parity with the desktop, adapted for touch interfaces. Notes are stored in the app's document directory and synced via the GitHub REST API.
 
 ### Development
 

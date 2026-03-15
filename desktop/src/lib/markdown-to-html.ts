@@ -1,8 +1,11 @@
 /**
  * Simple markdown-to-HTML converter.
  * Supports: headings, bold, italic, code (inline + blocks), links, images,
- * lists (ordered + unordered), blockquotes, horizontal rules, tables, task lists.
+ * lists (ordered + unordered), blockquotes, horizontal rules, tables, task lists,
+ * [TOC] placeholder, dataview code blocks, and excalidraw embeds.
  */
+
+import { renderTocHTML } from "@/lib/toc-utils";
 
 /**
  * Convert a markdown string to HTML.
@@ -15,6 +18,13 @@ export function markdownToHTML(md: string): string {
   while (i < lines.length) {
     const line = lines[i];
 
+    // [TOC] placeholder
+    if (line.trim() === "[TOC]") {
+      html.push(renderTocHTML(md));
+      i++;
+      continue;
+    }
+
     // Fenced code blocks (``` or ~~~)
     if (line.match(/^```/) || line.match(/^~~~/)) {
       const fence = line.match(/^(`{3,}|~{3,})/)?.[1] || "```";
@@ -26,6 +36,14 @@ export function markdownToHTML(md: string): string {
         i++;
       }
       i++; // skip closing fence
+
+      // Dataview code blocks — render as a placeholder div
+      if (lang === "dataview") {
+        const queryText = codeLines.map(l => l.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')).join("\n");
+        html.push(`<div class="dataview-block" data-query="${escapeHtml(queryText)}"></div>`);
+        continue;
+      }
+
       const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
       html.push(`<pre><code${langAttr}>${codeLines.join("\n")}</code></pre>`);
       continue;
@@ -123,6 +141,12 @@ function inlineFormat(text: string): string {
 
   // Inline code (must come first to prevent inner formatting)
   result = result.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Drawing embeds: ![[filename.drawing]]
+  result = result.replace(
+    /!\[\[([^\]]+\.drawing)\]\]/g,
+    '<div class="drawing-embed" data-file="$1" style="background:#313244;border:1px solid #45475a;border-radius:8px;padding:12px;margin:4px 0;text-align:center;color:#a6adc8;font-size:12px;cursor:pointer" title="Click to open drawing">&#x1f4dd; $1</div>'
+  );
 
   // Images: ![alt](url)
   result = result.replace(

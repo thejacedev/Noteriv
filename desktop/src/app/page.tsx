@@ -22,6 +22,12 @@ import AudioRecorder from "@/components/AudioRecorder";
 import AttachmentManager from "@/components/AttachmentManager";
 import PluginManagerModal from "@/components/PluginManager";
 import CSSSnippets from "@/components/CSSSnippets";
+import CalendarView from "@/components/CalendarView";
+import DataviewBlock from "@/components/DataviewBlock";
+import { isBoardContent, isBoardFile, createBoardContent } from "@/lib/board-utils";
+import { isDrawingFile, generateDrawingName, createEmptyDrawing, serializeDrawing } from "@/lib/drawing-utils";
+import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
+import { insertAtCursor } from "@/lib/editor-commands";
 import {
   HotkeyBinding,
   HotkeyAction,
@@ -62,6 +68,8 @@ const ReadOnlyView = dynamic(() => import("@/components/ReadOnlyView"), { ssr: f
 const GraphView = dynamic(() => import("@/components/GraphView"), { ssr: false });
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const SlidePresentation = dynamic(() => import("@/components/SlidePresentation"), { ssr: false });
+const BoardView = dynamic(() => import("@/components/BoardView"), { ssr: false });
+const DrawingEditor = dynamic(() => import("@/components/DrawingEditor"), { ssr: false });
 
 type ViewMode = "live" | "source" | "view";
 type AppState = "loading" | "setup" | "app";
@@ -116,6 +124,10 @@ export default function Home() {
   // Ecosystem
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showCSSSnippets, setShowCSSSnippets] = useState(false);
+
+  // New features
+  const [showCalendarView, setShowCalendarView] = useState(false);
+  const [drawingFile, setDrawingFile] = useState<string | null>(null);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -351,6 +363,30 @@ export default function Home() {
   }, [appState, tabs, settings.autoSaveInterval]);
 
   // ============================================================
+  // Board auto-save (every 5s for .board.md files)
+  // ============================================================
+
+  useEffect(() => {
+    if (appState !== "app") return;
+    const interval = setInterval(async () => {
+      if (!window.electronAPI) return;
+      for (const tab of tabs) {
+        if (tab.content !== tab.savedContent && (isBoardFile(tab.filePath) || isBoardContent(tab.content))) {
+          const success = await window.electronAPI.writeFile(tab.filePath, tab.content);
+          if (success) {
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.filePath === tab.filePath ? { ...t, savedContent: t.content } : t
+              )
+            );
+          }
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [appState, tabs]);
+
+  // ============================================================
   // Git sync
   // ============================================================
 
@@ -472,6 +508,12 @@ export default function Home() {
   const openingFilesRef = useRef(new Set<string>());
 
   const openFile = useCallback(async (filePath: string) => {
+    // Excalidraw files open in the drawing editor
+    if (isDrawingFile(filePath)) {
+      setDrawingFile(filePath);
+      return;
+    }
+
     // Already being opened — block duplicate calls
     if (openingFilesRef.current.has(filePath)) {
       setActiveTab(filePath);
@@ -606,11 +648,20 @@ export default function Home() {
   const handleSave = useCallback(async () => {
     if (!window.electronAPI || !currentTab) return;
 
+    // Auto-update TOC blocks before saving
+    let contentToSave = currentTab.content;
+    if (hasTocBlock(contentToSave)) {
+      contentToSave = updateTocBlocks(contentToSave);
+      if (contentToSave !== currentTab.content) {
+        handleContentChange(contentToSave);
+      }
+    }
+
     // Save snapshot for file recovery
     if (activeVault) {
-      try { saveSnapshot(activeVault.path, currentTab.filePath, currentTab.content); } catch {}
+      try { saveSnapshot(activeVault.path, currentTab.filePath, contentToSave); } catch {}
     }
-    const success = await window.electronAPI.writeFile(currentTab.filePath, currentTab.content);
+    const success = await window.electronAPI.writeFile(currentTab.filePath, contentToSave);
     if (success) {
       setTabs((prev) =>
         prev.map((t) =>
@@ -797,6 +848,76 @@ export default function Home() {
     setSidebarRefresh((k) => k + 1);
   }, [activeVault, openFile]);
 
+  // Create daily note for a specific date (from calendar)
+  const handleCreateDailyNote = useCallback(async (dateStr: string) => {
+    if (!window.electronAPI || !activeVault) return;
+    const dailyDir = `${activeVault.path}/Daily`;
+    const filePath = `${dailyDir}/${dateStr}.md`;
+    await window.electronAPI.createDir(dailyDir);
+    const existing = await window.electronAPI.readFile(filePath);
+    if (existing === null) {
+      await window.electronAPI.writeFile(filePath, `# ${dateStr}\n\n`);
+    }
+    openFile(filePath);
+    setSidebarRefresh((k) => k + 1);
+  }, [activeVault, openFile]);
+
+  // Create new task board
+  const handleNewBoard = useCallback(async () => {
+    if (!window.electronAPI || !activeVault) return;
+    const existing = await window.electronAPI.readDir(activeVault.path);
+    const names = existing.map((e) => e.name);
+    let name = "Board.board.md";
+    let counter = 1;
+    while (names.includes(name)) { counter++; name = `Board ${counter}.board.md`; }
+    const filePath = `${activeVault.path}/${name}`;
+    await window.electronAPI.writeFile(filePath, createBoardContent());
+    openFile(filePath);
+    setSidebarRefresh((k) => k + 1);
+  }, [activeVault, openFile]);
+
+  // Create new excalidraw drawing
+  const handleNewDrawing = useCallback(async () => {
+    if (!window.electronAPI || !activeVault) return;
+    const existing = await window.electronAPI.readDir(activeVault.path);
+    const names = existing.map((e) => e.name);
+    const name = generateDrawingName(names);
+    const filePath = `${activeVault.path}/${name}`;
+    await window.electronAPI.writeFile(filePath, serializeDrawing(createEmptyDrawing()));
+    setDrawingFile(filePath);
+    setSidebarRefresh((k) => k + 1);
+  }, [activeVault]);
+
+  // Insert TOC placeholder
+  const handleInsertToc = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    insertAtCursor(view, insertTocPlaceholder());
+  }, []);
+
+  // Insert auto-updating TOC block
+  const handleInsertTocBlock = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    insertAtCursor(view, generateTocBlock(content));
+  }, [content]);
+
+  // Update existing TOC blocks
+  const handleUpdateToc = useCallback(() => {
+    if (!currentTab || !hasTocBlock(content)) return;
+    const updated = updateTocBlocks(content);
+    if (updated !== content) {
+      handleContentChange(updated);
+    }
+  }, [content, currentTab, handleContentChange]);
+
+  // Insert dataview query template
+  const handleInsertDataview = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    insertAtCursor(view, '```dataview\nTABLE file.name, file.tags FROM "" SORT BY file.modified DESC LIMIT 10\n```');
+  }, []);
+
   const handleHeadingClick = useCallback((line: number) => {
     const view = editorViewRef.current;
     if (!view) return;
@@ -869,9 +990,15 @@ export default function Home() {
       slidePresentation: () => setShowSlidePresentation(true),
       pluginManager: () => setShowPluginManager(true),
       cssSnippets: () => setShowCSSSnippets(true),
+      calendarView: () => setShowCalendarView(true),
+      newBoard: handleNewBoard,
+      insertDrawing: handleNewDrawing,
+      insertToc: handleInsertToc,
+      updateToc: handleUpdateToc,
+      insertDataview: handleInsertDataview,
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview]);
 
   // ============================================================
   // Hotkey settings persistence
@@ -995,6 +1122,12 @@ export default function Home() {
         slidePresentation: () => setShowSlidePresentation(true),
         pluginManager: () => setShowPluginManager(true),
         cssSnippets: () => setShowCSSSnippets(true),
+        calendarView: () => setShowCalendarView(true),
+        newBoard: handleNewBoard,
+        insertDrawing: handleNewDrawing,
+        insertToc: handleInsertToc,
+        updateToc: handleUpdateToc,
+        insertDataview: handleInsertDataview,
       };
 
       for (const binding of hotkeys) {
@@ -1011,7 +1144,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview]);
 
   // Electron menu events
   useEffect(() => {
@@ -1112,6 +1245,16 @@ export default function Home() {
                   <path d="M14 13l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
               </button>
+              <button className="ribbon-btn" title="Calendar view" onClick={() => setShowCalendarView(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M2 7h12" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <circle cx="5.5" cy="10" r="1" fill="currentColor" />
+                  <circle cx="8" cy="10" r="1" fill="currentColor" />
+                  <circle cx="10.5" cy="10" r="1" fill="currentColor" />
+                </svg>
+              </button>
               <button className="ribbon-btn" title="Presentation" onClick={() => setShowSlidePresentation(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="3" width="12" height="8" rx="1" stroke="currentColor" strokeWidth="1.2" />
@@ -1149,7 +1292,7 @@ export default function Home() {
         )}
 
         {/* Editor */}
-        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col">
+        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""}>
           {currentTab ? (
             <>
               <DocumentTitle
@@ -1157,7 +1300,9 @@ export default function Home() {
                 onRename={handleRenameCurrentFile}
               />
               <div className="flex-1 overflow-hidden">
-                {viewMode === "view" ? (
+                {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
+                  <BoardView content={content} onChange={handleContentChange} />
+                ) : viewMode === "view" ? (
                   <ReadOnlyView content={content} />
                 ) : viewMode === "source" ? (
                   <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
@@ -1439,6 +1584,26 @@ export default function Home() {
             refreshSnippets(snips);
           }}
           onClose={() => setShowCSSSnippets(false)}
+        />
+      )}
+
+      {/* Calendar View */}
+      {showCalendarView && activeVault && (
+        <CalendarView
+          vaultPath={activeVault.path}
+          onFileSelect={(f) => { openFile(f); setShowCalendarView(false); }}
+          onCreateDailyNote={(date) => { handleCreateDailyNote(date); setShowCalendarView(false); }}
+          onClose={() => setShowCalendarView(false)}
+        />
+      )}
+
+      {/* Drawing Editor */}
+      {drawingFile && activeVault && (
+        <DrawingEditor
+          filePath={drawingFile}
+          vaultPath={activeVault.path}
+          onSave={() => setSidebarRefresh((k) => k + 1)}
+          onClose={() => setDrawingFile(null)}
         />
       )}
     </div>

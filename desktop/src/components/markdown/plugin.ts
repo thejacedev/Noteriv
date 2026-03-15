@@ -11,6 +11,7 @@ import { getBlockRenderers, getInlineRenderers } from "./registry";
 import { CodeBlockTracker } from "./renderers/code-blocks";
 import { MathBlockTracker } from "./renderers/math";
 import { HtmlBlockTracker } from "./renderers/html";
+import { processTocLine } from "./renderers/toc";
 import type { BlockContext, InlineReplacement } from "./types";
 
 /** When true, all lines render as non-cursor (pure view mode). */
@@ -129,6 +130,9 @@ function buildDecorations(view: EditorView): DecorationSet {
       cursorLines.has(i)
     );
     if (htmlResult) continue;
+
+    // [TOC] block
+    if (processTocLine(builder, line, text, cursorLines.has(i), doc.toString())) continue;
 
     // Skip cursor lines — show raw markdown
     if (cursorLines.has(i)) continue;

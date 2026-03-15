@@ -200,12 +200,190 @@ interface CodeBlockInfo {
   closeLine: number;
 }
 
+class DataviewWidget extends WidgetType {
+  constructor(readonly query: string) {
+    super();
+  }
+
+  toDOM() {
+    const container = document.createElement("div");
+    container.className = "md-dataview";
+    container.style.cssText = "background:#313244;border:1px solid #45475a;border-radius:8px;padding:12px;margin:4px 0;font-size:12px;color:#cdd6f4";
+
+    const header = document.createElement("div");
+    header.style.cssText = "font-size:10px;font-weight:700;color:#89b4fa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px";
+    header.textContent = "DATAVIEW";
+    container.appendChild(header);
+
+    const loading = document.createElement("div");
+    loading.style.cssText = "color:#a6adc8;font-size:12px";
+    loading.textContent = "Running query...";
+    container.appendChild(loading);
+
+    // Execute query async
+    this.runQuery(container, loading);
+
+    return container;
+  }
+
+  private async runQuery(container: HTMLElement, loading: HTMLElement) {
+    try {
+      if (!window.electronAPI) {
+        loading.textContent = "Electron API not available";
+        loading.style.color = "#f38ba8";
+        return;
+      }
+
+      // Dynamic import to avoid circular deps
+      const { parseQuery, executeQuery, parseNoteData } = await import("@/lib/dataview");
+
+      const parsed = parseQuery(this.query);
+      if ("error" in parsed) {
+        loading.textContent = `Error: ${parsed.error}`;
+        loading.style.color = "#f38ba8";
+        return;
+      }
+
+      // Get vault path from the DOM (stored on the editor container)
+      const vaultPath = document.querySelector("[data-vault-path]")?.getAttribute("data-vault-path");
+      if (!vaultPath) {
+        loading.textContent = "No vault path found";
+        loading.style.color = "#f38ba8";
+        return;
+      }
+
+      const files = await window.electronAPI.listAllFiles(vaultPath);
+      const notes = [];
+      for (const file of files) {
+        if (!file.filePath.match(/\.(md|markdown)$/i)) continue;
+        const content = await window.electronAPI.readFile(file.filePath);
+        if (content === null) continue;
+        notes.push(parseNoteData(file.filePath, content, { created: "", modified: "", size: content.length }));
+      }
+
+      const result = executeQuery(parsed, notes);
+
+      // Clear loading
+      container.removeChild(loading);
+
+      if (result.type === "TABLE") {
+        const table = document.createElement("table");
+        table.style.cssText = "width:100%;border-collapse:collapse;font-size:12px";
+
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        for (const f of result.fields) {
+          const th = document.createElement("th");
+          th.style.cssText = "text-align:left;padding:4px 8px;color:#a6adc8;font-size:11px;font-weight:600;border-bottom:1px solid #45475a";
+          th.textContent = f;
+          headerRow.appendChild(th);
+        }
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        for (const row of result.rows) {
+          const tr = document.createElement("tr");
+          tr.style.borderTop = "1px solid #313244";
+          for (const f of result.fields) {
+            const td = document.createElement("td");
+            td.style.cssText = "padding:4px 8px;color:#cdd6f4";
+            if (f === "file.name") {
+              const link = document.createElement("span");
+              link.className = "md-wikilink";
+              link.style.cssText = "color:#89b4fa;cursor:pointer";
+              link.textContent = row[f] || "";
+              link.setAttribute("data-target", row["file.path"] || "");
+              td.appendChild(link);
+            } else {
+              td.textContent = row[f] || "";
+            }
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        const footer = document.createElement("div");
+        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.textContent = `${result.rows.length} results`;
+        container.appendChild(footer);
+
+      } else if (result.type === "LIST") {
+        const ul = document.createElement("ul");
+        ul.style.cssText = "list-style:none;padding:0;margin:0";
+        for (const row of result.rows) {
+          const li = document.createElement("li");
+          li.style.padding = "3px 0";
+          const link = document.createElement("span");
+          link.className = "md-wikilink";
+          link.style.cssText = "color:#89b4fa;cursor:pointer";
+          link.textContent = row["file.name"] || "";
+          link.setAttribute("data-target", row["file.path"] || "");
+          li.appendChild(link);
+          ul.appendChild(li);
+        }
+        container.appendChild(ul);
+
+        const footer = document.createElement("div");
+        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.textContent = `${result.rows.length} results`;
+        container.appendChild(footer);
+
+      } else if (result.type === "TASK" && result.tasks) {
+        const ul = document.createElement("ul");
+        ul.style.cssText = "list-style:none;padding:0;margin:0";
+        for (const task of result.tasks) {
+          const li = document.createElement("li");
+          li.style.cssText = `display:flex;align-items:flex-start;gap:6px;padding:3px 0;color:${task.completed ? "#585b70" : "#cdd6f4"};font-size:12px`;
+          const check = document.createElement("span");
+          check.style.cssText = `width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;${task.completed ? "background:#a6e3a1;color:#1e1e2e" : "border:1.5px solid #585b70"}`;
+          check.textContent = task.completed ? "\u2713" : "";
+          li.appendChild(check);
+          const text = document.createElement("span");
+          text.style.textDecoration = task.completed ? "line-through" : "none";
+          text.textContent = task.text;
+          li.appendChild(text);
+          const file = document.createElement("span");
+          file.className = "md-wikilink";
+          file.style.cssText = "color:#89b4fa;cursor:pointer;font-size:10px;opacity:0.6;margin-left:auto";
+          file.textContent = task.fileName;
+          file.setAttribute("data-target", task.filePath);
+          li.appendChild(file);
+          ul.appendChild(li);
+        }
+        container.appendChild(ul);
+
+        const footer = document.createElement("div");
+        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.textContent = `${result.tasks.length} tasks`;
+        container.appendChild(footer);
+      }
+    } catch (err) {
+      loading.textContent = `Error: ${err}`;
+      loading.style.color = "#f38ba8";
+    }
+  }
+
+  ignoreEvent() { return false; }
+
+  eq(other: DataviewWidget) {
+    return this.query === other.query;
+  }
+}
+
 class CodeBlockWidget extends WidgetType {
   constructor(readonly lang: string, readonly code: string) {
     super();
   }
 
   toDOM() {
+    // Dataview blocks get a special widget
+    if (this.lang === "dataview") {
+      return new DataviewWidget(this.code).toDOM();
+    }
+
     const container = document.createElement("div");
     container.className = "md-codeblock";
 

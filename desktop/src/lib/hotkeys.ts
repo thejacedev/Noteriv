@@ -59,7 +59,14 @@ export type HotkeyAction =
   | "attachments"
   | "slidePresentation"
   | "pluginManager"
-  | "cssSnippets";
+  | "cssSnippets"
+  // New features
+  | "calendarView"
+  | "newBoard"
+  | "insertDrawing"
+  | "insertToc"
+  | "updateToc"
+  | "insertDataview";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -140,6 +147,13 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   // Ecosystem
   { action: "pluginManager", label: "Plugin Manager", keys: "", category: "View" },
   { action: "cssSnippets", label: "CSS Snippets", keys: "", category: "View" },
+  // New features
+  { action: "calendarView", label: "Calendar View", keys: "", category: "View" },
+  { action: "newBoard", label: "New Board", keys: "", category: "File" },
+  { action: "insertDrawing", label: "New Drawing", keys: "", category: "Edit" },
+  { action: "insertToc", label: "Insert Table of Contents", keys: "", category: "Edit" },
+  { action: "updateToc", label: "Update Table of Contents", keys: "", category: "Edit" },
+  { action: "insertDataview", label: "Insert Dataview Query", keys: "", category: "Edit" },
 ];
 
 /**
