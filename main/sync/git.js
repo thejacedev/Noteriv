@@ -60,6 +60,25 @@ function makeAuthUrl(remoteUrl, token) {
   return remoteUrl;
 }
 
+async function currentBranch(dir) {
+  try {
+    const branch = await git(["branch", "--show-current"], dir);
+    if (branch) return branch;
+  } catch {}
+  // Fallback: check HEAD ref for initial commits or detached state
+  try {
+    const ref = await git(["symbolic-ref", "--short", "HEAD"], dir);
+    if (ref) return ref;
+  } catch {}
+  // Last resort: check what the remote default branch is
+  try {
+    const remoteInfo = await git(["remote", "show", "origin"], dir);
+    const match = remoteInfo.match(/HEAD branch:\s*(.+)/);
+    if (match) return match[1].trim();
+  } catch {}
+  return "main";
+}
+
 async function isGitInstalled() {
   try {
     await git(["--version"], process.cwd());
@@ -112,7 +131,7 @@ async function getStatus(dir) {
     const repo = await isGitRepo(dir);
     if (!repo) return { isRepo: false, changes: 0, branch: null, remote: null, ahead: 0, behind: 0 };
 
-    const branch = await git(["branch", "--show-current"], dir).catch(() => "main");
+    const branch = await currentBranch(dir);
 
     let remote = null;
     try {
@@ -143,10 +162,9 @@ async function sync(dir, commitMessage, token = null) {
   const msg = commitMessage || `Sync notes ${new Date().toISOString().split("T")[0]}`;
 
   let remote = null;
-  let branch = "main";
+  let branch = await currentBranch(dir);
   try {
     remote = await git(["remote", "get-url", "origin"], dir);
-    branch = await git(["branch", "--show-current"], dir).catch(() => "main");
   } catch {}
 
   if (remote) {
@@ -204,7 +222,7 @@ async function sync(dir, commitMessage, token = null) {
 }
 
 async function pull(dir, token = null) {
-  const branch = await git(["branch", "--show-current"], dir).catch(() => "main");
+  const branch = await currentBranch(dir);
   const hasChanges = await git(["status", "--porcelain"], dir).catch(() => "");
   const needsStash = !!hasChanges;
 

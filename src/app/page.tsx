@@ -756,6 +756,25 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", handleWikiClick, true);
   }, [activeVault, openFile]);
 
+  // External link click handler — open in system browser
+  useEffect(() => {
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest("a.md-link") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || (!href.startsWith("http://") && !href.startsWith("https://"))) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      window.electronAPI?.openExternal(href);
+    };
+
+    document.addEventListener("click", handleLinkClick, true);
+    return () => document.removeEventListener("click", handleLinkClick, true);
+  }, []);
+
   const handleDailyNote = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
     const now = new Date();

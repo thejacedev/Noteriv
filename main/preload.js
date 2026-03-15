@@ -87,6 +87,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("fs:searchInFiles", { dir, query }),
   listAllFiles: (dir) => ipcRenderer.invoke("fs:listAllFiles", dir),
 
+  // Shell
+  openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
+
   // Updater
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
   updaterDownload: () => ipcRenderer.invoke("updater:download"),

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const _serve = require("electron-serve");
@@ -101,6 +101,16 @@ ipcMain.handle("window:maximize", () => {
 ipcMain.handle("window:close", () => mainWindow.close());
 ipcMain.handle("window:isMaximized", () => mainWindow.isMaximized());
 ipcMain.handle("window:platform", () => process.platform);
+
+// ============================================================
+// Shell IPC handlers
+// ============================================================
+
+ipcMain.handle("shell:openExternal", (_, url) => {
+  if (typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"))) {
+    return shell.openExternal(url);
+  }
+});
 
 // ============================================================
 // Workspace state IPC handlers
