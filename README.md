@@ -1,36 +1,605 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <img src="desktop/public/icon.png" alt="Noteriv" width="140" height="140" />
+  <h1>Noteriv</h1>
+  <p><strong>Markdown notes, everywhere.</strong></p>
+  <p>
+    A powerful, open-source note-taking app built for writers, developers, and anyone who thinks in plain text.<br />
+    Available on <strong>desktop</strong> (Windows, macOS, Linux) and <strong>mobile</strong> (Android, iOS).
+  </p>
 
-## Getting Started
+  <p>
+    <a href="#-features"><strong>Features</strong></a> &middot;
+    <a href="#-getting-started"><strong>Getting Started</strong></a> &middot;
+    <a href="#-desktop-app"><strong>Desktop</strong></a> &middot;
+    <a href="#-mobile-app"><strong>Mobile</strong></a> &middot;
+    <a href="#-community"><strong>Community</strong></a> &middot;
+    <a href="#-project-structure"><strong>Structure</strong></a> &middot;
+    <a href="#-contributing"><strong>Contributing</strong></a>
+  </p>
 
-First, run the development server:
+  <br />
+</div>
+
+---
+
+## Why Noteriv?
+
+Most note apps lock you into their cloud, their format, or their platform. Noteriv is different:
+
+- **Your notes are plain markdown files.** No proprietary format. Open them in any editor, anywhere.
+- **Your data stays yours.** Notes live on your device. Sync with GitHub if you want, or don't.
+- **Same app on every platform.** Desktop and mobile with full feature parity. Edit on your laptop, review on your phone.
+- **Extensible.** Plugins, themes, and CSS snippets let you make it your own.
+
+---
+
+## ✨ Features
+
+### Editor
+
+<table>
+  <tr>
+    <td width="50%">
+      <h4>Writing</h4>
+      <ul>
+        <li><strong>Live markdown preview</strong> &mdash; See rendered output as you type</li>
+        <li><strong>Source mode</strong> &mdash; Raw markdown with syntax highlighting</li>
+        <li><strong>Read-only mode</strong> &mdash; Clean rendered view for reading</li>
+        <li><strong>Formatting toolbar</strong> &mdash; Bold, italic, headings, links, lists, code, tables, horizontal rules</li>
+        <li><strong>Auto-save</strong> &mdash; Configurable intervals (10s, 30s, 1m, 5m) or manual</li>
+        <li><strong>Spell check</strong> &mdash; Toggle on/off</li>
+        <li><strong>Vim mode</strong> &mdash; Optional vim keybindings (desktop)</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h4>Markdown Support</h4>
+      <ul>
+        <li>Headings (H1&ndash;H6)</li>
+        <li>Bold, italic, strikethrough, highlight</li>
+        <li>Ordered &amp; unordered lists</li>
+        <li>Task lists with checkboxes</li>
+        <li>Tables with alignment</li>
+        <li>Fenced code blocks with syntax highlighting</li>
+        <li>Block &amp; inline math (LaTeX via KaTeX)</li>
+        <li>Mermaid diagrams</li>
+        <li>Callouts / admonitions (16+ types)</li>
+        <li>Footnotes &amp; definition lists</li>
+        <li>Superscript, subscript</li>
+        <li>HTML blocks</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Knowledge Management
+
+<table>
+  <tr>
+    <td width="50%">
+      <h4>Linking &amp; Discovery</h4>
+      <ul>
+        <li><strong>Wiki-links</strong> &mdash; Link notes with <code>[[note name]]</code>, supports aliases <code>[[note|display]]</code> and headings <code>[[note#heading]]</code></li>
+        <li><strong>Backlinks panel</strong> &mdash; See every note that links to the current file</li>
+        <li><strong>Tags</strong> &mdash; Hierarchical tags with <code>#tag</code> and <code>#parent/child</code> syntax</li>
+        <li><strong>Graph view</strong> &mdash; Interactive force-directed knowledge graph (desktop)</li>
+        <li><strong>Hover preview</strong> &mdash; Preview linked notes on hover (desktop)</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h4>Organization</h4>
+      <ul>
+        <li><strong>Vaults</strong> &mdash; Multiple vaults for different projects or areas of life</li>
+        <li><strong>Folders</strong> &mdash; Nested folder structure with drag-and-drop reordering</li>
+        <li><strong>Bookmarks</strong> &mdash; Pin frequently accessed notes</li>
+        <li><strong>Outline panel</strong> &mdash; Table of contents from headings</li>
+        <li><strong>Quick open</strong> &mdash; Fuzzy file search across your vault</li>
+        <li><strong>Vault search</strong> &mdash; Full-text search across all notes</li>
+        <li><strong>Daily notes</strong> &mdash; Quick-access to today's note</li>
+        <li><strong>Random note</strong> &mdash; Rediscover forgotten ideas</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Advanced Features
+
+<table>
+  <tr>
+    <td width="33%">
+      <h4>Content Tools</h4>
+      <ul>
+        <li><strong>Templates</strong> &mdash; Create notes from templates with variables (<code>{{date}}</code>, <code>{{time}}</code>, <code>{{title}}</code>, and more)</li>
+        <li><strong>Frontmatter editor</strong> &mdash; YAML metadata editing with property suggestions</li>
+        <li><strong>Note composer</strong> &mdash; Merge multiple notes or split by heading level</li>
+        <li><strong>File recovery</strong> &mdash; Automatic snapshots (up to 50 per file) with one-tap restore</li>
+        <li><strong>Slide presentations</strong> &mdash; Present markdown as slides (split by <code>---</code>), with speaker notes</li>
+        <li><strong>PDF export</strong> &mdash; Export notes to PDF (desktop)</li>
+      </ul>
+    </td>
+    <td width="33%">
+      <h4>Media &amp; Attachments</h4>
+      <ul>
+        <li><strong>Attachment manager</strong> &mdash; Browse, filter, and manage all vault attachments</li>
+        <li><strong>Image support</strong> &mdash; PNG, JPG, GIF, SVG, WebP, and more</li>
+        <li><strong>Audio files</strong> &mdash; MP3, WAV, OGG, FLAC, AAC</li>
+        <li><strong>Video files</strong> &mdash; MP4, MKV, AVI, MOV</li>
+        <li><strong>Audio recorder</strong> &mdash; Record voice notes directly in the app (desktop)</li>
+        <li><strong>Canvas</strong> &mdash; Visual whiteboard with nodes and connections (desktop)</li>
+      </ul>
+    </td>
+    <td width="33%">
+      <h4>Sync</h4>
+      <ul>
+        <li><strong>GitHub sync</strong> &mdash; Push and pull notes to/from any GitHub repository</li>
+        <li><strong>Auto-sync</strong> &mdash; Automatic background sync at configurable intervals</li>
+        <li><strong>Pull on open</strong> &mdash; Automatically pull latest changes when opening a vault</li>
+        <li><strong>Sync on save</strong> &mdash; Push after every manual save</li>
+        <li><strong>Folder sync</strong> &mdash; Sync with Google Drive, Dropbox, OneDrive, iCloud (desktop)</li>
+        <li><strong>WebDAV sync</strong> &mdash; Sync with Nextcloud, ownCloud, or any WebDAV server (desktop)</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Customization
+
+<table>
+  <tr>
+    <td width="50%">
+      <h4>Themes</h4>
+      <p>10 built-in themes with full dark and light mode support:</p>
+      <table>
+        <tr>
+          <td><strong>Dark</strong></td>
+          <td>Catppuccin Mocha, Nord, Dracula, Solarized Dark, One Dark, Gruvbox Dark, Tokyo Night, GitHub Dark</td>
+        </tr>
+        <tr>
+          <td><strong>Light</strong></td>
+          <td>Catppuccin Latte, Solarized Light</td>
+        </tr>
+      </table>
+      <br />
+      <ul>
+        <li>Community themes from <a href="https://github.com/thejacedev/NoterivThemes">NoterivThemes</a></li>
+        <li>Custom theme creation and import/export (desktop)</li>
+        <li>8 accent colors: Blue, Lavender, Mauve, Pink, Peach, Yellow, Green, Teal</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h4>Ecosystem</h4>
+      <p><strong>Plugins</strong></p>
+      <ul>
+        <li>Install community plugins from <a href="https://github.com/thejacedev/NoterivPlugins">NoterivPlugins</a></li>
+        <li>Plugin API with vault access, UI commands, events, and editor integration</li>
+        <li>Enable/disable per vault</li>
+      </ul>
+      <p><strong>CSS Snippets</strong></p>
+      <ul>
+        <li>Create custom CSS to style the editor and preview</li>
+        <li>Install community snippets from <a href="https://github.com/thejacedev/NoterivSnippets">NoterivSnippets</a></li>
+        <li>Toggle snippets on/off individually</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+### Editor Settings
+
+| Setting | Options |
+|---|---|
+| Auto-save interval | Off, 10s, 30s, 1 min, 5 min |
+| Font size | 12px &ndash; 24px |
+| Line height | 1.2 &ndash; 2.0 |
+| Tab size | 2, 4, 8 |
+| Editor font | JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, SF Mono, System Mono |
+| Theme | 10 built-in + community + custom |
+| Accent color | 8 options |
+| Spell check | On / Off |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- [npm](https://www.npmjs.com/)
+- [Git](https://git-scm.com/) (for GitHub sync features)
+
+### Clone the repo
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/thejacedev/Noteriv.git
+cd Noteriv
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🖥 Desktop App
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+> **Electron + Next.js** &mdash; Windows, macOS, Linux
 
-## Learn More
+The desktop app provides the full Noteriv experience with a CodeMirror-based editor, native file system access, and Git integration via the system's git binary.
 
-To learn more about Next.js, take a look at the following resources:
+### Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cd desktop
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This starts both the Next.js dev server (port 3456) and the Electron window simultaneously.
 
-## Deploy on Vercel
+### Build
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+cd desktop
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Builds distributable packages to `desktop/dist/`:
+
+| Platform | Format |
+|---|---|
+| Linux | AppImage, .deb, .rpm |
+| macOS | .dmg |
+| Windows | .exe (NSIS installer) |
+
+### Desktop Architecture
+
+```
+desktop/
+├── main/                 Electron main process
+│   ├── main.js           App entry, IPC handlers, window management
+│   ├── preload.js        Context bridge (91 methods)
+│   ├── store.js          Persistent config (vaults, settings)
+│   ├── auth.js           GitHub token encryption (OS keychain)
+│   ├── updater.js        Auto-update via electron-updater
+│   └── sync/
+│       ├── git.js        Git operations via child_process
+│       ├── folder.js     Folder sync (bidirectional, mtime-based)
+│       ├── webdav.js     WebDAV sync
+│       ├── helpers.js    Shared sync utilities
+│       └── index.js      Sync orchestrator
+├── src/
+│   ├── app/
+│   │   ├── page.tsx      Main app (90+ state variables)
+│   │   ├── layout.tsx    Next.js root layout
+│   │   └── globals.css   Global styles + CSS variables
+│   ├── components/       32 React components
+│   │   ├── Editor.tsx           CodeMirror markdown editor
+│   │   ├── Sidebar.tsx          File tree with drag-drop
+│   │   ├── TitleBar.tsx         Tabs + window controls
+│   │   ├── SettingsModal.tsx    6-section settings
+│   │   ├── SetupWizard.tsx      First-run wizard
+│   │   ├── GraphView.tsx        Force-directed knowledge graph
+│   │   ├── Canvas.tsx           Visual whiteboard
+│   │   ├── SlidePresentation.tsx  Markdown presentations
+│   │   ├── CommandPalette.tsx   Searchable action palette
+│   │   ├── ThemePicker.tsx      Theme browser + installer
+│   │   ├── PluginManager.tsx    Plugin browser + installer
+│   │   ├── CSSSnippets.tsx      Snippet editor + community
+│   │   └── markdown/            Live rendering engine
+│   │       ├── plugin.ts        CodeMirror ViewPlugin
+│   │       ├── registry.ts      Renderer registration
+│   │       ├── renderers/       15 block + inline renderers
+│   │       ├── callouts.ts      Obsidian-style admonitions
+│   │       ├── embeds.ts        Note embedding (![[file]])
+│   │       ├── math.ts          KaTeX rendering
+│   │       ├── mermaid.ts       Diagram rendering
+│   │       ├── wikilinks.ts     Interactive wiki-links
+│   │       └── slash-commands.ts  / command menu
+│   ├── lib/              23 utility modules
+│   │   ├── settings.ts          App settings + defaults
+│   │   ├── theme-utils.ts       10 built-in themes + community
+│   │   ├── plugin-api.ts        Plugin sandbox + API
+│   │   ├── css-snippets.ts      CSS snippet system
+│   │   ├── hotkeys.ts           60+ rebindable shortcuts
+│   │   ├── editor-commands.ts   Formatting commands
+│   │   ├── wiki-link-utils.ts   Link parsing + resolution
+│   │   ├── tag-utils.ts         Tag extraction + aggregation
+│   │   ├── frontmatter-utils.ts YAML frontmatter
+│   │   ├── template-utils.ts    Template variables
+│   │   ├── file-recovery.ts     Snapshot system
+│   │   ├── note-composer-utils.ts  Merge + split
+│   │   ├── attachment-utils.ts  Media management
+│   │   ├── audio-utils.ts       Recording utilities
+│   │   ├── canvas-utils.ts      Canvas data model
+│   │   ├── slide-utils.ts       Presentation parser
+│   │   ├── pdf-export.ts        PDF export
+│   │   ├── sync-providers.ts    Folder + WebDAV config
+│   │   └── vim-mode.ts          Vim keybindings
+│   └── types/
+│       └── electron.d.ts  IPC type definitions (50+ methods)
+└── public/               App icons (macOS, Windows, Linux)
+```
+
+---
+
+## 📱 Mobile App
+
+> **Expo + React Native** &mdash; Android, iOS
+
+The mobile app has full feature parity with the desktop, adapted for touch interfaces. Notes are stored in the app's document directory and synced via the GitHub REST API.
+
+### Development
+
+```bash
+cd phone
+npm install
+npx expo start
+```
+
+| Command | Description |
+|---|---|
+| `npx expo start` | Start Expo dev server |
+| `npx expo start --android` | Open on Android device/emulator |
+| `npx expo start --ios` | Open on iOS simulator |
+
+### Mobile Architecture
+
+```
+phone/
+├── app/                  Screens (Expo Router, file-based routing)
+│   ├── _layout.tsx       Root layout + theme provider
+│   ├── index.tsx          Home (notes list, daily note, random note)
+│   ├── editor.tsx         Markdown editor + preview
+│   ├── settings.tsx       Settings (themes, GitHub, ecosystem)
+│   ├── setup.tsx          First-run wizard with GitHub auth
+│   ├── templates.tsx      Template picker
+│   ├── recovery.tsx       File recovery / snapshots
+│   ├── composer.tsx       Note merge + split
+│   ├── attachments.tsx    Attachment manager
+│   ├── backlinks.tsx      Backlinks viewer
+│   ├── frontmatter.tsx    YAML frontmatter editor
+│   ├── slides.tsx         Slide presentation viewer
+│   ├── snippets.tsx       CSS snippets (installed + community)
+│   └── plugins.tsx        Plugin manager (installed + community)
+├── components/
+│   ├── MarkdownEditor.tsx   TextInput editor + formatting toolbar
+│   ├── MarkdownPreview.tsx  Custom markdown renderer
+│   ├── NotesList.tsx        File/folder browser
+│   ├── SearchModal.tsx      Quick open + vault search
+│   ├── CreateModal.tsx      Create file/folder
+│   ├── VaultSwitcher.tsx    Switch/create vaults
+│   ├── OutlinePanel.tsx     Document outline
+│   ├── BookmarksPanel.tsx   Bookmarked files
+│   └── TagsPanel.tsx        Hierarchical tag browser
+├── context/
+│   ├── AppContext.tsx       Global state (vault, settings, files, auto-sync)
+│   └── ThemeContext.tsx     Dynamic theme provider
+├── lib/
+│   ├── file-system.ts       expo-file-system class API wrapper
+│   ├── vault.ts             Vault CRUD + workspace
+│   ├── settings.ts          Settings with defaults
+│   ├── storage.ts           AsyncStorage wrappers
+│   ├── github-sync.ts       GitHub REST API sync (push/pull)
+│   ├── templates.ts         Template listing + variables
+│   ├── frontmatter.ts       YAML parse/serialize
+│   ├── file-recovery.ts     Snapshot system
+│   ├── note-composer.ts     Merge + split
+│   ├── wiki-links.ts        Link parsing + backlinks
+│   ├── attachments.ts       Attachment management
+│   ├── slide-utils.ts       Slide parser
+│   ├── daily-note.ts        Daily note helper
+│   ├── random-note.ts       Random note picker
+│   ├── css-snippets.ts      CSS snippet system
+│   ├── plugins.ts           Plugin management
+│   └── community.ts         Community theme support
+├── constants/
+│   └── theme.ts             10 built-in themes + accent colors
+└── types/
+    └── index.ts             TypeScript interfaces
+```
+
+### Mobile vs Desktop
+
+Both apps share the same feature set with platform-appropriate adaptations:
+
+| Feature | Desktop | Mobile |
+|---|---|---|
+| Editor | CodeMirror 6 | TextInput + toolbar |
+| Git sync | Native git binary | GitHub REST API |
+| File storage | Any filesystem path | App document directory |
+| Themes | 10 built-in + custom creator | 10 built-in + community install |
+| Plugins | Sandbox execution | Install + enable/disable |
+| Navigation | Sidebar + tabs | Stack navigation + modals |
+| Graph view | Force-directed canvas | &mdash; |
+| Canvas | SVG whiteboard | &mdash; |
+| Vim mode | CodeMirror vim extension | &mdash; |
+| Audio recorder | MediaRecorder API | &mdash; |
+| Keyboard shortcuts | 60+ rebindable | System defaults |
+
+---
+
+## 🌐 Community
+
+Noteriv has a growing ecosystem of community-created extensions. Browse and install them directly from the app.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <h3>Plugins</h3>
+      <a href="https://github.com/thejacedev/NoterivPlugins">
+        <strong>thejacedev/NoterivPlugins</strong>
+      </a>
+      <br /><br />
+      <p>Extend Noteriv with custom commands, sidebar panels, status bar items, and editor integrations. Plugins have access to the vault filesystem, editor state, and event system.</p>
+      <br />
+      <sub>
+        <strong>Plugin API:</strong> vault read/write, UI commands, event listeners (file-open, file-save, editor-change, etc.), editor manipulation (insert, replace, cursor)
+      </sub>
+    </td>
+    <td align="center" width="33%">
+      <h3>Themes</h3>
+      <a href="https://github.com/thejacedev/NoterivThemes">
+        <strong>thejacedev/NoterivThemes</strong>
+      </a>
+      <br /><br />
+      <p>Community color themes beyond the 10 built-in options. Themes define 16 color properties covering backgrounds, text, accent, and syntax colors.</p>
+      <br />
+      <sub>
+        <strong>Theme format:</strong> JSON with id, name, type (dark/light), and colors object. Import/export supported on desktop.
+      </sub>
+    </td>
+    <td align="center" width="33%">
+      <h3>CSS Snippets</h3>
+      <a href="https://github.com/thejacedev/NoterivSnippets">
+        <strong>thejacedev/NoterivSnippets</strong>
+      </a>
+      <br /><br />
+      <p>Fine-tune the editor and preview with custom CSS. Snippets are stored per-vault and can be toggled individually. Community snippets are organized by category.</p>
+      <br />
+      <sub>
+        <strong>Snippet storage:</strong> <code>.noteriv/snippets/</code> directory with per-snippet <code>.css</code> files and a config JSON for enable/disable state.
+      </sub>
+    </td>
+  </tr>
+</table>
+
+### Creating Plugins
+
+Plugins live in `.noteriv/plugins/{plugin-id}/` inside your vault. Each plugin needs:
+
+```
+my-plugin/
+├── manifest.json    Plugin metadata
+└── main.js          Entry point
+```
+
+**manifest.json:**
+```json
+{
+  "id": "my-plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "description": "What this plugin does",
+  "author": "Your Name",
+  "main": "main.js"
+}
+```
+
+**main.js:**
+```javascript
+module.exports = {
+  onLoad(api) {
+    api.ui.addCommand({
+      id: "hello",
+      name: "Say Hello",
+      callback: () => api.ui.showNotice("Hello from my plugin!")
+    });
+  },
+  onUnload() {
+    // cleanup
+  }
+};
+```
+
+### Creating Themes
+
+Themes are JSON files with 16 color properties:
+
+```json
+{
+  "id": "my-theme",
+  "name": "My Theme",
+  "type": "dark",
+  "colors": {
+    "bgPrimary": "#1a1b26",
+    "bgSecondary": "#16161e",
+    "bgTertiary": "#24283b",
+    "border": "#3b4261",
+    "textPrimary": "#c0caf5",
+    "textSecondary": "#a9b1d6",
+    "textMuted": "#565f89",
+    "accent": "#7aa2f7",
+    "green": "#9ece6a",
+    "red": "#f7768e",
+    "yellow": "#e0af68",
+    "blue": "#7aa2f7",
+    "mauve": "#bb9af7",
+    "peach": "#ff9e64",
+    "teal": "#73daca",
+    "pink": "#bb9af7"
+  }
+}
+```
+
+Save to `.noteriv/themes/my-theme.json` or submit a PR to [NoterivThemes](https://github.com/thejacedev/NoterivThemes).
+
+---
+
+## 📁 Project Structure
+
+```
+Noteriv/
+├── desktop/              Electron + Next.js desktop application
+│   ├── main/             Electron main process (IPC, file I/O, Git, sync)
+│   ├── src/components/   32 React components + markdown rendering engine
+│   ├── src/lib/          23 utility modules
+│   └── public/           Platform icons
+├── phone/                Expo + React Native mobile application
+│   ├── app/              14 screens (Expo Router)
+│   ├── components/       10 UI components
+│   ├── lib/              17 utility modules
+│   └── context/          App state + theme contexts
+├── .github/workflows/    CI/CD (build + release)
+├── LICENSE               MIT License
+└── README.md
+```
+
+---
+
+## 🔧 Development
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `cd desktop && npm run dev` | Desktop dev mode (Next.js + Electron) |
+| `cd desktop && npm run build` | Build desktop distributables |
+| `cd desktop && npm run build:next` | Build Next.js only |
+| `cd phone && npx expo start` | Mobile dev server |
+| `cd phone && npx expo start --android` | Run on Android |
+| `cd phone && npx expo start --ios` | Run on iOS |
+| `cd phone && npx expo export` | Export mobile app bundle |
+
+### Tech Stack
+
+| Layer | Desktop | Mobile |
+|---|---|---|
+| Framework | Next.js 16 | Expo 54 |
+| UI | React 19 | React Native 0.81 |
+| Editor | CodeMirror 6 | TextInput + custom renderer |
+| Runtime | Electron 40 | Expo Router 6 |
+| File I/O | Node.js fs | expo-file-system |
+| Sync | child_process git | GitHub REST API |
+| Storage | JSON files | AsyncStorage |
+| Styling | Tailwind CSS 4 | StyleSheet + dynamic themes |
+| Math | KaTeX | &mdash; |
+| Diagrams | Mermaid | &mdash; |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Report bugs** &mdash; Open an issue with steps to reproduce
+2. **Suggest features** &mdash; Open an issue describing what you'd like to see
+3. **Submit code** &mdash; Fork, create a branch, make your changes, and open a PR
+4. **Create plugins** &mdash; Build and share plugins via [NoterivPlugins](https://github.com/thejacedev/NoterivPlugins)
+5. **Create themes** &mdash; Design and share themes via [NoterivThemes](https://github.com/thejacedev/NoterivThemes)
+6. **Create snippets** &mdash; Write and share CSS snippets via [NoterivSnippets](https://github.com/thejacedev/NoterivSnippets)
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) &copy; Jace Sleeman
+
+<div align="center">
+  <br />
+  <sub>Built with care by <a href="https://github.com/thejacedev">@thejacedev</a></sub>
+</div>
