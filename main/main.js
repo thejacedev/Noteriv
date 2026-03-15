@@ -6,6 +6,7 @@ const store = require("./store");
 const gitOps = require("./sync/git");
 const auth = require("./auth");
 const syncOps = require("./sync");
+const { initUpdater, checkForUpdates } = require("./updater");
 
 const isProd = process.env.NODE_ENV === "production" || app.isPackaged;
 
@@ -341,6 +342,17 @@ ipcMain.handle("fs:listAllFiles", async (_, dir) => {
 // App lifecycle
 // ============================================================
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  initUpdater(mainWindow);
+
+  // Auto-check for updates on startup if enabled (production only)
+  if (isProd) {
+    const settings = store.loadSettings();
+    if (settings.autoUpdate !== false) {
+      setTimeout(() => checkForUpdates(), 5000);
+    }
+  }
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

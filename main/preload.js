@@ -87,6 +87,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("fs:searchInFiles", { dir, query }),
   listAllFiles: (dir) => ipcRenderer.invoke("fs:listAllFiles", dir),
 
+  // Updater
+  updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  updaterDownload: () => ipcRenderer.invoke("updater:download"),
+  updaterInstall: () => ipcRenderer.invoke("updater:install"),
+  updaterGetVersion: () => ipcRenderer.invoke("updater:getVersion"),
+  onUpdaterUpdateAvailable: (callback) => {
+    ipcRenderer.on("updater:update-available", (_, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners("updater:update-available");
+  },
+  onUpdaterUpdateNotAvailable: (callback) => {
+    ipcRenderer.on("updater:update-not-available", () => callback());
+    return () => ipcRenderer.removeAllListeners("updater:update-not-available");
+  },
+  onUpdaterDownloadProgress: (callback) => {
+    ipcRenderer.on("updater:download-progress", (_, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners("updater:download-progress");
+  },
+  onUpdaterUpdateDownloaded: (callback) => {
+    ipcRenderer.on("updater:update-downloaded", (_, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners("updater:update-downloaded");
+  },
+  onUpdaterError: (callback) => {
+    ipcRenderer.on("updater:error", (_, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners("updater:error");
+  },
+
   // Menu events
   onMenuSave: (callback) => {
     ipcRenderer.on("menu:save", callback);

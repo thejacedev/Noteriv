@@ -135,6 +135,66 @@ export default function SettingsModal({
       <Row label="Spell check" desc="Underline misspelled words in the editor.">
         <Toggle checked={settings.spellCheck} onChange={(v) => update({ spellCheck: v })} />
       </Row>
+
+      <div className="st-divider" />
+      <div className="st-group-label">Updates</div>
+
+      {appVersion && (
+        <Row label="Version" desc="Currently installed version of Noteriv.">
+          <span className="st-version-badge">v{appVersion}</span>
+        </Row>
+      )}
+
+      <Row label="Automatic updates" desc="Check for updates on startup and notify when a new version is available.">
+        <Toggle checked={settings.autoUpdate} onChange={(v) => update({ autoUpdate: v })} />
+      </Row>
+
+      <div className="st-update-row">
+        {updateStatus === "idle" && (
+          <button className="st-test-btn" onClick={handleCheckForUpdates}>
+            Check for Updates
+          </button>
+        )}
+        {updateStatus === "checking" && (
+          <button className="st-test-btn" disabled>Checking...</button>
+        )}
+        {updateStatus === "up-to-date" && (
+          <div className="st-update-status">
+            <span className="st-test-result st-test-ok">Up to date</span>
+            <button className="st-test-btn" onClick={handleCheckForUpdates}>Check Again</button>
+          </div>
+        )}
+        {updateStatus === "available" && (
+          <div className="st-update-status">
+            <span className="st-update-version">v{updateInfo.version} available</span>
+            <button className="st-test-btn st-update-download-btn" onClick={handleDownloadUpdate}>
+              Download Update
+            </button>
+          </div>
+        )}
+        {updateStatus === "downloading" && (
+          <div className="st-update-status">
+            <div className="st-update-progress-bar">
+              <div className="st-update-progress-fill" style={{ width: `${updateInfo.percent ?? 0}%` }} />
+            </div>
+            <span className="st-update-percent">{Math.round(updateInfo.percent ?? 0)}%</span>
+          </div>
+        )}
+        {updateStatus === "downloaded" && (
+          <div className="st-update-status">
+            <span className="st-test-result st-test-ok">v{updateInfo.version} ready</span>
+            <button className="st-test-btn st-update-install-btn" onClick={handleInstallUpdate}>
+              Restart &amp; Install
+            </button>
+          </div>
+        )}
+        {updateStatus === "error" && (
+          <div className="st-update-status">
+            <span className="st-test-result st-test-fail">{updateInfo.error || "Update failed"}</span>
+            <button className="st-test-btn" onClick={handleCheckForUpdates}>Retry</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -259,6 +319,69 @@ export default function SettingsModal({
       ))}
     </div>
   );
+
+  // Updater state
+  const [appVersion, setAppVersion] = useState("");
+  const [updateStatus, setUpdateStatus] = useState<
+    "idle" | "checking" | "available" | "downloading" | "downloaded" | "error" | "up-to-date"
+  >("idle");
+  const [updateInfo, setUpdateInfo] = useState<{ version?: string; percent?: number; error?: string }>({});
+
+  useEffect(() => {
+    if (!window.electronAPI?.updaterGetVersion) return;
+    window.electronAPI.updaterGetVersion().then(setAppVersion);
+  }, []);
+
+  const handleCheckForUpdates = async () => {
+    if (!window.electronAPI?.updaterCheck) return;
+    setUpdateStatus("checking");
+    setUpdateInfo({});
+    const result = await window.electronAPI.updaterCheck();
+    if (result.error) {
+      setUpdateStatus("error");
+      setUpdateInfo({ error: result.error });
+    } else if (result.available) {
+      setUpdateStatus("available");
+      setUpdateInfo({ version: result.version });
+    } else {
+      setUpdateStatus("up-to-date");
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    if (!window.electronAPI?.updaterDownload) return;
+    setUpdateStatus("downloading");
+    setUpdateInfo((prev) => ({ ...prev, percent: 0 }));
+
+    const cleanupProgress = window.electronAPI.onUpdaterDownloadProgress?.((data) => {
+      setUpdateInfo((prev) => ({ ...prev, percent: data.percent }));
+    });
+    const cleanupDownloaded = window.electronAPI.onUpdaterUpdateDownloaded?.((data) => {
+      setUpdateStatus("downloaded");
+      setUpdateInfo({ version: data.version });
+    });
+    const cleanupError = window.electronAPI.onUpdaterError?.((data) => {
+      setUpdateStatus("error");
+      setUpdateInfo({ error: data.message });
+    });
+
+    const ok = await window.electronAPI.updaterDownload();
+    if (!ok) {
+      setUpdateStatus("error");
+      setUpdateInfo({ error: "Download failed" });
+    }
+
+    // Cleanup listeners after a delay to catch events
+    setTimeout(() => {
+      cleanupProgress?.();
+      cleanupDownloaded?.();
+      cleanupError?.();
+    }, 60000);
+  };
+
+  const handleInstallUpdate = () => {
+    window.electronAPI?.updaterInstall?.();
+  };
 
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);

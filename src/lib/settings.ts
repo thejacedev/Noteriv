@@ -14,6 +14,7 @@ export interface AppSettings {
   folderSync: { targetPath: string; direction: "push" | "pull" | "both" };
   webdavSync: { url: string; username: string; password: string; remotePath: string };
   theme: string; // theme ID
+  autoUpdate: boolean; // check for and install updates automatically
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -32,6 +33,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   folderSync: { targetPath: "", direction: "both" },
   webdavSync: { url: "", username: "", password: "", remotePath: "/Noteriv" },
   theme: "catppuccin-mocha",
+  autoUpdate: true,
 };
 
 export const ACCENT_COLORS = [

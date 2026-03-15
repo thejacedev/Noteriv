@@ -1286,6 +1286,57 @@ body {
   color: var(--red);
 }
 
+/* Updater */
+.st-version-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(205, 214, 244, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--editor-font, monospace);
+}
+.st-update-row {
+  margin-top: 8px;
+  padding: 0 4px;
+}
+.st-update-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.st-update-version {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.st-update-download-btn,
+.st-update-install-btn {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.st-update-install-btn {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+.st-update-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(205, 214, 244, 0.08);
+  overflow: hidden;
+}
+.st-update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.st-update-percent {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
 /* Toggle switch */
 .st-toggle {
   position: relative;

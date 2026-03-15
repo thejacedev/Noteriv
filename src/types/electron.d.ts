@@ -137,6 +137,17 @@ interface ElectronAPI {
   loadSettings: () => Promise<Record<string, any>>;
   saveSettings: (settings: Record<string, any>) => Promise<boolean>;
 
+  // Updater
+  updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string }>;
+  updaterDownload: () => Promise<boolean>;
+  updaterInstall: () => Promise<void>;
+  updaterGetVersion: () => Promise<string>;
+  onUpdaterUpdateAvailable: (callback: (data: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => () => void;
+  onUpdaterUpdateNotAvailable: (callback: () => void) => () => void;
+  onUpdaterDownloadProgress: (callback: (data: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => () => void;
+  onUpdaterUpdateDownloaded: (callback: (data: { version: string }) => void) => () => void;
+  onUpdaterError: (callback: (data: { message: string }) => void) => () => void;
+
   // Sync providers (folder, webdav, s3)
   syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{ pushed: number; pulled: number }>;
   syncProviderTest: (providerType: string, config: Record<string, any>) => Promise<{ ok: boolean; error?: string }>;

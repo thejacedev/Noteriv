@@ -43,10 +43,16 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm"
       ],
       "category": "Office",
       "icon": "public/linux/icons"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "thejacedev",
+      "repo": "Noteriv"
     }
   },
   "dependencies": {
@@ -63,6 +69,7 @@
     "@replit/codemirror-vim": "^6.3.0",
     "concurrently": "^9.2.1",
     "electron-serve": "^3.0.1",
+    "electron-updater": "^6.8.3",
     "katex": "^0.16.38",
     "mermaid": "^11.13.0",
     "next": "16.1.6",
@@ -72,13 +79,13 @@
     "webdav": "^5.9.0"
   },
   "devDependencies": {
-    "electron": "^40.8.0",
-    "electron-builder": "^26.8.1",
     "@tailwindcss/postcss": "^4",
     "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

@@ -20,7 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx next build
-      - run: npx electron-builder --linux AppImage deb
+      - run: npx electron-builder --linux AppImage deb rpm
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
@@ -29,6 +29,7 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
+            dist/*.rpm
 
   build-windows:
     runs-on: windows-latest
@@ -95,6 +96,7 @@ jobs:
           files: |
             dist/*.AppImage
             dist/*.deb
+            dist/*.rpm
             dist/*.exe
             dist/*.dmg
         env:
