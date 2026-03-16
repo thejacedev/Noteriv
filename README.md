@@ -132,7 +132,8 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Audio files</strong> &mdash; MP3, WAV, OGG, FLAC, AAC</li>
         <li><strong>Video files</strong> &mdash; MP4, MKV, AVI, MOV</li>
         <li><strong>Audio recorder</strong> &mdash; Record voice notes directly in the app (desktop)</li>
-        <li><strong>Canvas</strong> &mdash; Visual whiteboard with nodes and connections (desktop)</li>
+        <li><strong>Canvas / Whiteboard</strong> &mdash; Infinite canvas with text nodes, sticky notes (6 colors), image nodes, freehand drawing, file embeds, groups, and edge connections. Toolbar with select, text, sticky, image, draw tools + color picker</li>
+        <li><strong>PDF annotation</strong> &mdash; Open PDFs inline with highlight (4 colors), underline, and note tools. Annotation sidebar, auto-save to sidecar JSON, and one-click export to linked markdown with blockquotes and page references</li>
         <li><strong>Drawing editor</strong> &mdash; Built-in drawing canvas with pencil, shapes, arrows, text, and eraser tools. Full color picker, stroke widths, pan &amp; zoom. Drawings saved as <code>.drawing</code> files and embeddable in notes with <code>![[file.drawing]]</code></li>
       </ul>
     </td>
@@ -206,6 +207,22 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li>Search and select notes from your vault</li>
         <li>Copy HTML to clipboard or save as <code>.html</code></li>
         <li>Opens in your default browser after saving</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <h4>Web Clipper</h4>
+      <p>Browser extension to save articles and selections as markdown notes directly into your vault.</p>
+      <ul>
+        <li>Clip full pages or selected text</li>
+        <li>Pure JS HTML-to-markdown conversion (headings, links, images, lists, code, tables)</li>
+        <li>Set title, tags, and target folder from the popup</li>
+        <li>Right-click context menu: "Clip to Noteriv" / "Clip Selection to Noteriv"</li>
+        <li>Auto-generates frontmatter with title, source URL, date, and tags</li>
+        <li>Sidebar refreshes instantly when a note is clipped</li>
+        <li>Localhost API server on port 27123 &mdash; auto-starts with the app</li>
+        <li>Install: load <code>extension/</code> as unpacked extension in Chrome/Brave/Edge or temporary add-on in Firefox</li>
       </ul>
     </td>
   </tr>
@@ -337,7 +354,7 @@ desktop/
 │   │   ├── page.tsx      Main app (90+ state variables)
 │   │   ├── layout.tsx    Next.js root layout
 │   │   └── globals.css   Global styles + CSS variables
-│   ├── components/       40 React components
+│   ├── components/       41 React components
 │   │   ├── Editor.tsx           CodeMirror markdown editor
 │   │   ├── Sidebar.tsx          File tree with drag-drop
 │   │   ├── TitleBar.tsx         Tabs + window controls
@@ -357,6 +374,7 @@ desktop/
 │   │   ├── PublishPreview.tsx   HTML export preview + multi-note publish
 │   │   ├── FlashcardReview.tsx  Spaced repetition flashcard review
 │   │   ├── CollabPanel.tsx      Live collaboration session manager
+│   │   ├── PDFViewer.tsx        PDF viewer with annotation tools
 │   │   └── markdown/            Live rendering engine
 │   │       ├── plugin.ts        CodeMirror ViewPlugin
 │   │       ├── registry.ts      Renderer registration
@@ -367,7 +385,7 @@ desktop/
 │   │       ├── mermaid.ts       Diagram rendering
 │   │       ├── wikilinks.ts     Interactive wiki-links
 │   │       └── slash-commands.ts  / command menu
-│   ├── lib/              32 utility modules
+│   ├── lib/              33 utility modules
 │   │   ├── settings.ts          App settings + defaults
 │   │   ├── theme-utils.ts       10 built-in themes + community
 │   │   ├── plugin-api.ts        Plugin sandbox + API
@@ -395,7 +413,8 @@ desktop/
 │   │   ├── publish.ts           HTML export with theme colors
 │   │   ├── flashcard-utils.ts   SM-2 spaced repetition + card extraction
 │   │   ├── collab.ts            Yjs CRDT + WebRTC collaboration
-│   │   └── focus-mode.ts        Focus/typewriter mode extension
+│   │   ├── focus-mode.ts        Focus/typewriter mode extension
+│   │   └── pdf-annotation.ts   PDF annotation types + sidecar I/O + markdown export
 │   └── types/
 │       └── electron.d.ts  IPC type definitions (50+ methods)
 └── public/               App icons (macOS, Windows, Linux)
@@ -623,10 +642,11 @@ Save to `.noteriv/themes/my-theme.json` or submit a PR to [NoterivThemes](https:
 ```
 Noteriv/
 ├── desktop/              Electron + Next.js desktop application
-│   ├── main/             Electron main process (IPC, file I/O, Git, sync)
-│   ├── src/components/   32 React components + markdown rendering engine
-│   ├── src/lib/          23 utility modules
-│   └── public/           Platform icons
+│   ├── main/             Electron main process (IPC, file I/O, Git, sync, clipper server)
+│   ├── src/components/   41 React components + markdown rendering engine
+│   ├── src/lib/          33 utility modules
+│   └── public/           Platform icons + pdf.js worker
+├── extension/            Web Clipper browser extension (Manifest V3)
 ├── phone/                Expo + React Native mobile application
 │   ├── app/              14 screens (Expo Router)
 │   ├── components/       10 UI components

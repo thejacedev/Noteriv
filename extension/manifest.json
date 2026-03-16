@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Noteriv Web Clipper",
+  "version": "1.0.0",
+  "description": "Clip web pages to Noteriv",
+  "permissions": ["activeTab", "contextMenus"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

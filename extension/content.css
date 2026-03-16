@@ -1,0 +1,9 @@
+/* Noteriv Web Clipper - Toast notification styles */
+/* Styles are applied inline via JS for maximum specificity.
+   This file is kept minimal as a placeholder for any future
+   content script styling needs. */
+
+#noteriv-clipper-toast {
+  all: initial;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}

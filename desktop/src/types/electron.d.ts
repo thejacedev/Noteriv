@@ -79,9 +79,16 @@ interface ElectronAPI {
   openFile: () => Promise<{ filePath: string; content: string } | null>;
   openFolder: () => Promise<string | null>;
   saveFileDialog: (defaultPath?: string) => Promise<string | null>;
+  showOpenDialog: (options: {
+    properties?: string[];
+    filters?: { name: string; extensions: string[] }[];
+    title?: string;
+    defaultPath?: string;
+  }) => Promise<{ canceled: boolean; filePaths: string[] }>;
 
   // File system
   readFile: (filePath: string) => Promise<string | null>;
+  readBinaryFile: (filePath: string) => Promise<string | null>;
   writeFile: (filePath: string, content: string) => Promise<boolean>;
   readDir: (dirPath: string) => Promise<FileEntry[]>;
   createFile: (filePath: string) => Promise<boolean>;
@@ -142,6 +149,11 @@ interface ElectronAPI {
   // Shell
   openExternal: (url: string) => Promise<void>;
   openPath: (filePath: string) => Promise<string>;
+
+  // Web Clipper
+  clipperGetPort: () => Promise<number>;
+  clipperSetEnabled: (enabled: boolean) => Promise<void>;
+  onClipperClipped: (callback: (filePath: string) => void) => () => void;
 
   // Updater
   updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string }>;

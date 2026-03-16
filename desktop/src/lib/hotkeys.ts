@@ -70,7 +70,10 @@ export type HotkeyAction =
   | "focusMode"
   | "publishNote"
   | "flashcardReview"
-  | "startCollab";
+  | "startCollab"
+  | "newCanvas"
+  | "openPdfViewer"
+  | "exportPdfAnnotations";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -162,6 +165,10 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "publishNote", label: "Publish Note as HTML", keys: "", category: "File" },
   { action: "flashcardReview", label: "Flashcard Review", keys: "", category: "Navigation" },
   { action: "startCollab", label: "Live Collaboration", keys: "", category: "Edit" },
+  { action: "newCanvas", label: "New Canvas / Whiteboard", keys: "", category: "File" },
+  // PDF
+  { action: "openPdfViewer", label: "Open PDF", keys: "", category: "File" },
+  { action: "exportPdfAnnotations", label: "Export PDF Annotations", keys: "", category: "File" },
 ];
 
 /**

@@ -2,15 +2,20 @@
 
 export interface CanvasNode {
   id: string;
-  type: "text" | "file" | "group";
+  type: "text" | "file" | "group" | "sticky" | "image" | "drawing";
   x: number;
   y: number;
   width: number;
   height: number;
   text?: string;
   filePath?: string;
+  imagePath?: string;
   label?: string;
   color?: string;
+  drawingPoints?: number[][];
+  strokeColor?: string;
+  strokeWidth?: number;
+  rotation?: number;
 }
 
 export interface CanvasEdge {
@@ -87,6 +92,101 @@ export function createGroupNode(
     width: w,
     height: h,
     label,
+  };
+}
+
+/** Sticky note color palette */
+export const STICKY_COLORS: Record<string, string> = {
+  yellow: "#f9e2af",
+  pink: "#f5c2e7",
+  blue: "#89dceb",
+  green: "#a6e3a1",
+  purple: "#cba6f7",
+  peach: "#fab387",
+};
+
+/** Create a sticky note node at a given position */
+export function createStickyNode(
+  x: number,
+  y: number,
+  text: string = "",
+  color: string = "yellow"
+): CanvasNode {
+  // Random slight rotation between -2 and 2 degrees
+  const rotation = Math.round((Math.random() * 4 - 2) * 100) / 100;
+  return {
+    id: generateId(),
+    type: "sticky",
+    x,
+    y,
+    width: 200,
+    height: 200,
+    text,
+    color,
+    rotation,
+  };
+}
+
+/** Create an image node at a given position */
+export function createImageNode(
+  x: number,
+  y: number,
+  imagePath: string
+): CanvasNode {
+  return {
+    id: generateId(),
+    type: "image",
+    x,
+    y,
+    width: 300,
+    height: 240,
+    imagePath,
+  };
+}
+
+/** Create a drawing (freehand stroke) node */
+export function createDrawingNode(
+  points: number[][],
+  strokeColor: string = "#cdd6f4",
+  strokeWidth: number = 3
+): CanvasNode {
+  if (points.length === 0) {
+    return {
+      id: generateId(),
+      type: "drawing",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      drawingPoints: [],
+      strokeColor,
+      strokeWidth,
+    };
+  }
+  // Calculate bounding box from the points
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [px, py] of points) {
+    minX = Math.min(minX, px);
+    minY = Math.min(minY, py);
+    maxX = Math.max(maxX, px);
+    maxY = Math.max(maxY, py);
+  }
+  const pad = strokeWidth;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const w = Math.max(maxX - minX, 1);
+  const h = Math.max(maxY - minY, 1);
+  // Normalize points relative to the node origin
+  const normalizedPoints = points.map(([px, py]) => [px - minX, py - minY]);
+  return {
+    id: generateId(),
+    type: "drawing",
+    x: minX,
+    y: minY,
+    width: w,
+    height: h,
+    drawingPoints: normalizedPoints,
+    strokeColor,
+    strokeWidth,
   };
 }
 

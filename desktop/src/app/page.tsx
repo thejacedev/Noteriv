@@ -26,6 +26,7 @@ import CalendarView from "@/components/CalendarView";
 import DataviewBlock from "@/components/DataviewBlock";
 import { isBoardContent, isBoardFile, createBoardContent } from "@/lib/board-utils";
 import { isDrawingFile, generateDrawingName, createEmptyDrawing, serializeDrawing } from "@/lib/drawing-utils";
+import { isPdfFile } from "@/lib/pdf-annotation";
 import PublishPreview from "@/components/PublishPreview";
 import FlashcardReview from "@/components/FlashcardReview";
 import CollabPanel from "@/components/CollabPanel";
@@ -73,6 +74,7 @@ const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const SlidePresentation = dynamic(() => import("@/components/SlidePresentation"), { ssr: false });
 const BoardView = dynamic(() => import("@/components/BoardView"), { ssr: false });
 const DrawingEditor = dynamic(() => import("@/components/DrawingEditor"), { ssr: false });
+const PDFViewer = dynamic(() => import("@/components/PDFViewer"), { ssr: false });
 
 type ViewMode = "live" | "source" | "view";
 type AppState = "loading" | "setup" | "app";
@@ -131,10 +133,12 @@ export default function Home() {
   // New features
   const [showCalendarView, setShowCalendarView] = useState(false);
   const [drawingFile, setDrawingFile] = useState<string | null>(null);
+  const [pdfFile, setPdfFile] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
+  const [canvasFile, setCanvasFile] = useState<string | null>(null);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -562,6 +566,18 @@ export default function Home() {
       return;
     }
 
+    // Canvas files open in the canvas/whiteboard
+    if (filePath.endsWith(".canvas")) {
+      setCanvasFile(filePath);
+      return;
+    }
+
+    // PDF files open in the PDF viewer
+    if (isPdfFile(filePath)) {
+      setPdfFile(filePath);
+      return;
+    }
+
     // Already being opened — block duplicate calls
     if (openingFilesRef.current.has(filePath)) {
       setActiveTab(filePath);
@@ -924,6 +940,20 @@ export default function Home() {
     setSidebarRefresh((k) => k + 1);
   }, [activeVault, openFile]);
 
+  // Create new canvas/whiteboard
+  const handleNewCanvas = useCallback(async () => {
+    if (!window.electronAPI || !activeVault) return;
+    const existing = await window.electronAPI.readDir(activeVault.path);
+    const names = existing.map((e) => e.name);
+    let name = "Canvas.canvas";
+    let counter = 1;
+    while (names.includes(name)) { counter++; name = `Canvas ${counter}.canvas`; }
+    const filePath = `${activeVault.path}/${name}`;
+    await window.electronAPI.writeFile(filePath, JSON.stringify({ nodes: [], edges: [] }, null, 2));
+    setCanvasFile(filePath);
+    setSidebarRefresh((k) => k + 1);
+  }, [activeVault]);
+
   // Create new excalidraw drawing
   const handleNewDrawing = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
@@ -1051,6 +1081,7 @@ export default function Home() {
       cssSnippets: () => setShowCSSSnippets(true),
       calendarView: () => setShowCalendarView(true),
       newBoard: handleNewBoard,
+      newCanvas: handleNewCanvas,
       insertDrawing: handleNewDrawing,
       insertToc: handleInsertToc,
       updateToc: handleUpdateToc,
@@ -1059,9 +1090,15 @@ export default function Home() {
       publishNote: handlePublish,
       flashcardReview: () => setShowFlashcards(true),
       startCollab: () => setShowCollab(true),
+      openPdfViewer: () => {
+        if (activeTab && isPdfFile(activeTab)) setPdfFile(activeTab);
+      },
+      exportPdfAnnotations: () => {
+        if (pdfFile) { /* export handled inside PDFViewer */ }
+      },
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile]);
 
   // ============================================================
   // Hotkey settings persistence
@@ -1187,6 +1224,7 @@ export default function Home() {
         cssSnippets: () => setShowCSSSnippets(true),
         calendarView: () => setShowCalendarView(true),
         newBoard: handleNewBoard,
+        newCanvas: handleNewCanvas,
         insertDrawing: handleNewDrawing,
         insertToc: handleInsertToc,
         updateToc: handleUpdateToc,
@@ -1195,6 +1233,10 @@ export default function Home() {
         publishNote: handlePublish,
         flashcardReview: () => setShowFlashcards(true),
         startCollab: () => setShowCollab(true),
+        openPdfViewer: () => {
+          if (activeTab && isPdfFile(activeTab)) setPdfFile(activeTab);
+        },
+        exportPdfAnnotations: () => {},
       };
 
       for (const binding of hotkeys) {
@@ -1211,7 +1253,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile]);
 
   // Electron menu events
   useEffect(() => {
@@ -1224,6 +1266,15 @@ export default function Home() {
     ];
     return () => cleanups.forEach((fn) => fn());
   }, [appState, handleSave, handleSaveAs, handleNewFile, handleOpenFile]);
+
+  // Web clipper: refresh sidebar when a note is clipped
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI || appState !== "app") return;
+    const cleanup = window.electronAPI.onClipperClipped?.(() => {
+      setSidebarRefresh((k) => k + 1);
+    });
+    return () => cleanup?.();
+  }, [appState]);
 
   // ============================================================
   // Render
@@ -1664,6 +1715,18 @@ export default function Home() {
         />
       )}
 
+      {/* Canvas / Whiteboard */}
+      {canvasFile && activeVault && (
+        <Canvas
+          filePath={canvasFile}
+          vaultPath={activeVault.path}
+          onSave={async (content) => {
+            if (window.electronAPI) await window.electronAPI.writeFile(canvasFile, content);
+          }}
+          onFileSelect={(f) => { setCanvasFile(null); openFile(f); }}
+          onClose={() => setCanvasFile(null)}
+        />
+      )}
       {/* Drawing Editor */}
       {drawingFile && activeVault && (
         <DrawingEditor
@@ -1671,6 +1734,16 @@ export default function Home() {
           vaultPath={activeVault.path}
           onSave={() => setSidebarRefresh((k) => k + 1)}
           onClose={() => setDrawingFile(null)}
+        />
+      )}
+
+      {/* PDF Viewer */}
+      {pdfFile && activeVault && (
+        <PDFViewer
+          filePath={pdfFile}
+          vaultPath={activeVault.path}
+          onExportedNote={(mdPath) => { openFile(mdPath); setSidebarRefresh((k) => k + 1); }}
+          onClose={() => setPdfFile(null)}
         />
       )}
 

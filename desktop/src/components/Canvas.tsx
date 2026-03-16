@@ -14,12 +14,16 @@ import {
   createTextNode,
   createFileNode,
   createGroupNode,
+  createStickyNode,
+  createImageNode,
+  createDrawingNode,
   createEdge,
   serializeCanvas,
   parseCanvas,
   getAnchorPoint,
   generateId,
   recalcEdgeSides,
+  STICKY_COLORS,
 } from "@/lib/canvas-utils";
 import "@/styles/canvas.css";
 
@@ -30,6 +34,7 @@ interface CanvasProps {
   vaultPath: string;
   onSave: (content: string) => void;
   onFileSelect: (filePath: string) => void;
+  onClose?: () => void;
 }
 
 // ─── Constants ───
@@ -40,6 +45,20 @@ const ZOOM_STEP = 0.1;
 const MIN_NODE_W = 100;
 const MIN_NODE_H = 60;
 const NODE_COLORS = ["", "red", "orange", "yellow", "green", "blue", "purple"];
+
+/** Tool modes for the canvas toolbar */
+type CanvasTool = "select" | "text" | "sticky" | "image" | "draw";
+
+/** Colors available for the draw tool */
+const DRAW_STROKE_COLORS = [
+  "#cdd6f4", // white-ish (text)
+  "#f38ba8", // red
+  "#fab387", // peach
+  "#f9e2af", // yellow
+  "#a6e3a1", // green
+  "#89dceb", // blue
+  "#cba6f7", // purple
+];
 
 // ─── Sub-components ───
 
@@ -338,6 +357,219 @@ function GroupNodeView({
   );
 }
 
+/** Single sticky note node */
+function StickyNoteView({
+  node,
+  selected,
+  editing,
+  onPointerDown,
+  onDoubleClick,
+  onTextChange,
+  onTextBlur,
+  onAnchorPointerDown,
+  onResizePointerDown,
+  onContextMenu,
+}: {
+  node: CanvasNode;
+  selected: boolean;
+  editing: boolean;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
+  onDoubleClick: (id: string) => void;
+  onTextChange: (id: string, text: string) => void;
+  onTextBlur: () => void;
+  onAnchorPointerDown: (nodeId: string, side: string, e: React.PointerEvent) => void;
+  onResizePointerDown: (nodeId: string, corner: string, e: React.PointerEvent) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.selectionStart = textareaRef.current.value.length;
+    }
+  }, [editing]);
+
+  const rotation = node.rotation ?? 0;
+
+  return (
+    <div
+      className={`canvas-node canvas-node-sticky${selected ? " selected" : ""}`}
+      data-sticky-color={node.color || "yellow"}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.width,
+        height: node.height,
+        transform: `rotate(${rotation}deg)`,
+        background: STICKY_COLORS[node.color || "yellow"] || "#f9e2af",
+      }}
+      onPointerDown={(e) => onPointerDown(node.id, e)}
+      onDoubleClick={() => onDoubleClick(node.id)}
+      onContextMenu={(e) => onContextMenu(node.id, e)}
+    >
+      <div className="canvas-sticky-body">
+        {editing ? (
+          <textarea
+            ref={textareaRef}
+            value={node.text || ""}
+            onChange={(e) => onTextChange(node.id, e.target.value)}
+            onBlur={onTextBlur}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <div className="sticky-text-display">
+            {node.text || "Double-click to edit"}
+          </div>
+        )}
+      </div>
+      {/* Resize handles */}
+      {selected && (
+        <>
+          <div className="canvas-resize-handle nw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "nw", e); }} />
+          <div className="canvas-resize-handle ne" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "ne", e); }} />
+          <div className="canvas-resize-handle sw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "sw", e); }} />
+          <div className="canvas-resize-handle se" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "se", e); }} />
+        </>
+      )}
+      {/* Edge anchors */}
+      <div className="canvas-edge-anchor top" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "top", e); }} />
+      <div className="canvas-edge-anchor bottom" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "bottom", e); }} />
+      <div className="canvas-edge-anchor left" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "left", e); }} />
+      <div className="canvas-edge-anchor right" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "right", e); }} />
+    </div>
+  );
+}
+
+/** Single image node */
+function ImageNodeView({
+  node,
+  selected,
+  onPointerDown,
+  onDoubleClick,
+  onAnchorPointerDown,
+  onResizePointerDown,
+  onContextMenu,
+}: {
+  node: CanvasNode;
+  selected: boolean;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
+  onDoubleClick: (id: string) => void;
+  onAnchorPointerDown: (nodeId: string, side: string, e: React.PointerEvent) => void;
+  onResizePointerDown: (nodeId: string, corner: string, e: React.PointerEvent) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+}) {
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!node.imagePath) return;
+    // Read the image via Electron and create an object URL or use file:// protocol
+    async function loadImage() {
+      if (!node.imagePath) return;
+      try {
+        // Use file:// protocol for Electron (works in webview)
+        setImageSrc(`file://${node.imagePath}`);
+      } catch {
+        setImageSrc(null);
+      }
+    }
+    loadImage();
+  }, [node.imagePath]);
+
+  return (
+    <div
+      className={`canvas-node canvas-node-image${selected ? " selected" : ""}`}
+      data-color={node.color || undefined}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.width,
+        height: node.height,
+      }}
+      onPointerDown={(e) => onPointerDown(node.id, e)}
+      onDoubleClick={() => onDoubleClick(node.id)}
+      onContextMenu={(e) => onContextMenu(node.id, e)}
+    >
+      {imageSrc ? (
+        <img
+          src={imageSrc}
+          alt=""
+          draggable={false}
+        />
+      ) : (
+        <div className="canvas-image-placeholder">
+          <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+            <circle cx="5" cy="6" r="1.5" stroke="currentColor" strokeWidth="1" />
+            <path d="M1 11l4-3 3 2 3-4 4 5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+      {/* Resize handles */}
+      {selected && (
+        <>
+          <div className="canvas-resize-handle nw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "nw", e); }} />
+          <div className="canvas-resize-handle ne" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "ne", e); }} />
+          <div className="canvas-resize-handle sw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "sw", e); }} />
+          <div className="canvas-resize-handle se" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "se", e); }} />
+        </>
+      )}
+      {/* Edge anchors */}
+      <div className="canvas-edge-anchor top" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "top", e); }} />
+      <div className="canvas-edge-anchor bottom" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "bottom", e); }} />
+      <div className="canvas-edge-anchor left" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "left", e); }} />
+      <div className="canvas-edge-anchor right" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "right", e); }} />
+    </div>
+  );
+}
+
+/** Drawing (freehand stroke) node */
+function DrawingNodeView({
+  node,
+  selected,
+  onPointerDown,
+  onContextMenu,
+}: {
+  node: CanvasNode;
+  selected: boolean;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+}) {
+  const points = node.drawingPoints || [];
+  if (points.length < 2) return null;
+
+  const polylinePoints = points.map(([px, py]) => `${px},${py}`).join(" ");
+
+  return (
+    <div
+      className={`canvas-node canvas-node-drawing${selected ? " selected" : ""}`}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.width,
+        height: node.height,
+      }}
+      onPointerDown={(e) => { e.stopPropagation(); onPointerDown(node.id, e); }}
+      onContextMenu={(e) => onContextMenu(node.id, e)}
+    >
+      <svg
+        viewBox={`0 0 ${node.width} ${node.height}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ position: "absolute", top: 0, left: 0, width: node.width, height: node.height, overflow: "visible" }}
+      >
+        <polyline
+          points={polylinePoints}
+          fill="none"
+          stroke={node.strokeColor || "#cdd6f4"}
+          strokeWidth={node.strokeWidth || 3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 /** File picker overlay */
 function FilePicker({
   vaultPath,
@@ -358,7 +590,7 @@ function FilePicker({
     async function loadFiles() {
       if (!window.electronAPI) return;
       const all = await window.electronAPI.listAllFiles(vaultPath);
-      setFiles(all.filter((f) => /\.(md|markdown)$/i.test(f.fileName)));
+      setFiles(all);
     }
     loadFiles();
   }, [vaultPath]);
@@ -434,19 +666,29 @@ function CanvasContextMenu({
   x,
   y,
   nodeId,
+  nodeType,
   nodeColor,
   onDelete,
   onColorChange,
+  onStickyColorChange,
   onDuplicate,
+  onAddTextNode,
+  onAddStickyNote,
+  onAddImage,
   onClose,
 }: {
   x: number;
   y: number;
   nodeId: string | null;
+  nodeType?: string;
   nodeColor?: string;
   onDelete: () => void;
   onColorChange: (color: string) => void;
+  onStickyColorChange: (color: string) => void;
   onDuplicate: () => void;
+  onAddTextNode: () => void;
+  onAddStickyNote: () => void;
+  onAddImage: () => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -463,23 +705,44 @@ function CanvasContextMenu({
             Duplicate
           </button>
           <div className="canvas-context-divider" />
-          <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
-            Color
-          </div>
-          <div className="canvas-context-submenu">
-            {NODE_COLORS.map((c) => (
-              <div
-                key={c || "none"}
-                className={`canvas-color-dot${nodeColor === c ? " active" : ""}`}
-                style={{
-                  background: c
-                    ? { red: "#e55", orange: "#e93", yellow: "#ec5", green: "#5b5", blue: "#58c", purple: "#a6e" }[c]
-                    : "var(--bg-hover)",
-                }}
-                onClick={() => onColorChange(c)}
-              />
-            ))}
-          </div>
+          {/* Show sticky-specific color picker for sticky nodes */}
+          {nodeType === "sticky" ? (
+            <>
+              <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
+                Sticky Color
+              </div>
+              <div className="canvas-context-submenu">
+                {Object.entries(STICKY_COLORS).map(([name, hex]) => (
+                  <div
+                    key={name}
+                    className={`canvas-sticky-color-dot${nodeColor === name ? " active" : ""}`}
+                    style={{ background: hex }}
+                    onClick={() => onStickyColorChange(name)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : nodeType !== "drawing" ? (
+            <>
+              <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
+                Color
+              </div>
+              <div className="canvas-context-submenu">
+                {NODE_COLORS.map((c) => (
+                  <div
+                    key={c || "none"}
+                    className={`canvas-color-dot${nodeColor === c ? " active" : ""}`}
+                    style={{
+                      background: c
+                        ? { red: "#e55", orange: "#e93", yellow: "#ec5", green: "#5b5", blue: "#58c", purple: "#a6e" }[c]
+                        : "var(--bg-hover)",
+                    }}
+                    onClick={() => onColorChange(c)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
           <div className="canvas-context-divider" />
           <button className="canvas-context-item danger" onClick={onDelete}>
             Delete
@@ -487,9 +750,17 @@ function CanvasContextMenu({
         </>
       )}
       {!nodeId && (
-        <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-muted)" }}>
-          Right-click a node for options
-        </div>
+        <>
+          <button className="canvas-context-item" onClick={onAddTextNode}>
+            Add Text Node
+          </button>
+          <button className="canvas-context-item" onClick={onAddStickyNote}>
+            Add Sticky Note
+          </button>
+          <button className="canvas-context-item" onClick={onAddImage}>
+            Add Image
+          </button>
+        </>
       )}
     </div>
   );
@@ -566,7 +837,7 @@ function Minimap({
 
 // ─── Main Canvas Component ───
 
-export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: CanvasProps) {
+export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onClose }: CanvasProps) {
   // ─── State ───
   const [canvasData, setCanvasData] = useState<CanvasData>({ nodes: [], edges: [] });
   const [zoom, setZoom] = useState(1);
@@ -581,6 +852,16 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string | null } | null>(null);
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
   const [viewportSize, setViewportSize] = useState({ w: 800, h: 600 });
+
+  // Tool mode state
+  const [activeTool, setActiveTool] = useState<CanvasTool>("select");
+  const [drawStrokeColor, setDrawStrokeColor] = useState("#cdd6f4");
+  const [drawStrokeWidth] = useState(3);
+
+  // Freehand drawing state
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [currentDrawPoints, setCurrentDrawPoints] = useState<number[][]>([]);
+  const drawPointsRef = useRef<number[][]>([]);
 
   // Drawing edge state
   const [drawingEdge, setDrawingEdge] = useState<{
@@ -709,19 +990,40 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
       if ((e.target as HTMLElement).closest(".canvas-node")) return;
 
       e.preventDefault();
+      setContextMenu(null);
+
+      // Draw mode: start freehand stroke
+      if (activeTool === "draw") {
+        const world = screenToWorld(e.clientX, e.clientY);
+        const startPoint = [world.x, world.y];
+        setIsDrawing(true);
+        setCurrentDrawPoints([startPoint]);
+        drawPointsRef.current = [startPoint];
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        return;
+      }
+
       setIsPanning(true);
       setSelectedNodeIds(new Set());
       setSelectedEdgeId(null);
       setEditingNodeId(null);
-      setContextMenu(null);
       dragStartRef.current = { x: e.clientX, y: e.clientY, panX, panY };
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [panX, panY]
+    [panX, panY, activeTool, screenToWorld]
   );
 
   const handleViewportPointerMove = useCallback(
     (e: React.PointerEvent) => {
+      // Freehand drawing
+      if (isDrawing) {
+        const world = screenToWorld(e.clientX, e.clientY);
+        const newPoint = [world.x, world.y];
+        drawPointsRef.current = [...drawPointsRef.current, newPoint];
+        setCurrentDrawPoints([...drawPointsRef.current]);
+        return;
+      }
+
       // Panning
       if (isPanning && dragStartRef.current) {
         const dx = e.clientX - dragStartRef.current.x;
@@ -733,12 +1035,14 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
 
       // Dragging node
       if (isDraggingNode && nodeDragRef.current) {
-        const dx = (e.clientX - nodeDragRef.current.startX) / zoom;
-        const dy = (e.clientY - nodeDragRef.current.startY) / zoom;
+        const drag = nodeDragRef.current;
+        if (!drag.nodePositions) return;
+        const dx = (e.clientX - drag.startX) / zoom;
+        const dy = (e.clientY - drag.startY) / zoom;
         updateCanvas((prev) => ({
           ...prev,
           nodes: prev.nodes.map((n) => {
-            const orig = nodeDragRef.current!.nodePositions.get(n.id);
+            const orig = drag.nodePositions.get(n.id);
             if (!orig) return n;
             return { ...n, x: orig.x + dx, y: orig.y + dy };
           }),
@@ -773,11 +1077,25 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
         return;
       }
     },
-    [isPanning, isDraggingNode, drawingEdge, resizing, zoom, updateCanvas, screenToWorld]
+    [isDrawing, isPanning, isDraggingNode, drawingEdge, resizing, zoom, updateCanvas, screenToWorld]
   );
 
   const handleViewportPointerUp = useCallback(
     (e: React.PointerEvent) => {
+      // Finalize freehand drawing stroke
+      if (isDrawing) {
+        setIsDrawing(false);
+        const points = drawPointsRef.current;
+        if (points.length >= 2) {
+          const drawNode = createDrawingNode(points, drawStrokeColor, drawStrokeWidth);
+          updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, drawNode] }));
+        }
+        setCurrentDrawPoints([]);
+        drawPointsRef.current = [];
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+        return;
+      }
+
       if (isPanning) {
         setIsPanning(false);
         dragStartRef.current = null;
@@ -841,7 +1159,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
         }));
       }
     },
-    [isPanning, isDraggingNode, drawingEdge, resizing, canvasData.nodes, canvasData.edges, screenToWorld, updateCanvas]
+    [isDrawing, isPanning, isDraggingNode, drawingEdge, resizing, canvasData.nodes, canvasData.edges, screenToWorld, updateCanvas, drawStrokeColor, drawStrokeWidth]
   );
 
   // ─── Zoom (mouse wheel) ───
@@ -918,13 +1236,34 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
       const node = canvasData.nodes.find((n) => n.id === nodeId);
       if (!node) return;
 
-      if (node.type === "text" || node.type === "group") {
+      if (node.type === "text" || node.type === "group" || node.type === "sticky") {
         setEditingNodeId(nodeId);
       } else if (node.type === "file" && node.filePath) {
         onFileSelect(node.filePath);
+      } else if (node.type === "image") {
+        // Double-click image to change it via file dialog
+        (async () => {
+          if (!window.electronAPI) return;
+          try {
+            const result = await window.electronAPI.showOpenDialog({
+              properties: ["openFile"],
+              filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"] }],
+            });
+            if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+              updateCanvas((prev) => ({
+                ...prev,
+                nodes: prev.nodes.map((n) =>
+                  n.id === nodeId ? { ...n, imagePath: result.filePaths[0] } : n
+                ),
+              }));
+            }
+          } catch {
+            // Silently fail if dialog not available
+          }
+        })();
       }
     },
-    [canvasData.nodes, onFileSelect]
+    [canvasData.nodes, onFileSelect, updateCanvas]
   );
 
   const handleTextChange = useCallback(
@@ -1100,11 +1439,22 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
       }
 
       if (e.key === "Escape") {
-        setSelectedNodeIds(new Set());
-        setSelectedEdgeId(null);
-        setEditingNodeId(null);
-        setContextMenu(null);
-        setDrawingEdge(null);
+        // If something is active, deselect it first
+        if (selectedNodeIds.size > 0 || selectedEdgeId || editingNodeId || drawingEdge || isDrawing || contextMenu || activeTool !== "select") {
+          setSelectedNodeIds(new Set());
+          setSelectedEdgeId(null);
+          setEditingNodeId(null);
+          setContextMenu(null);
+          setDrawingEdge(null);
+          setActiveTool("select");
+          setIsDrawing(false);
+          setCurrentDrawPoints([]);
+          drawPointsRef.current = [];
+        } else if (onClose) {
+          // Nothing selected — save and close
+          onSave(serializeCanvas(canvasData));
+          onClose();
+        }
       }
 
       // Ctrl+A: select all
@@ -1129,14 +1479,64 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
   }, [editingNodeId, deleteSelected, duplicateSelected, canvasData.nodes, selectedNodeIds]);
 
   // ─── Toolbar actions ───
-  const addTextNode = useCallback(() => {
-    const cx = (-panX + viewportSize.w / 2) / zoom;
-    const cy = (-panY + viewportSize.h / 2) / zoom;
+  const addTextNode = useCallback((atX?: number, atY?: number) => {
+    const cx = atX ?? (-panX + viewportSize.w / 2) / zoom;
+    const cy = atY ?? (-panY + viewportSize.h / 2) / zoom;
     const node = createTextNode(cx - 130, cy - 80, "");
     updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
     setSelectedNodeIds(new Set([node.id]));
     setEditingNodeId(node.id);
+    setActiveTool("select");
   }, [panX, panY, zoom, viewportSize, updateCanvas]);
+
+  const addStickyNode = useCallback((atX?: number, atY?: number) => {
+    const cx = atX ?? (-panX + viewportSize.w / 2) / zoom;
+    const cy = atY ?? (-panY + viewportSize.h / 2) / zoom;
+    const node = createStickyNode(cx - 100, cy - 100, "", "yellow");
+    updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
+    setSelectedNodeIds(new Set([node.id]));
+    setEditingNodeId(node.id);
+    setActiveTool("select");
+  }, [panX, panY, zoom, viewportSize, updateCanvas]);
+
+  /** Opens a file dialog to pick an image and creates an image node */
+  const addImageNode = useCallback(async (atX?: number, atY?: number) => {
+    if (!window.electronAPI) return;
+    try {
+      // Use Electron dialog to pick an image file
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"] }],
+      });
+      if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const imagePath = result.filePaths[0];
+        const cx = atX ?? (-panX + viewportSize.w / 2) / zoom;
+        const cy = atY ?? (-panY + viewportSize.h / 2) / zoom;
+        const node = createImageNode(cx - 150, cy - 120, imagePath);
+        updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
+        setSelectedNodeIds(new Set([node.id]));
+      }
+    } catch {
+      // Silently fail if dialog not available
+    }
+    setActiveTool("select");
+  }, [panX, panY, zoom, viewportSize, updateCanvas]);
+
+  /** Change the color of a sticky note via context menu */
+  const handleStickyColorChange = useCallback(
+    (color: string) => {
+      if (contextMenu?.nodeId) {
+        updateCanvas((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            n.id === contextMenu.nodeId ? { ...n, color } : n
+          ),
+        }));
+      }
+      setContextMenu(null);
+    },
+    [contextMenu, updateCanvas]
+  );
 
   const handleFilePickerSelect = useCallback(
     (selectedFilePath: string) => {
@@ -1233,17 +1633,26 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
 
   // ─── Render ───
 
-  // Sort nodes: groups first (background), then others
+  // Sort nodes: groups first (background), then others, then drawings on top
   const sortedNodes = useMemo(() => {
     const groups = canvasData.nodes.filter((n) => n.type === "group");
-    const others = canvasData.nodes.filter((n) => n.type !== "group");
-    return [...groups, ...others];
+    const others = canvasData.nodes.filter((n) => n.type !== "group" && n.type !== "drawing");
+    const drawings = canvasData.nodes.filter((n) => n.type === "drawing");
+    return [...groups, ...others, ...drawings];
   }, [canvasData.nodes]);
 
   const selectedNodeColor = useMemo(() => {
     if (contextMenu?.nodeId) {
       const node = canvasData.nodes.find((n) => n.id === contextMenu.nodeId);
       return node?.color || "";
+    }
+    return "";
+  }, [contextMenu, canvasData.nodes]);
+
+  const selectedNodeType = useMemo(() => {
+    if (contextMenu?.nodeId) {
+      const node = canvasData.nodes.find((n) => n.id === contextMenu.nodeId);
+      return node?.type || "";
     }
     return "";
   }, [contextMenu, canvasData.nodes]);
@@ -1257,7 +1666,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
       {/* Viewport */}
       <div
         ref={viewportRef}
-        className={`canvas-viewport${isPanning ? " is-panning" : ""}${drawingEdge ? " is-connecting" : ""}`}
+        className={`canvas-viewport${isPanning ? " is-panning" : ""}${drawingEdge ? " is-connecting" : ""}${activeTool === "draw" ? " is-drawing" : ""}`}
         onPointerDown={handleViewportPointerDown}
         onPointerMove={handleViewportPointerMove}
         onPointerUp={handleViewportPointerUp}
@@ -1342,22 +1751,116 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
                 />
               );
             }
+            if (node.type === "sticky") {
+              return (
+                <StickyNoteView
+                  key={node.id}
+                  node={node}
+                  selected={isSelected}
+                  editing={editingNodeId === node.id}
+                  onPointerDown={handleNodePointerDown}
+                  onDoubleClick={handleNodeDoubleClick}
+                  onTextChange={handleTextChange}
+                  onTextBlur={handleEditBlur}
+                  onAnchorPointerDown={handleAnchorPointerDown}
+                  onResizePointerDown={handleResizePointerDown}
+                  onContextMenu={handleNodeContextMenu}
+                />
+              );
+            }
+            if (node.type === "image") {
+              return (
+                <ImageNodeView
+                  key={node.id}
+                  node={node}
+                  selected={isSelected}
+                  onPointerDown={handleNodePointerDown}
+                  onDoubleClick={handleNodeDoubleClick}
+                  onAnchorPointerDown={handleAnchorPointerDown}
+                  onResizePointerDown={handleResizePointerDown}
+                  onContextMenu={handleNodeContextMenu}
+                />
+              );
+            }
+            if (node.type === "drawing") {
+              return (
+                <DrawingNodeView
+                  key={node.id}
+                  node={node}
+                  selected={isSelected}
+                  onPointerDown={handleNodePointerDown}
+                  onContextMenu={handleNodeContextMenu}
+                />
+              );
+            }
             return null;
           })}
+
+          {/* Live freehand stroke (while drawing) */}
+          {isDrawing && currentDrawPoints.length >= 2 && (
+            <svg className="canvas-drawing-live-svg">
+              <polyline
+                points={currentDrawPoints.map(([px, py]) => `${px},${py}`).join(" ")}
+                fill="none"
+                stroke={drawStrokeColor}
+                strokeWidth={drawStrokeWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
         </div>
       </div>
 
       {/* Toolbar */}
       <div className="canvas-toolbar">
+        {/* Select (pointer) tool */}
         <button
-          className="canvas-toolbar-btn"
-          onClick={addTextNode}
+          className={`canvas-toolbar-btn${activeTool === "select" ? " active" : ""}`}
+          onClick={() => setActiveTool("select")}
+          title="Select (V)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 2l8 6-3.5.5L10 13l-2-1-2.5-4.5L3 10V2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        <div className="canvas-toolbar-divider" />
+
+        {/* Text node */}
+        <button
+          className={`canvas-toolbar-btn${activeTool === "text" ? " active" : ""}`}
+          onClick={() => { setActiveTool("select"); addTextNode(); }}
           title="Add text node"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M3 3h10M8 3v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
+        {/* Sticky note */}
+        <button
+          className={`canvas-toolbar-btn${activeTool === "sticky" ? " active" : ""}`}
+          onClick={() => { setActiveTool("select"); addStickyNode(); }}
+          title="Add sticky note"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3" fill="rgba(249,226,175,0.3)" />
+            <path d="M5 6h6M5 9h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+        </button>
+        {/* Image */}
+        <button
+          className={`canvas-toolbar-btn${activeTool === "image" ? " active" : ""}`}
+          onClick={() => { addImageNode(); }}
+          title="Add image"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+            <circle cx="5" cy="6" r="1.5" stroke="currentColor" strokeWidth="1" />
+            <path d="M1 11l4-3 3 2 3-4 4 5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {/* File node */}
         <button
           className="canvas-toolbar-btn"
           onClick={() => setShowFilePicker(true)}
@@ -1368,6 +1871,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
             <path d="M9 1v4h4" stroke="currentColor" strokeWidth="1.3" />
           </svg>
         </button>
+        {/* Group */}
         <button
           className="canvas-toolbar-btn"
           onClick={addGroupNode}
@@ -1377,6 +1881,36 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
             <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" strokeDasharray="3 2" />
           </svg>
         </button>
+
+        <div className="canvas-toolbar-divider" />
+
+        {/* Draw (pencil) tool */}
+        <button
+          className={`canvas-toolbar-btn${activeTool === "draw" ? " active" : ""}`}
+          onClick={() => setActiveTool(activeTool === "draw" ? "select" : "draw")}
+          title="Draw (D)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2.5 13.5l1-4L11 2l2.5 2.5-7.5 7.5-4 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            <path d="M9.5 3.5l2.5 2.5" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {/* Color picker for draw stroke */}
+        {activeTool === "draw" && (
+          <>
+            <div className="canvas-toolbar-divider" />
+            <div className="canvas-toolbar-color-group">
+              {DRAW_STROKE_COLORS.map((c) => (
+                <div
+                  key={c}
+                  className={`canvas-toolbar-color-dot${drawStrokeColor === c ? " active" : ""}`}
+                  style={{ background: c }}
+                  onClick={() => setDrawStrokeColor(c)}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         <div className="canvas-toolbar-divider" />
 
@@ -1447,14 +1981,31 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect }: Ca
           x={contextMenu.x}
           y={contextMenu.y}
           nodeId={contextMenu.nodeId}
+          nodeType={selectedNodeType}
           nodeColor={selectedNodeColor}
           onDelete={() => {
             deleteSelected();
             setContextMenu(null);
           }}
           onColorChange={changeSelectedColor}
+          onStickyColorChange={handleStickyColorChange}
           onDuplicate={() => {
             duplicateSelected();
+            setContextMenu(null);
+          }}
+          onAddTextNode={() => {
+            const world = screenToWorld(contextMenu.x, contextMenu.y);
+            addTextNode(world.x, world.y);
+            setContextMenu(null);
+          }}
+          onAddStickyNote={() => {
+            const world = screenToWorld(contextMenu.x, contextMenu.y);
+            addStickyNode(world.x, world.y);
+            setContextMenu(null);
+          }}
+          onAddImage={() => {
+            const world = screenToWorld(contextMenu.x, contextMenu.y);
+            addImageNode(world.x, world.y);
             setContextMenu(null);
           }}
           onClose={() => setContextMenu(null)}

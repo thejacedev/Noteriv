@@ -18,9 +18,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openFolder: () => ipcRenderer.invoke("dialog:openFolder"),
   saveFileDialog: (defaultPath) =>
     ipcRenderer.invoke("dialog:saveFile", { defaultPath }),
+  showOpenDialog: (options) =>
+    ipcRenderer.invoke("dialog:showOpenDialog", options),
 
   // File system
   readFile: (filePath) => ipcRenderer.invoke("fs:readFile", filePath),
+  readBinaryFile: (filePath) => ipcRenderer.invoke("fs:readBinaryFile", filePath),
   writeFile: (filePath, content) =>
     ipcRenderer.invoke("fs:writeFile", { filePath, content }),
   readDir: (dirPath) => ipcRenderer.invoke("fs:readDir", dirPath),
@@ -92,6 +95,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("dialog:saveHtml", { defaultPath }),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
   openPath: (filePath) => ipcRenderer.invoke("shell:openPath", filePath),
+
+  // Web Clipper
+  clipperGetPort: () => ipcRenderer.invoke("clipper:getPort"),
+  clipperSetEnabled: (enabled) => ipcRenderer.invoke("clipper:setEnabled", enabled),
+  onClipperClipped: (callback) => {
+    ipcRenderer.on("clipper:clipped", (_, filePath) => callback(filePath));
+    return () => ipcRenderer.removeAllListeners("clipper:clipped");
+  },
 
   // Updater
   updaterCheck: () => ipcRenderer.invoke("updater:check"),

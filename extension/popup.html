@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noteriv Web Clipper</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 340px;
+      min-height: 200px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      padding: 16px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #cdd6f4;
+      flex: 1;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f38ba8;
+      flex-shrink: 0;
+    }
+
+    .status-dot.connected {
+      background: #a6e3a1;
+    }
+
+    .status-text {
+      font-size: 11px;
+      color: #6c7086;
+    }
+
+    /* Form fields */
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #a6adc8;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      padding: 8px 10px;
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      color: #cdd6f4;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      border-color: #89b4fa;
+    }
+
+    .field input::placeholder {
+      color: #6c7086;
+    }
+
+    /* Buttons */
+    .buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #89b4fa;
+      color: #1e1e2e;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #74c7ec;
+    }
+
+    .btn-secondary {
+      background: #45475a;
+      color: #cdd6f4;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #585b70;
+    }
+
+    /* Message */
+    .message {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+
+    .message.success {
+      display: block;
+      background: rgba(166, 227, 161, 0.15);
+      color: #a6e3a1;
+      border: 1px solid rgba(166, 227, 161, 0.3);
+    }
+
+    .message.error {
+      display: block;
+      background: rgba(243, 139, 168, 0.15);
+      color: #f38ba8;
+      border: 1px solid rgba(243, 139, 168, 0.3);
+    }
+
+    /* Disconnected state */
+    .disconnected-message {
+      text-align: center;
+      padding: 24px 16px;
+      color: #6c7086;
+      display: none;
+    }
+
+    .disconnected-message p {
+      margin-bottom: 8px;
+    }
+
+    .disconnected-message .hint {
+      font-size: 11px;
+    }
+
+    /* Vault name */
+    .vault-name {
+      font-size: 11px;
+      color: #6c7086;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .vault-name span {
+      color: #89b4fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Noteriv Clipper</h1>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+  <div class="status-text" id="statusText">Checking connection...</div>
+
+  <div class="vault-name" id="vaultName">
+    Vault: <span id="vaultNameText"></span>
+  </div>
+
+  <div class="disconnected-message" id="disconnectedMsg">
+    <p>Cannot connect to Noteriv</p>
+    <p class="hint">Make sure the Noteriv desktop app is running.</p>
+  </div>
+
+  <div id="clipForm" style="display: none;">
+    <div class="field">
+      <label for="titleInput">Title</label>
+      <input type="text" id="titleInput" placeholder="Page title" />
+    </div>
+
+    <div class="field">
+      <label for="tagsInput">Tags</label>
+      <input type="text" id="tagsInput" placeholder="tag1, tag2, tag3" />
+    </div>
+
+    <div class="field">
+      <label for="folderInput">Folder</label>
+      <input type="text" id="folderInput" placeholder="Subfolder (optional)" />
+    </div>
+
+    <div class="buttons">
+      <button class="btn btn-primary" id="clipPageBtn">Clip Page</button>
+      <button class="btn btn-secondary" id="clipSelectionBtn">Clip Selection</button>
+    </div>
+
+    <div class="message" id="message"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ const gitOps = require("./sync/git");
 const auth = require("./auth");
 const syncOps = require("./sync");
 const { initUpdater, checkForUpdates } = require("./updater");
+const clipperServer = require("./clipper-server");
 
 const isProd = process.env.NODE_ENV === "production" || app.isPackaged;
 
@@ -180,6 +181,11 @@ ipcMain.handle("dialog:openFolder", async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle("dialog:showOpenDialog", async (_, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, options);
+  return { canceled: result.canceled, filePaths: result.filePaths };
+});
+
 ipcMain.handle("dialog:saveFile", async (_, { defaultPath }) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     defaultPath,
@@ -193,6 +199,7 @@ ipcMain.handle("dialog:saveFile", async (_, { defaultPath }) => {
 });
 
 ipcMain.handle("fs:readFile", async (_, filePath) => { try { return fs.readFileSync(filePath, "utf-8"); } catch { return null; } });
+ipcMain.handle("fs:readBinaryFile", async (_, filePath) => { try { return fs.readFileSync(filePath).toString("base64"); } catch { return null; } });
 ipcMain.handle("fs:writeFile", async (_, { filePath, content }) => {
   try {
     const dir = path.dirname(filePath);
@@ -368,12 +375,37 @@ ipcMain.handle("fs:listAllFiles", async (_, dir) => {
 });
 
 // ============================================================
+// Web Clipper IPC handlers
+// ============================================================
+
+ipcMain.handle("clipper:getPort", () => clipperServer.getPort());
+ipcMain.handle("clipper:setEnabled", async (_, enabled) => {
+  if (enabled) {
+    await clipperServer.startServer();
+  } else {
+    await clipperServer.stopServer();
+  }
+});
+
+// ============================================================
 // App lifecycle
 // ============================================================
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   initUpdater(mainWindow);
+
+  // Start the web clipper server
+  try {
+    await clipperServer.startServer();
+    clipperServer.setOnClip((filePath) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("clipper:clipped", filePath);
+      }
+    });
+  } catch (err) {
+    console.error("[Clipper] Failed to start server:", err);
+  }
 
   // Auto-check for updates on startup if enabled (production only)
   if (isProd) {
@@ -383,5 +415,8 @@ app.whenReady().then(() => {
     }
   }
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("window-all-closed", () => {
+  clipperServer.stopServer();
+  if (process.platform !== "darwin") app.quit();
+});
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
