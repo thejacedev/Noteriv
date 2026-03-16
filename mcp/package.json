@@ -1,0 +1,13 @@
+{
+  "name": "noteriv-mcp",
+  "version": "1.0.1",
+  "description": "MCP server for Noteriv — lets AI assistants read, write, and search your notes",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "noteriv-mcp": "./index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

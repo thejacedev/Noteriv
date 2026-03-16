@@ -459,6 +459,38 @@ export default function Home() {
   }, [appState, tabs]);
 
   // ============================================================
+  // Vault file watcher — react to external changes (e.g. MCP server)
+  // ============================================================
+
+  useEffect(() => {
+    if (appState !== "app" || !window.electronAPI?.onVaultChanged) return;
+    const unsub = window.electronAPI.onVaultChanged((changedPath: string) => {
+      setSidebarRefresh((n) => n + 1);
+      setTabs((prev) => {
+        const tab = prev.find((t) => t.filePath === changedPath);
+        if (!tab) return prev;
+        (async () => {
+          // Save unsaved changes first so they're not lost
+          if (tab.content !== tab.savedContent) {
+            await window.electronAPI.writeFile(changedPath, tab.content);
+          }
+          // Reload from disk
+          const newContent = await window.electronAPI.readFile(changedPath);
+          if (newContent !== null) {
+            setTabs((tabs) =>
+              tabs.map((t) =>
+                t.filePath === changedPath ? { ...t, content: newContent, savedContent: newContent } : t
+              )
+            );
+          }
+        })();
+        return prev;
+      });
+    });
+    return unsub;
+  }, [appState]);
+
+  // ============================================================
   // Git sync
   // ============================================================
 

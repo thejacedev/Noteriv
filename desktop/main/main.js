@@ -19,6 +19,71 @@ if (isProd) {
 
 let mainWindow;
 
+// ============================================================
+// Vault file watcher
+// ============================================================
+
+let vaultWatcher = null;
+let vaultChangeDebounce = null;
+
+function startVaultWatch(vaultPath) {
+  if (vaultWatcher) {
+    vaultWatcher.close();
+    vaultWatcher = null;
+  }
+  if (!vaultPath || !fs.existsSync(vaultPath)) return;
+
+  const watchers = new Map();
+  const noterivInternal = path.join(vaultPath, ".noteriv");
+
+  function notifyChange(filePath) {
+    if (vaultChangeDebounce) clearTimeout(vaultChangeDebounce);
+    vaultChangeDebounce = setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("vault:changed", filePath);
+      }
+    }, 300);
+  }
+
+  function watchDir(dir) {
+    if (watchers.has(dir)) return;
+    try {
+      const w = fs.watch(dir, (_, filename) => {
+        const fullPath = filename ? path.join(dir, filename) : dir;
+        // Watch newly created subdirectories
+        try {
+          if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()
+              && !path.basename(fullPath).startsWith(".")) {
+            walkAndWatch(fullPath);
+          }
+        } catch {}
+        // Ignore internal .noteriv changes to avoid loops
+        if (!fullPath.startsWith(noterivInternal)) {
+          notifyChange(fullPath);
+        }
+      });
+      watchers.set(dir, w);
+    } catch {}
+  }
+
+  function walkAndWatch(dir) {
+    watchDir(dir);
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+          walkAndWatch(path.join(dir, entry.name));
+        }
+      }
+    } catch {}
+  }
+
+  walkAndWatch(vaultPath);
+  vaultWatcher = {
+    close: () => { watchers.forEach((w) => { try { w.close(); } catch {} }); watchers.clear(); },
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -260,7 +325,11 @@ ipcMain.handle("vault:getActive", () => store.getActiveVault());
 ipcMain.handle("vault:create", (_, data) => store.createVault(data));
 ipcMain.handle("vault:update", (_, { id, updates }) => store.updateVault(id, updates));
 ipcMain.handle("vault:delete", (_, id) => { auth.removeToken(id); return store.deleteVault(id); });
-ipcMain.handle("vault:setActive", (_, id) => store.setActiveVault(id));
+ipcMain.handle("vault:setActive", (_, id) => {
+  const vault = store.setActiveVault(id);
+  if (vault) startVaultWatch(vault.path);
+  return vault;
+});
 
 // ============================================================
 // GitHub Auth IPC handlers
@@ -443,6 +512,10 @@ app.whenReady().then(async () => {
   createWindow();
   initUpdater(mainWindow);
 
+  // Start watching the active vault for external file changes
+  const activeVault = store.getActiveVault();
+  if (activeVault) startVaultWatch(activeVault.path);
+
   // Start the web clipper server
   try {
     await clipperServer.startServer();
@@ -464,6 +537,7 @@ app.whenReady().then(async () => {
   }
 });
 app.on("window-all-closed", () => {
+  if (vaultWatcher) vaultWatcher.close();
   clipperServer.stopServer();
   if (process.platform !== "darwin") app.quit();
 });

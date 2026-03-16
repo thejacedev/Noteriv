@@ -155,6 +155,9 @@ interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   openPath: (filePath: string) => Promise<string>;
 
+  // Vault file watcher
+  onVaultChanged: (callback: (filePath: string) => void) => () => void;
+
   // Web Clipper
   clipperGetPort: () => Promise<number>;
   clipperSetEnabled: (enabled: boolean) => Promise<void>;

@@ -146,6 +146,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Sync on save</strong> &mdash; Push after every manual save</li>
         <li><strong>Folder sync</strong> &mdash; Sync with Google Drive, Dropbox, OneDrive, iCloud (desktop)</li>
         <li><strong>WebDAV sync</strong> &mdash; Sync with Nextcloud, ownCloud, or any WebDAV server (desktop)</li>
+        <li><strong>Vault file watcher</strong> &mdash; Monitors the vault directory for external changes (from the MCP server, git pulls, other editors). Sidebar refreshes automatically; open files with no unsaved changes reload instantly; open files with unsaved changes are saved first before reloading</li>
       </ul>
     </td>
   </tr>
@@ -178,6 +179,28 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li>Month navigation and "Today" button</li>
         <li>Accessible from the ribbon or command palette</li>
       </ul>
+    </td>
+  </tr>
+</table>
+
+### AI Integration
+
+<table>
+  <tr>
+    <td colspan="2">
+      <h4>MCP Server</h4>
+      <p>Connect any MCP-compatible AI assistant (Claude, Cursor, etc.) directly to your Noteriv vault with full read/write access.</p>
+      <ul>
+        <li><strong>22 tools</strong> &mdash; read, write, append, delete, rename notes; list/create/delete folders; full-text search; tags, backlinks, outgoing links; vault stats; daily notes</li>
+        <li><strong>Auto-discovers vaults</strong> &mdash; reads the same config file as the desktop app, no manual path setup needed</li>
+        <li><strong>Multi-vault support</strong> &mdash; switch between vaults or pass a path directly as a CLI argument</li>
+        <li><strong>Live sync</strong> &mdash; the desktop app watches the vault for external changes and automatically refreshes the sidebar and any open files when the MCP server (or anything else) modifies them</li>
+        <li><strong>Soft delete</strong> &mdash; deleted notes go to <code>.noteriv/trash/</code>, restorable from the app</li>
+        <li><strong>MCP resources</strong> &mdash; vault notes are exposed as <code>note:///</code> resources for direct access</li>
+      </ul>
+      <strong>Setup (Claude Code):</strong>
+      <pre><code>claude mcp add noteriv node /path/to/Noteriv/mcp/index.js</code></pre>
+      <p>Then restart Claude Code. The server auto-detects your active vault from the Noteriv config.</p>
     </td>
   </tr>
 </table>
@@ -339,7 +362,7 @@ Builds distributable packages to `desktop/dist/`:
 desktop/
 ├── main/                 Electron main process
 │   ├── main.js           App entry, IPC handlers, window management
-│   ├── preload.js        Context bridge (91 methods)
+│   ├── preload.js        Context bridge (92 methods)
 │   ├── store.js          Persistent config (vaults, settings)
 │   ├── auth.js           GitHub token encryption (OS keychain)
 │   ├── updater.js        Auto-update via electron-updater
@@ -642,10 +665,11 @@ Save to `.noteriv/themes/my-theme.json` or submit a PR to [NoterivThemes](https:
 ```
 Noteriv/
 ├── desktop/              Electron + Next.js desktop application
-│   ├── main/             Electron main process (IPC, file I/O, Git, sync, clipper server)
+│   ├── main/             Electron main process (IPC, file I/O, Git, sync, clipper server, vault watcher)
 │   ├── src/components/   41 React components + markdown rendering engine
 │   ├── src/lib/          33 utility modules
 │   └── public/           Platform icons + pdf.js worker
+├── mcp/                  MCP server for AI assistant integration (22 tools, auto-discovers vaults)
 ├── extension/            Web Clipper browser extension (Manifest V3)
 ├── phone/                Expo + React Native mobile application
 │   ├── app/              14 screens (Expo Router)
@@ -668,6 +692,8 @@ Noteriv/
 | `cd desktop && npm run dev` | Desktop dev mode (Next.js + Electron) |
 | `cd desktop && npm run build` | Build desktop distributables |
 | `cd desktop && npm run build:next` | Build Next.js only |
+| `cd mcp && npm install` | Install MCP server dependencies |
+| `node mcp/index.js` | Run MCP server (manual vault path optional) |
 | `cd phone && npx expo start` | Mobile dev server |
 | `cd phone && npx expo start --android` | Run on Android |
 | `cd phone && npx expo start --ios` | Run on iOS |

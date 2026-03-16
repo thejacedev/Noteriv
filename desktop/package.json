@@ -1,6 +1,6 @@
 {
   "name": "noteriv",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A modern markdown editor with plugin API, themes, and sync",
   "author": {
     "name": "Jace Sleeman",

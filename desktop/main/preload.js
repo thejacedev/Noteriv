@@ -102,6 +102,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
   openPath: (filePath) => ipcRenderer.invoke("shell:openPath", filePath),
 
+  // Vault file watcher
+  onVaultChanged: (callback) => {
+    ipcRenderer.on("vault:changed", (_, filePath) => callback(filePath));
+    return () => ipcRenderer.removeAllListeners("vault:changed");
+  },
+
   // Web Clipper
   clipperGetPort: () => ipcRenderer.invoke("clipper:getPort"),
   clipperSetEnabled: (enabled) => ipcRenderer.invoke("clipper:setEnabled", enabled),
