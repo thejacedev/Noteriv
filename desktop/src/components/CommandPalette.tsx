@@ -6,11 +6,13 @@ import { HotkeyBinding, HotkeyAction, formatHotkey } from "@/lib/hotkeys";
 interface CommandPaletteProps {
   hotkeys: HotkeyBinding[];
   platform: string;
+  recentActions?: HotkeyAction[];
   onExecute: (action: HotkeyAction) => void;
+  onRecent?: (action: HotkeyAction) => void;
   onClose: () => void;
 }
 
-export default function CommandPalette({ hotkeys, platform, onExecute, onClose }: CommandPaletteProps) {
+export default function CommandPalette({ hotkeys, platform, recentActions = [], onExecute, onRecent, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,6 +29,14 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
     );
   }, [query, hotkeys]);
 
+  // Recent items (only shown when query is empty)
+  const recentItems = useMemo(() => {
+    if (query.trim()) return [];
+    return recentActions
+      .map((action) => hotkeys.find((h) => h.action === action))
+      .filter((h): h is HotkeyBinding => h !== undefined);
+  }, [query, recentActions, hotkeys]);
+
   // Group by category
   const grouped = useMemo(() => {
     const groups: { category: string; items: HotkeyBinding[] }[] = [];
@@ -41,8 +51,10 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
     return groups;
   }, [filtered]);
 
-  // Flat list for keyboard navigation
-  const flatItems = useMemo(() => filtered, [filtered]);
+  // Flat list for keyboard navigation (recent items first when no query)
+  const flatItems = useMemo(() => {
+    return [...recentItems, ...filtered];
+  }, [recentItems, filtered]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -60,6 +72,12 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [selectedIdx]);
 
+  const executeCommand = useCallback((action: HotkeyAction) => {
+    onRecent?.(action);
+    onExecute(action);
+    onClose();
+  }, [onExecute, onRecent, onClose]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -73,12 +91,11 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (flatItems[selectedIdx]) {
-          onExecute(flatItems[selectedIdx].action);
-          onClose();
+          executeCommand(flatItems[selectedIdx].action);
         }
       }
     },
-    [flatItems, selectedIdx, onExecute, onClose]
+    [flatItems, selectedIdx, executeCommand, onClose]
   );
 
   let flatIdx = 0;
@@ -102,6 +119,32 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
         </div>
 
         <div className="palette-list" ref={listRef}>
+          {/* Recent commands section (only when query is empty) */}
+          {recentItems.length > 0 && (
+            <div>
+              <div className="cmd-category cmd-category-recent">Recent</div>
+              {recentItems.map((item) => {
+                const idx = flatIdx++;
+                const isActive = idx === selectedIdx;
+                return (
+                  <button
+                    key={`recent-${item.action}`}
+                    data-cmd-idx={idx}
+                    className={`palette-item${isActive ? " palette-item-active" : ""}`}
+                    onClick={() => executeCommand(item.action)}
+                    onMouseEnter={() => setSelectedIdx(idx)}
+                  >
+                    <span className="palette-item-name">{item.label}</span>
+                    {item.keys && (
+                      <span className="cmd-keys">
+                        {formatHotkey(item.keys, platform)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {grouped.map((group) => (
             <div key={group.category}>
               <div className="cmd-category">{group.category}</div>
@@ -113,7 +156,7 @@ export default function CommandPalette({ hotkeys, platform, onExecute, onClose }
                     key={item.action}
                     data-cmd-idx={idx}
                     className={`palette-item${isActive ? " palette-item-active" : ""}`}
-                    onClick={() => { onExecute(item.action); onClose(); }}
+                    onClick={() => executeCommand(item.action)}
                     onMouseEnter={() => setSelectedIdx(idx)}
                   >
                     <span className="palette-item-name">{item.label}</span>

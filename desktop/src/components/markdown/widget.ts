@@ -11,7 +11,14 @@ export class RenderedMarkdownWidget extends WidgetType {
     span.innerHTML = this.html;
     return span;
   }
-  ignoreEvent() {
+  ignoreEvent(e: Event) {
+    // Let images handle their own clicks (for resize/select)
+    if (this.className === "md-image") return true;
+    // Let click events through for interactive elements (wikilinks, links, etc)
+    if (e.type === "mousedown") {
+      const target = e.target as HTMLElement;
+      if (target.closest(".md-img-wrapper")) return true;
+    }
     return false;
   }
 }

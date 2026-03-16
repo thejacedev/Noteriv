@@ -232,6 +232,22 @@ ipcMain.handle("fs:deleteFile", async (_, filePath) => { try { fs.unlinkSync(fil
 ipcMain.handle("fs:deleteDir", async (_, dirPath) => { try { fs.rmSync(dirPath, { recursive: true, force: true }); return true; } catch { return false; } });
 ipcMain.handle("fs:rename", async (_, { oldPath, newPath }) => { try { fs.renameSync(oldPath, newPath); return true; } catch { return false; } });
 ipcMain.handle("fs:createDir", async (_, dirPath) => { try { fs.mkdirSync(dirPath, { recursive: true }); return true; } catch { return false; } });
+ipcMain.handle("fs:copyFile", async (_, { src, dest }) => {
+  try {
+    const dir = path.dirname(dest);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(src, dest);
+    return true;
+  } catch { return false; }
+});
+ipcMain.handle("fs:writeBinaryFile", async (_, { filePath, base64 }) => {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, Buffer.from(base64, "base64"));
+    return true;
+  } catch { return false; }
+});
 
 // ============================================================
 // Vault IPC handlers
@@ -278,6 +294,38 @@ ipcMain.handle("git:pull", (_, { dir, vaultId }) => gitOps.pull(dir, tokenForVau
 ipcMain.handle("git:fetch", (_, { dir, vaultId }) => gitOps.fetch(dir, tokenForVault(vaultId)));
 ipcMain.handle("git:log", (_, { dir, count }) => gitOps.getLog(dir, count));
 ipcMain.handle("git:clone", (_, { url, dir, vaultId }) => gitOps.cloneRepo(url, dir, tokenForVault(vaultId)));
+
+// Git file history (for note history timeline)
+ipcMain.handle("git:fileLog", async (_, { dir, filePath }) => {
+  const { execSync } = require("child_process");
+  try {
+    const relativePath = path.relative(dir, filePath).replace(/\\/g, "/");
+    const output = execSync(
+      `git log --follow --pretty=format:"%H|%an|%ad|%s" -- "${relativePath}"`,
+      { cwd: dir, encoding: "utf-8", timeout: 10000 }
+    );
+    if (!output.trim()) return [];
+    return output.trim().split("\n").map((line) => {
+      const [hash, author, date, ...msgParts] = line.split("|");
+      return { hash, author, date, message: msgParts.join("|") };
+    });
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("git:showFile", async (_, { dir, filePath, hash }) => {
+  const { execSync } = require("child_process");
+  try {
+    const relativePath = path.relative(dir, filePath).replace(/\\/g, "/");
+    return execSync(
+      `git show ${hash}:"${relativePath}"`,
+      { cwd: dir, encoding: "utf-8", timeout: 10000 }
+    );
+  } catch {
+    return null;
+  }
+});
 
 // ============================================================
 // Settings IPC handlers

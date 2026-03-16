@@ -30,6 +30,10 @@ import { isPdfFile } from "@/lib/pdf-annotation";
 import PublishPreview from "@/components/PublishPreview";
 import FlashcardReview from "@/components/FlashcardReview";
 import CollabPanel from "@/components/CollabPanel";
+import TrashPanel from "@/components/TrashPanel";
+import NoteHistory from "@/components/NoteHistory";
+import LintPanel from "@/components/LintPanel";
+import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
 import { insertAtCursor } from "@/lib/editor-commands";
 import {
@@ -138,6 +142,11 @@ export default function Home() {
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
+  const [showNoteHistory, setShowNoteHistory] = useState(false);
+  const [showLintPanel, setShowLintPanel] = useState(false);
+  const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
   const [canvasFile, setCanvasFile] = useState<string | null>(null);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
@@ -195,9 +204,10 @@ export default function Home() {
       sidebarCollapsed,
       viewMode,
       fileOrder,
+      pinnedTabs: Array.from(pinnedTabs),
     };
     await window.electronAPI.saveWorkspace(activeVault.path, state);
-  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder]);
+  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, pinnedTabs]);
 
   // Debounced workspace save
   const debounceSaveWorkspace = useCallback(() => {
@@ -208,7 +218,7 @@ export default function Home() {
   // Save workspace when state changes
   useEffect(() => {
     if (appState === "app") debounceSaveWorkspace();
-  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, debounceSaveWorkspace]);
+  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, pinnedTabs, debounceSaveWorkspace]);
 
   const loadWorkspace = useCallback(async (vault: Vault) => {
     if (!window.electronAPI) return;
@@ -220,6 +230,7 @@ export default function Home() {
     setViewMode(ws.viewMode ?? "live");
     setExpandedFolders(ws.expandedFolders ?? []);
     setFileOrder(ws.fileOrder ?? {});
+    setPinnedTabs(new Set(ws.pinnedTabs ?? []));
 
     // Restore tabs
     const restoredTabs: TabState[] = [];
@@ -240,6 +251,12 @@ export default function Home() {
   useEffect(() => {
     async function init() {
       if (!window.electronAPI) { setAppState("setup"); return; }
+
+      // Load recent commands from localStorage
+      try {
+        const saved = localStorage.getItem("noteriv-recent-commands");
+        if (saved) setRecentCommands(JSON.parse(saved));
+      } catch {}
 
       // Load platform
       window.electronAPI.getPlatform().then(setPlatform);
@@ -290,6 +307,9 @@ export default function Home() {
             setGitChanges(status.changes);
           } catch {}
         }
+
+        // Auto-cleanup old trash (>30 days)
+        try { await cleanupOldTrash(vault.path, 30); } catch {}
 
         // Load CSS snippets
         try {
@@ -612,6 +632,8 @@ export default function Home() {
   }, []);
 
   const closeTab = useCallback((filePath: string) => {
+    // Pinned tabs cannot be closed
+    if (pinnedTabs.has(filePath)) return;
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.filePath === filePath);
       const next = prev.filter((t) => t.filePath !== filePath);
@@ -622,7 +644,19 @@ export default function Home() {
       }
       return next;
     });
-  }, [activeTab]);
+  }, [activeTab, pinnedTabs]);
+
+  const handleTogglePin = useCallback((filePath: string) => {
+    setPinnedTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
+      return next;
+    });
+  }, []);
 
   const reorderTabs = useCallback((from: number, to: number) => {
     setTabs((prev) => {
@@ -807,22 +841,37 @@ export default function Home() {
   // ============================================================
 
   const handleCloseAllTabs = useCallback(() => {
-    setTabs([]);
-    setActiveTab(null);
-  }, []);
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => pinnedTabs.has(t.filePath));
+      if (activeTab && !pinnedTabs.has(activeTab)) {
+        setActiveTab(remaining[0]?.filePath || null);
+      }
+      return remaining;
+    });
+  }, [pinnedTabs, activeTab]);
 
   const handleCloseOtherTabs = useCallback(() => {
     if (!activeTab) return;
-    setTabs((prev) => prev.filter((t) => t.filePath === activeTab));
-  }, [activeTab]);
+    setTabs((prev) => prev.filter((t) => t.filePath === activeTab || pinnedTabs.has(t.filePath)));
+  }, [activeTab, pinnedTabs]);
 
   const handleDeleteFile = useCallback(async () => {
-    if (!window.electronAPI || !currentTab) return;
-    const success = await window.electronAPI.deleteFile(currentTab.filePath);
+    if (!window.electronAPI || !currentTab || !activeVault) return;
+    const success = await trashFile(activeVault.path, currentTab.filePath);
     if (success) {
       closeTab(currentTab.filePath);
+      setSidebarRefresh((k) => k + 1);
     }
-  }, [currentTab, closeTab]);
+  }, [currentTab, closeTab, activeVault]);
+
+  const handleTrashFileFromSidebar = useCallback(async (filePath: string) => {
+    if (!activeVault) return;
+    const success = await trashFile(activeVault.path, filePath);
+    if (success) {
+      handleFileDelete(filePath);
+      setSidebarRefresh((k) => k + 1);
+    }
+  }, [activeVault, handleFileDelete]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -1096,9 +1145,28 @@ export default function Home() {
       exportPdfAnnotations: () => {
         if (pdfFile) { /* export handled inside PDFViewer */ }
       },
+      openTrash: () => setShowTrash(true),
+      togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
+      noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
+      toggleLint: () => setShowLintPanel((l) => !l),
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin]);
+
+  // ============================================================
+  // Recent commands handler
+  // ============================================================
+
+  const handleRecentCommand = useCallback((action: HotkeyAction) => {
+    setRecentCommands((prev) => {
+      const filtered = prev.filter((a) => a !== action);
+      const updated = [action, ...filtered].slice(0, 5);
+      try {
+        localStorage.setItem("noteriv-recent-commands", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
 
   // ============================================================
   // Hotkey settings persistence
@@ -1237,6 +1305,10 @@ export default function Home() {
           if (activeTab && isPdfFile(activeTab)) setPdfFile(activeTab);
         },
         exportPdfAnnotations: () => {},
+        openTrash: () => setShowTrash(true),
+        togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
+        noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
+        toggleLint: () => setShowLintPanel((l) => !l),
       };
 
       for (const binding of hotkeys) {
@@ -1253,7 +1325,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin]);
 
   // Electron menu events
   useEffect(() => {
@@ -1305,6 +1377,7 @@ export default function Home() {
           activeVault={activeVault}
           sidebarCollapsed={sidebarCollapsed}
           viewMode={viewMode}
+          pinnedTabs={pinnedTabs}
           onTabSelect={setActiveTab}
           onTabClose={closeTab}
           onTabReorder={reorderTabs}
@@ -1316,6 +1389,33 @@ export default function Home() {
           onSwitchVault={handleSwitchVault}
           onCreateVault={() => setShowSetupWizard(true)}
           onDeleteVault={handleDeleteVault}
+          onTogglePin={handleTogglePin}
+          onCloseOtherTabs={handleCloseOtherTabs}
+          onCloseAllTabs={handleCloseAllTabs}
+          onCloseTabsToRight={(filePath) => {
+            setTabs((prev) => {
+              const idx = prev.findIndex((t) => t.filePath === filePath);
+              if (idx === -1) return prev;
+              return prev.filter((t, i) => i <= idx || pinnedTabs.has(t.filePath));
+            });
+          }}
+          onRevealInSidebar={(filePath) => {
+            // Expand parent folders and scroll to file
+            const parts = filePath.split("/");
+            const folders: string[] = [];
+            for (let i = 1; i < parts.length - 1; i++) {
+              folders.push(parts.slice(0, i + 1).join("/"));
+            }
+            setExpandedFolders((prev) => {
+              const next = new Set(prev);
+              for (const f of folders) next.add(f);
+              return Array.from(next);
+            });
+            setSidebarCollapsed(false);
+          }}
+          onCopyPath={(filePath) => {
+            navigator.clipboard.writeText(filePath);
+          }}
         />
       )}
 
@@ -1406,6 +1506,7 @@ export default function Home() {
             fileOrder={fileOrder}
             onFileOrderChange={setFileOrder}
             refreshTrigger={sidebarRefresh}
+            onTrashFile={handleTrashFileFromSidebar}
           />
         )}
 
@@ -1474,6 +1575,14 @@ export default function Home() {
           onBookmarkRemove={(f) => setBookmarks((b) => b.filter((x) => x !== f))}
           visible={bookmarks.length > 0 || showTagPane}
         />
+        {showLintPanel && currentTab && activeVault && (
+          <LintPanel
+            content={content}
+            vaultPath={activeVault.path}
+            onLineClick={handleHeadingClick}
+            onClose={() => setShowLintPanel(false)}
+          />
+        )}
       </div>
 
       {/* Status bar */}
@@ -1561,7 +1670,9 @@ export default function Home() {
         <CommandPalette
           hotkeys={hotkeys}
           platform={platform}
+          recentActions={recentCommands}
           onExecute={handleCommandExecute}
+          onRecent={handleRecentCommand}
           onClose={() => setShowCommandPalette(false)}
         />
       )}
@@ -1772,6 +1883,26 @@ export default function Home() {
           content={content}
           onContentChange={handleContentChange}
           onClose={() => setShowCollab(false)}
+        />
+      )}
+
+      {/* Trash Panel */}
+      {showTrash && activeVault && (
+        <TrashPanel
+          vaultPath={activeVault.path}
+          onClose={() => setShowTrash(false)}
+          onRestored={() => setSidebarRefresh((k) => k + 1)}
+        />
+      )}
+
+      {/* Note History */}
+      {showNoteHistory && activeVault && currentTab && (
+        <NoteHistory
+          filePath={currentTab.filePath}
+          vaultPath={activeVault.path}
+          currentContent={content}
+          onRestore={(restored) => { handleContentChange(restored); setShowNoteHistory(false); }}
+          onClose={() => setShowNoteHistory(false)}
         />
       )}
     </div>

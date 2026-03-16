@@ -73,7 +73,11 @@ export type HotkeyAction =
   | "startCollab"
   | "newCanvas"
   | "openPdfViewer"
-  | "exportPdfAnnotations";
+  | "exportPdfAnnotations"
+  | "openTrash"
+  | "togglePinTab"
+  | "noteHistory"
+  | "toggleLint";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -169,6 +173,13 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   // PDF
   { action: "openPdfViewer", label: "Open PDF", keys: "", category: "File" },
   { action: "exportPdfAnnotations", label: "Export PDF Annotations", keys: "", category: "File" },
+  // Trash
+  { action: "openTrash", label: "Open Trash", keys: "", category: "File" },
+  // Tab pinning
+  { action: "togglePinTab", label: "Pin/Unpin Tab", keys: "", category: "File" },
+  // Note history & lint
+  { action: "noteHistory", label: "Note History", keys: "", category: "View" },
+  { action: "toggleLint", label: "Toggle Lint Warnings", keys: "", category: "View" },
 ];
 
 /**

@@ -72,10 +72,9 @@ export async function startCollab(
   onPeersChange: (count: number) => void,
 ): Promise<CollabSession | null> {
   try {
-    // @ts-ignore — optional dependency, may not be installed
-    const Y = await import("yjs");
-    // @ts-ignore — optional dependency, may not be installed
-    const { WebrtcProvider } = await import("y-webrtc");
+    // Dynamic import with webpack ignore comment to suppress warnings
+    const Y = await import(/* webpackIgnore: true */ "yjs");
+    const { WebrtcProvider } = await import(/* webpackIgnore: true */ "y-webrtc");
 
     const doc = new Y.Doc();
     const ytext = doc.getText("content");

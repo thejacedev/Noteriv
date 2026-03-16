@@ -61,6 +61,7 @@ interface WorkspaceState {
   sidebarCollapsed: boolean;
   viewMode: "live" | "source" | "view";
   fileOrder?: Record<string, string[]>; // dir path -> ordered file/folder names
+  pinnedTabs?: string[]; // file paths of pinned tabs
 }
 
 interface ElectronAPI {
@@ -96,6 +97,8 @@ interface ElectronAPI {
   deleteDir: (dirPath: string) => Promise<boolean>;
   rename: (oldPath: string, newPath: string) => Promise<boolean>;
   createDir: (dirPath: string) => Promise<boolean>;
+  copyFile: (src: string, dest: string) => Promise<boolean>;
+  writeBinaryFile: (filePath: string, base64: string) => Promise<boolean>;
 
   // Vault management
   getConfig: () => Promise<AppConfig>;
@@ -139,6 +142,8 @@ interface ElectronAPI {
   gitFetch: (dir: string, vaultId?: string) => Promise<boolean>;
   gitLog: (dir: string, count?: number) => Promise<GitLogEntry[]>;
   gitClone: (url: string, dir: string, vaultId?: string) => Promise<boolean>;
+  gitFileLog: (dir: string, filePath: string) => Promise<GitLogEntry[]>;
+  gitShowFile: (dir: string, filePath: string, hash: string) => Promise<string | null>;
 
   // Settings
   loadSettings: () => Promise<Record<string, any>>;

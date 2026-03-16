@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import VaultSwitcher from "./VaultSwitcher";
+import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 
 interface Tab {
   filePath: string;
@@ -16,6 +17,7 @@ interface TitleBarProps {
   activeVault: Vault | null;
   sidebarCollapsed: boolean;
   viewMode: "live" | "source" | "view";
+  pinnedTabs: Set<string>;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
   onTabReorder: (from: number, to: number) => void;
@@ -27,6 +29,12 @@ interface TitleBarProps {
   onSwitchVault: (id: string) => void;
   onCreateVault: () => void;
   onDeleteVault: (id: string) => void;
+  onTogglePin: (filePath: string) => void;
+  onCloseOtherTabs?: () => void;
+  onCloseAllTabs?: () => void;
+  onCloseTabsToRight?: (filePath: string) => void;
+  onRevealInSidebar?: (filePath: string) => void;
+  onCopyPath?: (filePath: string) => void;
 }
 
 export default function TitleBar({
@@ -36,6 +44,7 @@ export default function TitleBar({
   activeVault,
   sidebarCollapsed,
   viewMode,
+  pinnedTabs,
   onTabSelect,
   onTabClose,
   onTabReorder,
@@ -47,11 +56,18 @@ export default function TitleBar({
   onSwitchVault,
   onCreateVault,
   onDeleteVault,
+  onTogglePin,
+  onCloseOtherTabs,
+  onCloseAllTabs,
+  onCloseTabsToRight,
+  onRevealInSidebar,
+  onCopyPath,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [platform, setPlatform] = useState("linux");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; filePath: string } | null>(null);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -94,6 +110,65 @@ export default function TitleBar({
   };
 
   const isMac = platform === "darwin";
+
+  // Sort tabs: pinned first, then unpinned (preserving relative order within each group)
+  const sortedTabs = [...tabs].sort((a, b) => {
+    const aPinned = pinnedTabs.has(a.filePath);
+    const bPinned = pinnedTabs.has(b.filePath);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return 0;
+  });
+
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, filePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTabContextMenu({ x: e.clientX, y: e.clientY, filePath });
+  }, []);
+
+  const getTabContextMenuItems = useCallback((): ContextMenuItem[] => {
+    if (!tabContextMenu) return [];
+    const fp = tabContextMenu.filePath;
+    const isPinned = pinnedTabs.has(fp);
+    const items: ContextMenuItem[] = [
+      {
+        label: isPinned ? "Unpin Tab" : "Pin Tab",
+        onClick: () => onTogglePin(fp),
+      },
+      { label: "", separator: true, onClick: () => {} },
+      {
+        label: "Close Tab",
+        onClick: () => onTabClose(fp),
+      },
+      {
+        label: "Close Other Tabs",
+        onClick: () => {
+          onTabSelect(fp);
+          onCloseOtherTabs?.();
+        },
+      },
+      {
+        label: "Close Tabs to the Right",
+        onClick: () => onCloseTabsToRight?.(fp),
+      },
+      {
+        label: "Close All Tabs",
+        onClick: () => onCloseAllTabs?.(),
+      },
+      { label: "", separator: true, onClick: () => {} },
+      {
+        label: "Reveal in Sidebar",
+        onClick: () => onRevealInSidebar?.(fp),
+      },
+      {
+        label: "Copy File Path",
+        onClick: () => {
+          onCopyPath?.(fp);
+        },
+      },
+    ];
+    return items;
+  }, [tabContextMenu, pinnedTabs, onTogglePin, onTabClose, onTabSelect, onCloseOtherTabs, onCloseAllTabs, onCloseTabsToRight, onRevealInSidebar, onCopyPath]);
 
   return (
     <div className="titlebar">
@@ -185,10 +260,11 @@ export default function TitleBar({
 
       {/* Tab bar */}
       <div className="tab-bar">
-        {tabs.map((tab, idx) => {
+        {sortedTabs.map((tab, idx) => {
           const isActive = tab.filePath === activeTab;
           const isDragging = dragIdx === idx;
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
+          const isPinned = pinnedTabs.has(tab.filePath);
 
           return (
             <div
@@ -199,16 +275,25 @@ export default function TitleBar({
               onDrop={(e) => handleDrop(e, idx)}
               onDragEnd={handleDragEnd}
               onClick={() => onTabSelect(tab.filePath)}
-              className={`tab${isActive ? " tab-active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-dragover" : ""}`}
+              onContextMenu={(e) => handleTabContextMenu(e, tab.filePath)}
+              className={`tab${isActive ? " tab-active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-dragover" : ""}${isPinned ? " tab-pinned" : ""}`}
             >
+              {isPinned && (
+                <svg className="tab-pin-icon" width="10" height="10" viewBox="0 0 16 16" fill="none">
+                  <path d="M9.5 2L14 6.5L10 10.5L8.5 14L2 7.5L5.5 6L9.5 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  <path d="M5.5 10.5L2 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+              )}
               <span className="tab-label">{tab.name}</span>
               {tab.isDirty && <span className="tab-dirty" />}
-              <button
-                onClick={(e) => { e.stopPropagation(); onTabClose(tab.filePath); }}
-                className="tab-close"
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
-              </button>
+              {!isPinned && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onTabClose(tab.filePath); }}
+                  className="tab-close"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
+                </button>
+              )}
             </div>
           );
         })}
@@ -218,6 +303,16 @@ export default function TitleBar({
           <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
         </button>
       </div>
+
+      {/* Tab context menu */}
+      {tabContextMenu && (
+        <ContextMenu
+          x={tabContextMenu.x}
+          y={tabContextMenu.y}
+          items={getTabContextMenuItems()}
+          onClose={() => setTabContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

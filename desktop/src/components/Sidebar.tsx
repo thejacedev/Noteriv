@@ -24,6 +24,7 @@ interface SidebarProps {
   fileOrder: Record<string, string[]>;
   onFileOrderChange: (order: Record<string, string[]>) => void;
   refreshTrigger?: number;
+  onTrashFile?: (filePath: string) => void;
 }
 
 interface ContextMenuData {
@@ -309,6 +310,7 @@ export default function Sidebar({
   fileOrder,
   onFileOrderChange,
   refreshTrigger,
+  onTrashFile,
 }: SidebarProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -487,11 +489,18 @@ export default function Sidebar({
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
     if (!window.electronAPI) return;
+    // Use trash for files when onTrashFile is available
+    if (!entry.isDirectory && onTrashFile) {
+      onTrashFile(entry.path);
+      await refreshEntries();
+      setRefreshKey((k) => k + 1);
+      return;
+    }
     const success = entry.isDirectory
       ? await window.electronAPI.deleteDir(entry.path)
       : await window.electronAPI.deleteFile(entry.path);
     if (success) { onFileDelete(entry.path); await refreshEntries(); setRefreshKey((k) => k + 1); }
-  }, [onFileDelete, refreshEntries]);
+  }, [onFileDelete, refreshEntries, onTrashFile]);
 
   const handleNewFileIn = useCallback(async (dirPath: string) => {
     if (!window.electronAPI) return;

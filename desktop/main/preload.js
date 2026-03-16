@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteDir: (dirPath) => ipcRenderer.invoke("fs:deleteDir", dirPath),
   rename: (oldPath, newPath) => ipcRenderer.invoke("fs:rename", { oldPath, newPath }),
   createDir: (dirPath) => ipcRenderer.invoke("fs:createDir", dirPath),
+  copyFile: (src, dest) => ipcRenderer.invoke("fs:copyFile", { src, dest }),
+  writeBinaryFile: (filePath, base64) => ipcRenderer.invoke("fs:writeBinaryFile", { filePath, base64 }),
 
   // Vault management
   getConfig: () => ipcRenderer.invoke("vault:getConfig"),
@@ -74,6 +76,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("git:log", { dir, count }),
   gitClone: (url, dir, vaultId) =>
     ipcRenderer.invoke("git:clone", { url, dir, vaultId }),
+  gitFileLog: (dir, filePath) =>
+    ipcRenderer.invoke("git:fileLog", { dir, filePath }),
+  gitShowFile: (dir, filePath, hash) =>
+    ipcRenderer.invoke("git:showFile", { dir, filePath, hash }),
 
   // Settings
   loadSettings: () => ipcRenderer.invoke("settings:load"),
