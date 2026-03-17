@@ -84,7 +84,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,7 +107,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          body: "Release ${{ github.ref_name }} — notes incoming..."
+          generate_release_notes: true
           files: |
             dist/*.AppImage
             dist/*.deb
@@ -117,19 +116,3 @@ jobs:
             dist/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate release notes with Claude
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            Write release notes for Noteriv ${{ github.ref_name }}.
-
-            Run `git log --oneline $(git describe --tags --abbrev=0 HEAD^)..HEAD` to see commits since last release.
-
-            Format with emoji headers and bullet points. Only include sections that apply:
-            ✨ Features, 🐛 Bug Fixes, 🔧 Improvements.
-            Write for end users — no commit hashes, no jargon. Keep it concise.
-
-            Then update the release with: `gh release edit ${{ github.ref_name }} --notes "YOUR_NOTES_HERE"`
-          claude_args: '--allowed-tools "Bash(git log:*),Bash(git describe:*),Bash(gh release edit:*)"'
