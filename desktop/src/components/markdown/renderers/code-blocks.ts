@@ -208,15 +208,15 @@ class DataviewWidget extends WidgetType {
   toDOM() {
     const container = document.createElement("div");
     container.className = "md-dataview";
-    container.style.cssText = "background:#313244;border:1px solid #45475a;border-radius:8px;padding:12px;margin:4px 0;font-size:12px;color:#cdd6f4";
+    container.style.cssText = "background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:12px;margin:4px 0;font-size:12px;color:var(--text-primary)";
 
     const header = document.createElement("div");
-    header.style.cssText = "font-size:10px;font-weight:700;color:#89b4fa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px";
+    header.style.cssText = "font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px";
     header.textContent = "DATAVIEW";
     container.appendChild(header);
 
     const loading = document.createElement("div");
-    loading.style.cssText = "color:#a6adc8;font-size:12px";
+    loading.style.cssText = "color:var(--text-secondary);font-size:12px";
     loading.textContent = "Running query...";
     container.appendChild(loading);
 
@@ -230,7 +230,7 @@ class DataviewWidget extends WidgetType {
     try {
       if (!window.electronAPI) {
         loading.textContent = "Electron API not available";
-        loading.style.color = "#f38ba8";
+        loading.style.color = "var(--red)";
         return;
       }
 
@@ -240,7 +240,7 @@ class DataviewWidget extends WidgetType {
       const parsed = parseQuery(this.query);
       if ("error" in parsed) {
         loading.textContent = `Error: ${parsed.error}`;
-        loading.style.color = "#f38ba8";
+        loading.style.color = "var(--red)";
         return;
       }
 
@@ -248,7 +248,7 @@ class DataviewWidget extends WidgetType {
       const vaultPath = document.querySelector("[data-vault-path]")?.getAttribute("data-vault-path");
       if (!vaultPath) {
         loading.textContent = "No vault path found";
-        loading.style.color = "#f38ba8";
+        loading.style.color = "var(--red)";
         return;
       }
 
@@ -274,7 +274,7 @@ class DataviewWidget extends WidgetType {
         const headerRow = document.createElement("tr");
         for (const f of result.fields) {
           const th = document.createElement("th");
-          th.style.cssText = "text-align:left;padding:4px 8px;color:#a6adc8;font-size:11px;font-weight:600;border-bottom:1px solid #45475a";
+          th.style.cssText = "text-align:left;padding:4px 8px;color:var(--text-secondary);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)";
           th.textContent = f;
           headerRow.appendChild(th);
         }
@@ -284,14 +284,14 @@ class DataviewWidget extends WidgetType {
         const tbody = document.createElement("tbody");
         for (const row of result.rows) {
           const tr = document.createElement("tr");
-          tr.style.borderTop = "1px solid #313244";
+          tr.style.borderTop = "1px solid var(--bg-tertiary)";
           for (const f of result.fields) {
             const td = document.createElement("td");
-            td.style.cssText = "padding:4px 8px;color:#cdd6f4";
+            td.style.cssText = "padding:4px 8px;color:var(--text-primary)";
             if (f === "file.name") {
               const link = document.createElement("span");
               link.className = "md-wikilink";
-              link.style.cssText = "color:#89b4fa;cursor:pointer";
+              link.style.cssText = "color:var(--accent);cursor:pointer";
               link.textContent = row[f] || "";
               link.setAttribute("data-target", row["file.path"] || "");
               td.appendChild(link);
@@ -306,7 +306,7 @@ class DataviewWidget extends WidgetType {
         container.appendChild(table);
 
         const footer = document.createElement("div");
-        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.style.cssText = "font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right";
         footer.textContent = `${result.rows.length} results`;
         container.appendChild(footer);
 
@@ -318,7 +318,7 @@ class DataviewWidget extends WidgetType {
           li.style.padding = "3px 0";
           const link = document.createElement("span");
           link.className = "md-wikilink";
-          link.style.cssText = "color:#89b4fa;cursor:pointer";
+          link.style.cssText = "color:var(--accent);cursor:pointer";
           link.textContent = row["file.name"] || "";
           link.setAttribute("data-target", row["file.path"] || "");
           li.appendChild(link);
@@ -327,7 +327,7 @@ class DataviewWidget extends WidgetType {
         container.appendChild(ul);
 
         const footer = document.createElement("div");
-        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.style.cssText = "font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right";
         footer.textContent = `${result.rows.length} results`;
         container.appendChild(footer);
 
@@ -336,9 +336,9 @@ class DataviewWidget extends WidgetType {
         ul.style.cssText = "list-style:none;padding:0;margin:0";
         for (const task of result.tasks) {
           const li = document.createElement("li");
-          li.style.cssText = `display:flex;align-items:flex-start;gap:6px;padding:3px 0;color:${task.completed ? "#585b70" : "#cdd6f4"};font-size:12px`;
+          li.style.cssText = `display:flex;align-items:flex-start;gap:6px;padding:3px 0;color:${task.completed ? "var(--text-muted)" : "var(--text-primary)"};font-size:12px`;
           const check = document.createElement("span");
-          check.style.cssText = `width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;${task.completed ? "background:#a6e3a1;color:#1e1e2e" : "border:1.5px solid #585b70"}`;
+          check.style.cssText = `width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;${task.completed ? "background:var(--green);color:var(--bg-primary)" : "border:1.5px solid var(--text-muted)"}`;
           check.textContent = task.completed ? "\u2713" : "";
           li.appendChild(check);
           const text = document.createElement("span");
@@ -347,7 +347,7 @@ class DataviewWidget extends WidgetType {
           li.appendChild(text);
           const file = document.createElement("span");
           file.className = "md-wikilink";
-          file.style.cssText = "color:#89b4fa;cursor:pointer;font-size:10px;opacity:0.6;margin-left:auto";
+          file.style.cssText = "color:var(--accent);cursor:pointer;font-size:10px;opacity:0.6;margin-left:auto";
           file.textContent = task.fileName;
           file.setAttribute("data-target", task.filePath);
           li.appendChild(file);
@@ -356,13 +356,13 @@ class DataviewWidget extends WidgetType {
         container.appendChild(ul);
 
         const footer = document.createElement("div");
-        footer.style.cssText = "font-size:10px;color:#585b70;margin-top:8px;text-align:right";
+        footer.style.cssText = "font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right";
         footer.textContent = `${result.tasks.length} tasks`;
         container.appendChild(footer);
       }
     } catch (err) {
       loading.textContent = `Error: ${err}`;
-      loading.style.color = "#f38ba8";
+      loading.style.color = "var(--red)";
     }
   }
 
@@ -438,7 +438,7 @@ class CodeBlockWidget extends WidgetType {
         const highlighted = hasHighlighting ? highlightLine(line, this.lang) : escapeHtml(line);
         return `<span class="md-codeblock-line">${highlighted || " "}</span>`;
       })
-      .join("\n");
+      .join("");
 
     pre.appendChild(codeEl);
     container.appendChild(pre);
@@ -465,32 +465,42 @@ class CodeBlockWidget extends WidgetType {
       try {
         const mod = await import("mermaid");
         const mermaid = mod.default;
-        if (!(mermaid as any).__initialized) {
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: "dark",
-            themeVariables: {
-              darkMode: true,
-              primaryColor: "#313244",
-              primaryTextColor: "#cdd6f4",
-              primaryBorderColor: "#89b4fa",
-              lineColor: "#6c7086",
-              secondaryColor: "#45475a",
-              tertiaryColor: "#1e1e2e",
-              background: "#1e1e2e",
-              mainBkg: "#313244",
-              nodeBorder: "#89b4fa",
-              clusterBkg: "#181825",
-              clusterBorder: "#45475a",
-              titleColor: "#cdd6f4",
-              edgeLabelBackground: "#181825",
-              nodeTextColor: "#cdd6f4",
-            },
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-            securityLevel: "loose",
-          });
-          (mermaid as any).__initialized = true;
-        }
+
+        // Read theme colors from CSS variables so mermaid follows the active theme
+        const cs = getComputedStyle(document.documentElement);
+        const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+        const bgPrimary = v("--bg-primary", "#1e1e2e");
+        const bgSecondary = v("--bg-secondary", "#181825");
+        const bgTertiary = v("--bg-tertiary", "#313244");
+        const border = v("--border", "#45475a");
+        const textPrimary = v("--text-primary", "#cdd6f4");
+        const textMuted = v("--text-muted", "#6c7086");
+        const accent = v("--accent", "#89b4fa");
+
+        // Re-init each render so theme switches take effect
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "dark",
+          themeVariables: {
+            darkMode: true,
+            primaryColor: bgTertiary,
+            primaryTextColor: textPrimary,
+            primaryBorderColor: accent,
+            lineColor: textMuted,
+            secondaryColor: border,
+            tertiaryColor: bgPrimary,
+            background: bgPrimary,
+            mainBkg: bgTertiary,
+            nodeBorder: accent,
+            clusterBkg: bgSecondary,
+            clusterBorder: border,
+            titleColor: textPrimary,
+            edgeLabelBackground: bgSecondary,
+            nodeTextColor: textPrimary,
+          },
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+          securityLevel: "loose",
+        });
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         const { svg } = await mermaid.render(id, this.code);
         if (container.isConnected) {

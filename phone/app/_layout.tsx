@@ -142,6 +142,29 @@ function ThemedNavigation() {
             headerTintColor: colors.textPrimary,
           }}
         />
+        <Stack.Screen
+          name="calendar"
+          options={{
+            title: 'Calendar',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="flashcards"
+          options={{
+            title: 'Flashcards',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="trash"
+          options={{
+            presentation: 'modal',
+            title: 'Trash',
+            headerStyle: { backgroundColor: colors.bgSecondary },
+            headerTintColor: colors.textPrimary,
+          }}
+        />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </NavigationThemeProvider>

@@ -9,16 +9,16 @@ class TocWidget extends WidgetType {
   toDOM(view: EditorView) {
     const container = document.createElement("nav");
     container.className = "md-toc";
-    container.style.cssText = "background:#313244;border:1px solid #45475a;border-radius:8px;padding:12px 16px;margin:4px 0";
+    container.style.cssText = "background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:4px 0";
 
     const title = document.createElement("div");
-    title.style.cssText = "font-size:11px;font-weight:600;color:#a6adc8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px";
+    title.style.cssText = "font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px";
     title.textContent = "Table of Contents";
     container.appendChild(title);
 
     if (this.headings.length === 0) {
       const empty = document.createElement("div");
-      empty.style.cssText = "color:#585b70;font-size:12px";
+      empty.style.cssText = "color:var(--text-muted);font-size:12px";
       empty.textContent = "No headings found";
       container.appendChild(empty);
       return container;
@@ -33,7 +33,7 @@ class TocWidget extends WidgetType {
       li.style.marginLeft = `${(h.level - minLevel) * 16}px`;
 
       const link = document.createElement("a");
-      link.style.cssText = "color:#89b4fa;text-decoration:none;cursor:pointer";
+      link.style.cssText = "color:var(--accent);text-decoration:none;cursor:pointer";
       link.textContent = h.text;
       link.addEventListener("mousedown", (e) => {
         e.preventDefault();

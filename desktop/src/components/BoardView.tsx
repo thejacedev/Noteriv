@@ -20,14 +20,14 @@ interface BoardViewProps {
 }
 
 const TAG_COLORS: Record<string, string> = {
-  priority: "#f38ba8",
-  urgent: "#f38ba8",
-  bug: "#f38ba8",
-  feature: "#89b4fa",
-  enhancement: "#89b4fa",
-  blocked: "#f9e2af",
-  review: "#cba6f7",
-  default: "#a6adc8",
+  priority: "var(--red)",
+  urgent: "var(--red)",
+  bug: "var(--red)",
+  feature: "var(--accent)",
+  enhancement: "var(--accent)",
+  blocked: "var(--yellow)",
+  review: "var(--mauve)",
+  default: "var(--text-secondary)",
 };
 
 function getTagColor(tag: string): string {
@@ -153,7 +153,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
         height: "100%",
         overflowX: "auto",
         overflowY: "hidden",
-        background: "#1e1e2e",
+        background: "var(--bg-primary)",
       }}
     >
       {board.columns.map((col) => (
@@ -162,9 +162,9 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
           style={{
             minWidth: 260,
             maxWidth: 300,
-            background: "#181825",
+            background: "var(--bg-secondary)",
             borderRadius: 8,
-            border: "1px solid #313244",
+            border: "1px solid var(--border)",
             display: "flex",
             flexDirection: "column",
             maxHeight: "100%",
@@ -181,11 +181,11 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "10px 12px",
-            borderBottom: "1px solid #313244",
+            borderBottom: "1px solid var(--border)",
           }}>
-            <span style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 600 }}>
+            <span style={{ color: "var(--text-primary)", fontSize: 13, fontWeight: 600 }}>
               {col.title}
-              <span style={{ marginLeft: 6, color: "#585b70", fontWeight: 400, fontSize: 11 }}>{col.cards.length}</span>
+              <span style={{ marginLeft: 6, color: "var(--text-muted)", fontWeight: 400, fontSize: 11 }}>{col.cards.length}</span>
             </span>
             <div style={{ display: "flex", gap: 4 }}>
               <button
@@ -195,7 +195,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
               >+</button>
               <button
                 onClick={() => handleRemoveColumn(col.id)}
-                style={{ ...iconBtnStyle, color: "#f38ba8" }}
+                style={{ ...iconBtnStyle, color: "var(--red)" }}
                 title="Delete column"
               >&times;</button>
             </div>
@@ -207,7 +207,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
               <div key={card.id}>
                 {/* Drop indicator */}
                 {dropTarget?.colId === col.id && dropTarget.index === cardIdx && dragCard && (
-                  <div style={{ height: 2, background: "#89b4fa", borderRadius: 1, margin: "4px 0" }} />
+                  <div style={{ height: 2, background: "var(--accent)", borderRadius: 1, margin: "4px 0" }} />
                 )}
                 <div
                   draggable
@@ -215,7 +215,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                   onDragOver={(e) => handleDragOver(e, col.id, cardIdx)}
                   onDragEnd={handleDragEnd}
                   style={{
-                    background: dragCard?.cardId === card.id ? "#45475a" : "#313244",
+                    background: dragCard?.cardId === card.id ? "var(--bg-tertiary)" : "var(--bg-tertiary)",
                     borderRadius: 6,
                     padding: "8px 10px",
                     marginBottom: 6,
@@ -228,9 +228,9 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                       onClick={() => handleToggleCard(col.id, card.id)}
                       style={{
                         width: 16, height: 16, borderRadius: 3, marginTop: 1,
-                        border: card.completed ? "none" : "1.5px solid #585b70",
-                        background: card.completed ? "#a6e3a1" : "transparent",
-                        color: "#1e1e2e", fontSize: 10, cursor: "pointer",
+                        border: card.completed ? "none" : "1.5px solid var(--text-muted)",
+                        background: card.completed ? "var(--green)" : "transparent",
+                        color: "var(--bg-primary)", fontSize: 10, cursor: "pointer",
                         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                       }}
                     >{card.completed ? "\u2713" : ""}</button>
@@ -247,8 +247,8 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                           }}
                           onBlur={handleSaveEdit}
                           style={{
-                            width: "100%", background: "#1e1e2e", border: "1px solid #89b4fa",
-                            borderRadius: 3, padding: "2px 4px", color: "#cdd6f4", fontSize: 12,
+                            width: "100%", background: "var(--bg-primary)", border: "1px solid var(--accent)",
+                            borderRadius: 3, padding: "2px 4px", color: "var(--text-primary)", fontSize: 12,
                             outline: "none",
                           }}
                         />
@@ -256,7 +256,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                         <span
                           onDoubleClick={() => handleStartEdit(col.id, card)}
                           style={{
-                            color: card.completed ? "#585b70" : "#cdd6f4",
+                            color: card.completed ? "var(--text-muted)" : "var(--text-primary)",
                             fontSize: 12,
                             textDecoration: card.completed ? "line-through" : "none",
                             wordBreak: "break-word",
@@ -269,13 +269,15 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                         {card.tags.map((tag) => (
                           <span key={tag} style={{
                             fontSize: 10, padding: "1px 6px", borderRadius: 10,
-                            background: getTagColor(tag) + "22", color: getTagColor(tag),
+                            background: `color-mix(in srgb, ${getTagColor(tag)} 13%, transparent)`,
+                            color: getTagColor(tag),
                           }}>#{tag}</span>
                         ))}
                         {card.dueDate && (
                           <span style={{
                             fontSize: 10, padding: "1px 6px", borderRadius: 10,
-                            background: "#f9e2af22", color: "#f9e2af",
+                            background: "color-mix(in srgb, var(--yellow) 13%, transparent)",
+                            color: "var(--yellow)",
                           }}>{card.dueDate}</span>
                         )}
                       </div>
@@ -283,7 +285,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
 
                     <button
                       onClick={() => handleRemoveCard(col.id, card.id)}
-                      style={{ ...iconBtnStyle, fontSize: 12, color: "#585b70", padding: 0, width: 16, height: 16 }}
+                      style={{ ...iconBtnStyle, fontSize: 12, color: "var(--text-muted)", padding: 0, width: 16, height: 16 }}
                     >&times;</button>
                   </div>
                 </div>
@@ -292,7 +294,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
 
             {/* Trailing drop indicator */}
             {dropTarget?.colId === col.id && dropTarget.index === col.cards.length && dragCard && (
-              <div style={{ height: 2, background: "#89b4fa", borderRadius: 1, margin: "4px 0" }} />
+              <div style={{ height: 2, background: "var(--accent)", borderRadius: 1, margin: "4px 0" }} />
             )}
 
             {/* Add card input */}
@@ -309,8 +311,8 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                   onBlur={() => { if (!newCardText.trim()) setAddingToCol(null); }}
                   placeholder="Card text..."
                   style={{
-                    width: "100%", background: "#1e1e2e", border: "1px solid #45475a",
-                    borderRadius: 4, padding: "6px 8px", color: "#cdd6f4", fontSize: 12,
+                    width: "100%", background: "var(--bg-primary)", border: "1px solid var(--border)",
+                    borderRadius: 4, padding: "6px 8px", color: "var(--text-primary)", fontSize: 12,
                     outline: "none",
                   }}
                 />
@@ -327,9 +329,9 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                 width: "100%",
                 padding: "8px",
                 border: "none",
-                borderTop: "1px solid #313244",
+                borderTop: "1px solid var(--border)",
                 background: "transparent",
-                color: "#585b70",
+                color: "var(--text-muted)",
                 fontSize: 12,
                 cursor: "pointer",
                 textAlign: "left",
@@ -343,7 +345,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
       <div style={{ minWidth: 260 }}>
         {addingColumn ? (
           <div style={{
-            background: "#181825", borderRadius: 8, border: "1px solid #313244", padding: 12,
+            background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)", padding: 12,
           }}>
             <input
               value={newColTitle}
@@ -355,8 +357,8 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
               autoFocus
               placeholder="Column title..."
               style={{
-                width: "100%", background: "#1e1e2e", border: "1px solid #45475a",
-                borderRadius: 4, padding: "6px 8px", color: "#cdd6f4", fontSize: 13,
+                width: "100%", background: "var(--bg-primary)", border: "1px solid var(--border)",
+                borderRadius: 4, padding: "6px 8px", color: "var(--text-primary)", fontSize: 13,
                 outline: "none", marginBottom: 8,
               }}
             />
@@ -365,14 +367,14 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                 onClick={handleAddColumn}
                 style={{
                   padding: "4px 12px", borderRadius: 4, border: "none",
-                  background: "#89b4fa", color: "#1e1e2e", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: "var(--accent)", color: "var(--bg-primary)", fontSize: 12, fontWeight: 600, cursor: "pointer",
                 }}
               >Add</button>
               <button
                 onClick={() => setAddingColumn(false)}
                 style={{
-                  padding: "4px 12px", borderRadius: 4, border: "1px solid #45475a",
-                  background: "transparent", color: "#a6adc8", fontSize: 12, cursor: "pointer",
+                  padding: "4px 12px", borderRadius: 4, border: "1px solid var(--border)",
+                  background: "transparent", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
                 }}
               >Cancel</button>
             </div>
@@ -382,8 +384,8 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
             onClick={() => setAddingColumn(true)}
             style={{
               width: 260, padding: "12px", borderRadius: 8,
-              border: "1px dashed #45475a", background: "transparent",
-              color: "#585b70", fontSize: 13, cursor: "pointer",
+              border: "1px dashed var(--border)", background: "transparent",
+              color: "var(--text-muted)", fontSize: 13, cursor: "pointer",
               textAlign: "center",
             }}
           >+ Add column</button>
@@ -399,7 +401,7 @@ const iconBtnStyle: React.CSSProperties = {
   border: "none",
   borderRadius: 3,
   background: "transparent",
-  color: "#a6adc8",
+  color: "var(--text-secondary)",
   fontSize: 14,
   cursor: "pointer",
   display: "flex",

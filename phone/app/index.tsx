@@ -141,6 +141,18 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerBtn}
+            onPress={() => router.push('/calendar')}
+          >
+            <Ionicons name="calendar-outline" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => router.push('/flashcards')}
+          >
+            <Ionicons name="school-outline" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerBtn}
             onPress={handleRandomNote}
           >
             <Ionicons name="shuffle-outline" size={22} color={colors.textPrimary} />

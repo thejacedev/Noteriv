@@ -8,6 +8,7 @@ import {
   Alert,
   BackHandler,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -16,7 +17,8 @@ import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownPreview from '@/components/MarkdownPreview';
-import { rename as renameFile } from '@/lib/file-system';
+import { rename as renameFile, listAllMarkdownFiles } from '@/lib/file-system';
+import { lintMarkdown, LintWarning } from '@/lib/markdown-lint';
 
 export default function EditorScreen() {
   const router = useRouter();
@@ -39,6 +41,8 @@ export default function EditorScreen() {
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [focusMode, setFocusMode] = useState(false);
+  const [lintVisible, setLintVisible] = useState(false);
+  const [lintWarnings, setLintWarnings] = useState<LintWarning[]>([]);
   const hasLoaded = useRef(false);
 
   // Load file on mount
@@ -114,6 +118,16 @@ export default function EditorScreen() {
     setRenameValue(fileName);
     setRenameVisible(true);
   }, []);
+
+  const handleLint = useCallback(async () => {
+    setMenuVisible(false);
+    if (!vault) return;
+    const files = await listAllMarkdownFiles(vault.path);
+    const fileNames = files.map((f) => f.fileName);
+    const warnings = lintMarkdown(content, vault.path, fileNames);
+    setLintWarnings(warnings);
+    setLintVisible(true);
+  }, [content, vault]);
 
   const confirmRename = useCallback(() => {
     if (!currentFile || !renameValue.trim()) return;
@@ -284,6 +298,10 @@ export default function EditorScreen() {
             <Ionicons name="attach-outline" size={20} color={colors.textPrimary} />
             <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Attachments</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={handleLint}>
+            <Ionicons name="warning-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Lint</Text>
+          </TouchableOpacity>
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
             <Ionicons name="trash-outline" size={20} color={colors.red} />
@@ -321,6 +339,49 @@ export default function EditorScreen() {
           />
         )}
       </View>
+
+      {/* Lint Modal */}
+      <Modal
+        visible={lintVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLintVisible(false)}
+      >
+        <View style={styles.lintOverlay}>
+          <View style={[styles.lintSheet, { backgroundColor: colors.bgSecondary }]}>
+            <View style={[styles.lintHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.lintTitle, { color: colors.textPrimary }]}>Lint</Text>
+              <TouchableOpacity onPress={() => setLintVisible(false)} style={styles.lintClose}>
+                <Ionicons name="close" size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.lintBody}>
+              {lintWarnings.length === 0 ? (
+                <View style={styles.lintEmpty}>
+                  <Ionicons name="checkmark-circle" size={40} color={colors.green} />
+                  <Text style={[styles.lintEmptyText, { color: colors.textSecondary }]}>No issues found</Text>
+                </View>
+              ) : (
+                lintWarnings.map((w, i) => {
+                  const iconColor = w.type === 'error' ? colors.red : w.type === 'warning' ? colors.yellow : colors.blue;
+                  const iconName = w.type === 'error' ? 'close-circle-outline' : w.type === 'warning' ? 'warning-outline' : 'information-circle-outline';
+                  return (
+                    <View key={i} style={[styles.lintItem, { borderLeftColor: iconColor }]}>
+                      <Ionicons name={iconName as any} size={16} color={iconColor} style={{ marginTop: 1 }} />
+                      <View style={styles.lintItemBody}>
+                        <Text style={[styles.lintMessage, { color: colors.textPrimary }]}>{w.message}</Text>
+                        <Text style={[styles.lintMeta, { color: colors.textMuted }]}>
+                          Line {w.line} · {w.rule}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Rename Modal */}
       <Modal
@@ -497,4 +558,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  lintOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  lintSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  lintHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  lintTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  lintClose: { padding: 4 },
+  lintBody: { padding: 16, gap: 10, paddingBottom: 32 },
+  lintEmpty: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 10,
+  },
+  lintEmptyText: { fontSize: 15 },
+  lintItem: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    paddingVertical: 2,
+  },
+  lintItemBody: { flex: 1, gap: 2 },
+  lintMessage: { fontSize: 14, lineHeight: 20 },
+  lintMeta: { fontSize: 12 },
 });
