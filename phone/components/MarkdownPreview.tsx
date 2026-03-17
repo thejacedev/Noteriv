@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,16 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
+import * as FileSystem from 'expo-file-system';
 import { useTheme } from '@/context/ThemeContext';
+import { parseQuery, executeQuery, parseNoteData, QueryResult } from '@/lib/dataview';
+import { listAllMarkdownFiles, readFile } from '@/lib/file-system';
 
 interface MarkdownPreviewProps {
   content: string;
   fontSize: number;
+  vaultPath?: string;
   onLinkPress?: (url: string) => void;
   onWikiLinkPress?: (name: string) => void;
 }
@@ -24,11 +29,16 @@ type InlineNode =
   | { type: 'bold'; children: InlineNode[] }
   | { type: 'italic'; children: InlineNode[] }
   | { type: 'strikethrough'; children: InlineNode[] }
+  | { type: 'highlight'; children: InlineNode[] }
+  | { type: 'superscript'; text: string }
+  | { type: 'subscript'; text: string }
   | { type: 'code'; text: string }
   | { type: 'link'; text: string; url: string }
   | { type: 'image'; alt: string; url: string }
   | { type: 'wikilink'; name: string }
-  | { type: 'tag'; tag: string };
+  | { type: 'tag'; tag: string }
+  | { type: 'embed'; name: string }
+  | { type: 'math'; code: string };
 
 function parseInline(raw: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -41,6 +51,26 @@ function parseInline(raw: string): InlineNode[] {
       if (end !== -1) {
         nodes.push({ type: 'code', text: raw.substring(i + 1, end) });
         i = end + 1;
+        continue;
+      }
+    }
+
+    // Inline math $...$
+    if (raw[i] === '$' && raw[i + 1] !== '$') {
+      const end = raw.indexOf('$', i + 1);
+      if (end !== -1) {
+        nodes.push({ type: 'math', code: raw.substring(i + 1, end) });
+        i = end + 1;
+        continue;
+      }
+    }
+
+    // File embed ![[name]]
+    if (raw[i] === '!' && raw[i + 1] === '[' && raw[i + 2] === '[') {
+      const end = raw.indexOf(']]', i + 3);
+      if (end !== -1) {
+        nodes.push({ type: 'embed', name: raw.substring(i + 3, end) });
+        i = end + 2;
         continue;
       }
     }
@@ -114,6 +144,36 @@ function parseInline(raw: string): InlineNode[] {
       }
     }
 
+    // Subscript ~text~ (single tilde)
+    if (raw[i] === '~' && raw[i + 1] !== '~') {
+      const end = raw.indexOf('~', i + 1);
+      if (end !== -1) {
+        nodes.push({ type: 'subscript', text: raw.substring(i + 1, end) });
+        i = end + 1;
+        continue;
+      }
+    }
+
+    // Highlight ==text==
+    if (raw[i] === '=' && raw[i + 1] === '=') {
+      const end = raw.indexOf('==', i + 2);
+      if (end !== -1) {
+        nodes.push({ type: 'highlight', children: parseInline(raw.substring(i + 2, end)) });
+        i = end + 2;
+        continue;
+      }
+    }
+
+    // Superscript ^text^
+    if (raw[i] === '^') {
+      const end = raw.indexOf('^', i + 1);
+      if (end !== -1) {
+        nodes.push({ type: 'superscript', text: raw.substring(i + 1, end) });
+        i = end + 1;
+        continue;
+      }
+    }
+
     // Italic *...* or _..._
     if ((raw[i] === '*' || raw[i] === '_') && raw[i + 1] !== raw[i]) {
       const marker = raw[i];
@@ -137,7 +197,7 @@ function parseInline(raw: string): InlineNode[] {
 
     // Plain text - consume until next special char
     let textEnd = i + 1;
-    while (textEnd < raw.length && !'[`*_~!#'.includes(raw[textEnd])) {
+    while (textEnd < raw.length && !'[`*_~!#=^$'.includes(raw[textEnd])) {
       textEnd++;
     }
     nodes.push({ type: 'text', text: raw.substring(i, textEnd) });
@@ -159,7 +219,9 @@ type BlockNode =
   | { type: 'ul'; items: { text: string; checked: boolean | null }[]; line: number }
   | { type: 'ol'; items: { text: string; num: number }[]; line: number }
   | { type: 'table'; headers: string[]; alignments: string[]; rows: string[][]; line: number }
-  | { type: 'math_block'; code: string; line: number };
+  | { type: 'math_block'; code: string; line: number }
+  | { type: 'toc'; line: number }
+  | { type: 'embed'; name: string; line: number };
 
 function parseBlocks(content: string): BlockNode[] {
   const lines = content.split('\n');
@@ -202,6 +264,21 @@ function parseBlocks(content: string): BlockNode[] {
       }
       i++; // skip closing $$
       blocks.push({ type: 'math_block', code: codeLines.join('\n'), line: startLine });
+      continue;
+    }
+
+    // File embed block ![[name]]
+    const embedMatch = line.trim().match(/^!\[\[(.+?)\]\]$/);
+    if (embedMatch) {
+      blocks.push({ type: 'embed', name: embedMatch[1], line: i });
+      i++;
+      continue;
+    }
+
+    // TOC
+    if (line.trim() === '[TOC]') {
+      blocks.push({ type: 'toc', line: i });
+      i++;
       continue;
     }
 
@@ -361,6 +438,24 @@ function RenderInline({
                 <RenderInline nodes={node.children} fontSize={fontSize} colors={colors} onLinkPress={onLinkPress} onWikiLinkPress={onWikiLinkPress} />
               </Text>
             );
+          case 'highlight':
+            return (
+              <Text key={idx} style={{ backgroundColor: colors.yellow + '40', color: colors.textPrimary, fontSize }}>
+                <RenderInline nodes={node.children} fontSize={fontSize} colors={colors} onLinkPress={onLinkPress} onWikiLinkPress={onWikiLinkPress} />
+              </Text>
+            );
+          case 'superscript':
+            return (
+              <Text key={idx} style={{ fontSize: fontSize * 0.7, color: colors.textPrimary, lineHeight: fontSize }}>
+                {node.text}
+              </Text>
+            );
+          case 'subscript':
+            return (
+              <Text key={idx} style={{ fontSize: fontSize * 0.7, color: colors.textPrimary, lineHeight: fontSize }}>
+                {node.text}
+              </Text>
+            );
           case 'code':
             return (
               <Text
@@ -419,6 +514,27 @@ function RenderInline({
                 {node.tag}
               </Text>
             );
+          case 'math':
+            return (
+              <Text
+                key={idx}
+                style={{
+                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                  color: colors.peach,
+                  fontSize: fontSize - 1,
+                  backgroundColor: colors.bgTertiary,
+                  paddingHorizontal: 3,
+                }}
+              >
+                {node.code}
+              </Text>
+            );
+          case 'embed':
+            return (
+              <Text key={idx} style={{ color: colors.blue, fontSize }}>
+                {'↗ '}{node.name}
+              </Text>
+            );
           default:
             return null;
         }
@@ -456,9 +572,235 @@ function InlineText({
   );
 }
 
+// ---- WebView-based block renderers ----
+
+function MathBlock({ code, bgColor }: { code: string; bgColor: string }) {
+  const [height, setHeight] = useState(80);
+  const escaped = code.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+  const html = `<!DOCTYPE html><html><head>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>body{margin:0;padding:12px;background:${bgColor};display:flex;justify-content:center;align-items:center;}.katex-display{margin:0;}</style>
+  </head><body>
+    <div id="m"></div>
+    <script>
+      try{katex.render(\`${escaped}\`,document.getElementById('m'),{displayMode:true,throwOnError:false});}
+      catch(e){document.getElementById('m').textContent=\`${escaped}\`;}
+      window.ReactNativeWebView.postMessage(JSON.stringify({height:document.body.scrollHeight+24}));
+    </script>
+  </body></html>`;
+  return (
+    <WebView
+      style={{ height, backgroundColor: 'transparent' }}
+      source={{ html }}
+      scrollEnabled={false}
+      onMessage={(e) => {
+        try { const d = JSON.parse(e.nativeEvent.data); if (d.height) setHeight(d.height); } catch {}
+      }}
+    />
+  );
+}
+
+function MermaidBlock({ code, bgColor }: { code: string; bgColor: string }) {
+  const [height, setHeight] = useState(200);
+  const escaped = code.replace(/`/g, '\\`');
+  const html = `<!DOCTYPE html><html><head>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>body{margin:0;padding:12px;background:${bgColor};}svg{max-width:100%;}</style>
+  </head><body>
+    <div class="mermaid">\`${escaped}\`</div>
+    <script>
+      mermaid.initialize({startOnLoad:true,theme:'dark'});
+      setTimeout(()=>{window.ReactNativeWebView.postMessage(JSON.stringify({height:document.body.scrollHeight+24}));},600);
+    </script>
+  </body></html>`;
+  return (
+    <WebView
+      style={{ height, backgroundColor: 'transparent' }}
+      source={{ html }}
+      scrollEnabled={false}
+      onMessage={(e) => {
+        try { const d = JSON.parse(e.nativeEvent.data); if (d.height) setHeight(d.height); } catch {}
+      }}
+    />
+  );
+}
+
+function EmbedBlock({
+  name,
+  vaultPath,
+  fontSize,
+  colors,
+  onLinkPress,
+  onWikiLinkPress,
+}: {
+  name: string;
+  vaultPath: string;
+  fontSize: number;
+  colors: any;
+  onLinkPress?: (url: string) => void;
+  onWikiLinkPress?: (name: string) => void;
+}) {
+  const [embedContent, setEmbedContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      const base = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
+      const candidates = [
+        base + name,
+        base + name + '.md',
+        ...name.includes('/') ? [] : await findInVault(base, name),
+      ];
+      for (const path of candidates) {
+        try {
+          const info = await FileSystem.getInfoAsync(path);
+          if (info.exists) {
+            const text = await FileSystem.readAsStringAsync(path);
+            setEmbedContent(text);
+            return;
+          }
+        } catch {}
+      }
+      setEmbedContent(null);
+    }
+    load();
+  }, [name, vaultPath]);
+
+  if (embedContent === null) {
+    return (
+      <View style={{ padding: 10, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginVertical: 6 }}>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>{'↗ '}{name}</Text>
+      </View>
+    );
+  }
+
+  const blocks = parseBlocks(embedContent);
+  return (
+    <View style={{ borderLeftWidth: 2, borderLeftColor: colors.accent, paddingLeft: 12, marginVertical: 6 }}>
+      {blocks.map((block, idx) => (
+        <EmbedBlockItem key={idx} block={block} fontSize={fontSize} colors={colors} onLinkPress={onLinkPress} onWikiLinkPress={onWikiLinkPress} />
+      ))}
+    </View>
+  );
+}
+
+async function findInVault(base: string, name: string): Promise<string[]> {
+  try {
+    const items = await FileSystem.readDirectoryAsync(base);
+    const results: string[] = [];
+    for (const item of items) {
+      const full = base + item;
+      const info = await FileSystem.getInfoAsync(full);
+      if (info.isDirectory) {
+        const nested = await findInVault(full + '/', name);
+        results.push(...nested);
+      } else if (item === name || item === name + '.md') {
+        results.push(full);
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+function DataviewBlock({ code, vaultPath, fontSize, colors }: {
+  code: string; vaultPath: string; fontSize: number; colors: any;
+}) {
+  const [result, setResult] = useState<QueryResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function run() {
+      const parsed = parseQuery(code);
+      if ('error' in parsed) { setError(parsed.error); return; }
+      const files = await listAllMarkdownFiles(vaultPath);
+      const notes = await Promise.all(
+        files.map(async (f) => {
+          const content = (await readFile(f.filePath)) ?? '';
+          return parseNoteData(f.filePath, content, { created: '', modified: '', size: content.length });
+        })
+      );
+      setResult(executeQuery(parsed, notes));
+    }
+    run();
+  }, [code, vaultPath]);
+
+  if (error) {
+    return <Text style={{ color: colors.red, fontSize: fontSize - 1, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{error}</Text>;
+  }
+  if (!result) {
+    return <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>Running query…</Text>;
+  }
+
+  if (result.type === 'TASK') {
+    return (
+      <View style={{ gap: 4 }}>
+        {(result.tasks ?? []).map((t, i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <Text style={{ color: t.completed ? colors.green : colors.textMuted, fontSize: 16 }}>{t.completed ? '☑' : '☐'}</Text>
+            <Text style={{ color: t.completed ? colors.textMuted : colors.textPrimary, fontSize: fontSize - 1, textDecorationLine: t.completed ? 'line-through' : 'none', flex: 1 }}>{t.text}</Text>
+          </View>
+        ))}
+        {(result.tasks ?? []).length === 0 && <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>No tasks found.</Text>}
+      </View>
+    );
+  }
+
+  if (result.type === 'LIST') {
+    return (
+      <View style={{ gap: 3 }}>
+        {result.rows.map((r, i) => (
+          <Text key={i} style={{ color: colors.blue, fontSize: fontSize - 1 }}>· {r['file.name']}</Text>
+        ))}
+        {result.rows.length === 0 && <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>No results.</Text>}
+      </View>
+    );
+  }
+
+  // TABLE
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View>
+        <View style={{ flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingBottom: 6, marginBottom: 4 }}>
+          {result.fields.map((f, i) => (
+            <Text key={i} style={{ color: colors.textPrimary, fontWeight: '700', fontSize: fontSize - 2, width: 120 }}>{f}</Text>
+          ))}
+        </View>
+        {result.rows.map((row, ri) => (
+          <View key={ri} style={{ flexDirection: 'row', marginBottom: 3 }}>
+            {result.fields.map((f, fi) => (
+              <Text key={fi} style={{ color: colors.textSecondary, fontSize: fontSize - 2, width: 120 }} numberOfLines={1}>{row[f] || '—'}</Text>
+            ))}
+          </View>
+        ))}
+        {result.rows.length === 0 && <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>No results.</Text>}
+      </View>
+    </ScrollView>
+  );
+}
+
+function EmbedBlockItem({ block, fontSize, colors, onLinkPress, onWikiLinkPress }: {
+  block: BlockNode; fontSize: number; colors: any;
+  onLinkPress?: (url: string) => void; onWikiLinkPress?: (name: string) => void;
+}) {
+  const lineHeight = fontSize * 1.65;
+  if (block.type === 'heading') {
+    const size = [fontSize * 1.5, fontSize * 1.25, fontSize * 1.1, fontSize, fontSize, fontSize][block.level - 1] || fontSize;
+    return <InlineText text={block.text} fontSize={size} colors={colors} onLinkPress={onLinkPress} onWikiLinkPress={onWikiLinkPress} style={{ fontWeight: '700', color: colors.textPrimary, marginBottom: 6 }} />;
+  }
+  if (block.type === 'paragraph') {
+    return <InlineText text={block.text} fontSize={fontSize} colors={colors} onLinkPress={onLinkPress} onWikiLinkPress={onWikiLinkPress} style={{ color: colors.textPrimary, lineHeight, marginBottom: 8 }} />;
+  }
+  return null;
+}
+
 export default function MarkdownPreview({
   content,
   fontSize,
+  vaultPath,
   onLinkPress,
   onWikiLinkPress,
 }: MarkdownPreviewProps) {
@@ -523,6 +865,22 @@ export default function MarkdownPreview({
           );
 
         case 'code_block':
+          if (block.language === 'mermaid') {
+            return (
+              <View key={index} style={[styles.codeBlock, { backgroundColor: colors.bgTertiary }]}>
+                <Text style={[styles.codeLang, { color: colors.textMuted }]}>mermaid</Text>
+                <MermaidBlock code={block.code} bgColor={colors.bgTertiary} />
+              </View>
+            );
+          }
+          if (block.language === 'dataview' && vaultPath) {
+            return (
+              <View key={index} style={[styles.codeBlock, { backgroundColor: colors.bgTertiary }]}>
+                <Text style={[styles.codeLang, { color: colors.textMuted }]}>dataview</Text>
+                <DataviewBlock code={block.code} vaultPath={vaultPath} fontSize={fontSize} colors={colors} />
+              </View>
+            );
+          }
           return (
             <View key={index} style={[styles.codeBlock, { backgroundColor: colors.bgTertiary }]}>
               {block.language ? (
@@ -546,15 +904,7 @@ export default function MarkdownPreview({
           return (
             <View key={index} style={[styles.codeBlock, { backgroundColor: colors.bgTertiary }]}>
               <Text style={[styles.codeLang, { color: colors.textMuted }]}>math</Text>
-              <Text
-                style={[
-                  styles.codeText,
-                  { color: colors.textPrimary, fontSize: fontSize - 1, lineHeight: (fontSize - 1) * 1.5 },
-                ]}
-                selectable
-              >
-                {block.code}
-              </Text>
+              <MathBlock code={block.code} bgColor={colors.bgTertiary} />
             </View>
           );
 
@@ -708,11 +1058,54 @@ export default function MarkdownPreview({
             </ScrollView>
           );
 
+        case 'embed':
+          if (!vaultPath) {
+            return (
+              <View key={index} style={[styles.block, { padding: 10, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>{'↗ '}{block.name}</Text>
+              </View>
+            );
+          }
+          return (
+            <EmbedBlock
+              key={index}
+              name={block.name}
+              vaultPath={vaultPath}
+              fontSize={fontSize}
+              colors={colors}
+              onLinkPress={onLinkPress}
+              onWikiLinkPress={onWikiLinkPress}
+            />
+          );
+
+        case 'toc': {
+          const headings = blocks.filter((b): b is Extract<BlockNode, { type: 'heading' }> => b.type === 'heading');
+          if (headings.length === 0) return null;
+          return (
+            <View key={index} style={[styles.block, styles.tocBlock, { borderColor: colors.border }]}>
+              {headings.map((h, hi) => (
+                <Text
+                  key={hi}
+                  style={{
+                    color: colors.blue,
+                    fontSize: fontSize - 1,
+                    lineHeight: lineHeight * 0.9,
+                    paddingLeft: (h.level - 1) * 14,
+                    marginBottom: 3,
+                  }}
+                >
+                  {'· '}{h.text}
+                </Text>
+              ))}
+            </View>
+          );
+        }
+
         default:
           return null;
       }
     },
-    [colors, fontSize, lineHeight, onLinkPress, onWikiLinkPress]
+    [blocks, colors, fontSize, lineHeight, vaultPath, onLinkPress, onWikiLinkPress]
   );
 
   return (
@@ -781,6 +1174,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
+  },
+  tocBlock: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    padding: 12,
+    marginVertical: 8,
   },
   hr: {
     height: StyleSheet.hairlineWidth,

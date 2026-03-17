@@ -7,6 +7,14 @@
   "bin": {
     "noteriv-mcp": "./index.js"
   },
+  "keywords": ["mcp", "noteriv", "notes", "vault", "ai", "claude"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thejacedev/Noteriv"
+  },
+  "homepage": "https://github.com/thejacedev/Noteriv#readme",
+  "files": ["index.js"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   }

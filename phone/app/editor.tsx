@@ -38,6 +38,7 @@ export default function EditorScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [focusMode, setFocusMode] = useState(false);
   const hasLoaded = useRef(false);
 
   // Load file on mount
@@ -134,7 +135,7 @@ export default function EditorScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgPrimary }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.bgSecondary, borderBottomColor: colors.bgTertiary }]}>
+      {!focusMode && <View style={[styles.header, { backgroundColor: colors.bgSecondary, borderBottomColor: colors.bgTertiary }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleBack}
@@ -187,7 +188,7 @@ export default function EditorScreen() {
             />
           </TouchableOpacity>
         </View>
-      </View>
+      </View>}
 
       {/* More Menu */}
       {menuVisible && (
@@ -309,11 +310,14 @@ export default function EditorScreen() {
             content={content}
             onChange={setContent}
             fontSize={settings.fontSize}
+            focusMode={focusMode}
+            onToggleFocusMode={() => setFocusMode((f) => !f)}
           />
         ) : (
           <MarkdownPreview
             content={content}
             fontSize={settings.fontSize}
+            vaultPath={vault?.path}
           />
         )}
       </View>

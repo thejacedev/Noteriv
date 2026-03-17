@@ -203,3 +203,49 @@ export function fileExists(path: string): boolean {
     return false;
   }
 }
+
+export function trashFile(filePath: string, vaultPath: string): boolean {
+  try {
+    const trashDir = new Directory(vaultPath.replace(/\/$/, ''), '.trash');
+    if (!trashDir.exists) trashDir.create({ intermediates: true });
+    const file = new File(filePath);
+    if (!file.exists) return false;
+    // Avoid name collisions by prefixing timestamp
+    const base = vaultPath.replace(/\/$/, '') + '/.trash/';
+    const destName = Date.now() + '_' + file.name;
+    file.move(new File(base + destName));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function restoreFromTrash(trashedPath: string, vaultPath: string): boolean {
+  try {
+    const file = new File(trashedPath);
+    if (!file.exists) return false;
+    // Strip timestamp prefix (e.g. 1234567890_note.md -> note.md)
+    const originalName = file.name.replace(/^\d+_/, '');
+    file.move(new File(vaultPath.replace(/\/$/, '') + '/' + originalName));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function listTrash(vaultPath: string): FileEntry[] {
+  try {
+    const trashDir = new Directory(vaultPath.replace(/\/$/, ''), '.trash');
+    if (!trashDir.exists) return [];
+    const items = trashDir.list();
+    return items
+      .filter((item) => item instanceof File)
+      .map((item) => {
+        const f = item as File;
+        return { name: f.name.replace(/^\d+_/, ''), path: f.uri, isDirectory: false };
+      })
+      .sort((a, b) => b.path.localeCompare(a.path)); // newest first
+  } catch {
+    return [];
+  }
+}

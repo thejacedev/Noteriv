@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { FileEntry } from '@/types';
-import { rename, deleteFile, deleteDir } from '@/lib/file-system';
+import { rename, deleteFile, deleteDir, trashFile } from '@/lib/file-system';
 
 interface NotesListProps {
   files: FileEntry[];
@@ -70,18 +70,18 @@ export default function NotesList({
           style: 'destructive',
           onPress: () => {
             Alert.alert(
-              `Delete ${entry.isDirectory ? 'folder' : 'file'}?`,
-              `"${entry.name}" will be permanently deleted.`,
+              `Move to Trash?`,
+              `"${entry.name}" will be moved to .trash and can be restored.`,
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Delete',
+                  text: 'Move to Trash',
                   style: 'destructive',
                   onPress: () => {
                     if (entry.isDirectory) {
                       deleteDir(entry.path);
                     } else {
-                      deleteFile(entry.path);
+                      trashFile(entry.path, vaultPath);
                     }
                     onRefresh();
                   },

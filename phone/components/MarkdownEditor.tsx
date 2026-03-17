@@ -18,6 +18,8 @@ interface MarkdownEditorProps {
   content: string;
   onChange: (text: string) => void;
   fontSize: number;
+  focusMode?: boolean;
+  onToggleFocusMode?: () => void;
 }
 
 interface Selection {
@@ -129,9 +131,11 @@ const toolbarActions: ToolbarAction[] = [
     label: 'Table',
     action: (t, s) => insertText(t, s, '\n| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n| | | |\n', undefined),
   },
+  { icon: 'color-wand-outline' as keyof typeof Ionicons.glyphMap, label: '==', action: (t, s) => wrapSelection(t, s, '==', '==') },
+  { icon: 'calculator-outline' as keyof typeof Ionicons.glyphMap, label: '$', action: (t, s) => wrapSelection(t, s, '$', '$') },
 ];
 
-export default function MarkdownEditor({ content, onChange, fontSize }: MarkdownEditorProps) {
+export default function MarkdownEditor({ content, onChange, fontSize, focusMode, onToggleFocusMode }: MarkdownEditorProps) {
   const { colors } = useTheme();
   const inputRef = useRef<TextInput>(null);
   const [selection, setSelection] = useState<Selection>({ start: 0, end: 0 });
@@ -185,25 +189,44 @@ export default function MarkdownEditor({ content, onChange, fontSize }: Markdown
         placeholder="Start writing..."
       />
 
-      <View style={[styles.toolbar, { backgroundColor: colors.bgSecondary, borderTopColor: colors.border }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.toolbarContent}
-          keyboardShouldPersistTaps="always"
+      {!focusMode && (
+        <View style={[styles.toolbar, { backgroundColor: colors.bgSecondary, borderTopColor: colors.border }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.toolbarContent}
+            keyboardShouldPersistTaps="always"
+          >
+            {toolbarActions.map((action) => (
+              <TouchableOpacity
+                key={action.label}
+                style={[styles.toolbarButton, { backgroundColor: colors.bgTertiary }]}
+                onPress={() => handleToolbarPress(action.action)}
+                activeOpacity={0.6}
+              >
+                <Ionicons name={action.icon} size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ))}
+            {onToggleFocusMode && (
+              <TouchableOpacity
+                style={[styles.toolbarButton, { backgroundColor: colors.bgTertiary }]}
+                onPress={onToggleFocusMode}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="contract-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      )}
+      {focusMode && onToggleFocusMode && (
+        <TouchableOpacity
+          style={[styles.focusExitBtn, { backgroundColor: colors.bgSecondary + 'cc', borderColor: colors.border }]}
+          onPress={onToggleFocusMode}
         >
-          {toolbarActions.map((action) => (
-            <TouchableOpacity
-              key={action.label}
-              style={[styles.toolbarButton, { backgroundColor: colors.bgTertiary }]}
-              onPress={() => handleToolbarPress(action.action)}
-              activeOpacity={0.6}
-            >
-              <Ionicons name={action.icon} size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+          <Ionicons name="expand-outline" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -234,5 +257,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 36,
     borderRadius: 8,
+  },
+  focusExitBtn: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
