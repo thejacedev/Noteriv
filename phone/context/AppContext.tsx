@@ -144,17 +144,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [vault?.id, vault?.gitRemote]);
 
-  // Auto-sync timer (if vault has autoSync enabled)
+  // Auto-sync every 5 seconds (pull + push if changes)
   useEffect(() => {
     if (autoSyncTimer.current) {
       clearInterval(autoSyncTimer.current);
       autoSyncTimer.current = null;
     }
 
-    if (!vault?.gitRemote || !vault?.autoSync) return;
-
-    // Sync every 5 minutes
-    const SYNC_INTERVAL_MS = 5 * 60 * 1000;
+    if (!vault?.gitRemote) return;
 
     autoSyncTimer.current = setInterval(async () => {
       try {
@@ -165,17 +162,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           FS.writeFile(currentFile, content);
           setIsDirty(false);
         }
-        console.log('[Noteriv] Auto-syncing...');
         const result = await GitSync.sync(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined);
-        console.log(`[Noteriv] Sync: pulled ${result.pulled}, pushed ${result.pushed}`);
         if (result.pulled > 0 && currentDir) {
           const entries = FS.readDir(currentDir);
           setFiles(entries);
         }
-      } catch (err) {
-        console.warn('[Noteriv] Auto-sync failed:', err);
-      }
-    }, SYNC_INTERVAL_MS);
+      } catch {}
+    }, 5_000);
 
     return () => {
       if (autoSyncTimer.current) {
@@ -183,7 +176,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         autoSyncTimer.current = null;
       }
     };
-  }, [vault?.id, vault?.gitRemote, vault?.autoSync]);
+  }, [vault?.id, vault?.gitRemote]);
 
   const refreshFiles = useCallback(() => {
     if (!currentDir) return;
@@ -194,6 +187,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const refreshVaults = useCallback(async () => {
     const v = await VaultOps.getVaults();
     setVaults(v);
+    // Also refresh the active vault in case its properties changed
+    const active = await VaultOps.getActiveVault();
+    if (active) setVault(active);
   }, []);
 
   const switchVault = useCallback(async (id: string) => {
@@ -293,6 +289,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const completeSetup = useCallback(async () => {
     await VaultOps.setSetupComplete();
     setSetupComplete(true);
+    // Re-read vault from storage so gitRemote etc. are picked up
+    const active = await VaultOps.getActiveVault();
+    if (active) setVault(active);
   }, []);
 
   return (

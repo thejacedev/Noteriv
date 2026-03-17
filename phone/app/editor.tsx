@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,10 @@ import {
   BackHandler,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +20,11 @@ import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownPreview from '@/components/MarkdownPreview';
+import BoardView from '@/components/BoardView';
 import { rename as renameFile, listAllMarkdownFiles } from '@/lib/file-system';
 import { lintMarkdown, LintWarning } from '@/lib/markdown-lint';
+import { isBoardContent } from '@/lib/board-utils';
+import { resolveWikiLink } from '@/lib/wiki-links';
 
 export default function EditorScreen() {
   const router = useRouter();
@@ -35,6 +41,7 @@ export default function EditorScreen() {
     workspace,
     updateWorkspace,
     vault,
+    files,
   } = useApp();
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -44,6 +51,36 @@ export default function EditorScreen() {
   const [lintVisible, setLintVisible] = useState(false);
   const [lintWarnings, setLintWarnings] = useState<LintWarning[]>([]);
   const hasLoaded = useRef(false);
+
+  // Sibling notes for swipe navigation
+  const siblingNotes = useMemo(() => {
+    return files.filter((f) => !f.isDirectory && /\.(md|markdown)$/i.test(f.name));
+  }, [files]);
+
+  const currentIndex = useMemo(() => {
+    if (!currentFile) return -1;
+    return siblingNotes.findIndex((f) => f.path === currentFile);
+  }, [siblingNotes, currentFile]);
+
+  const navigateToNote = useCallback(async (notePath: string) => {
+    if (isDirty) await saveFile();
+    hasLoaded.current = false;
+    setCurrentFile(null);
+    router.replace({ pathname: '/editor', params: { path: notePath } });
+  }, [isDirty, saveFile, setCurrentFile, router]);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-30, 30])
+    .failOffsetY([-10, 10])
+    .onEnd((e) => {
+      if (Math.abs(e.velocityX) < 300) return;
+      if (e.translationX > 80 && currentIndex > 0) {
+        navigateToNote(siblingNotes[currentIndex - 1].path);
+      } else if (e.translationX < -80 && currentIndex < siblingNotes.length - 1) {
+        navigateToNote(siblingNotes[currentIndex + 1].path);
+      }
+    })
+    .runOnJS(true);
 
   // Load file on mount
   useEffect(() => {
@@ -118,6 +155,16 @@ export default function EditorScreen() {
     setRenameValue(fileName);
     setRenameVisible(true);
   }, []);
+
+  const handleWikiLink = useCallback(async (name: string) => {
+    if (!vault) return;
+    const resolved = await resolveWikiLink(name, vault.path);
+    if (resolved) {
+      if (isDirty) await saveFile();
+      setCurrentFile(null);
+      router.push({ pathname: '/editor', params: { path: resolved } });
+    }
+  }, [vault, isDirty, saveFile, setCurrentFile, router]);
 
   const handleLint = useCallback(async () => {
     setMenuVisible(false);
@@ -282,6 +329,21 @@ export default function EditorScreen() {
             style={styles.menuItem}
             onPress={() => {
               setMenuVisible(false);
+              if (currentFile) {
+                router.push({
+                  pathname: '/publish',
+                  params: { filePath: currentFile },
+                });
+              }
+            }}
+          >
+            <Ionicons name="globe-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Publish as HTML</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => {
+              setMenuVisible(false);
               router.push('/slides');
             }}
           >
@@ -321,24 +383,49 @@ export default function EditorScreen() {
         />
       )}
 
-      {/* Editor / Preview */}
-      <View style={styles.editorContainer}>
-        {workspace.viewMode === 'edit' ? (
-          <MarkdownEditor
-            content={content}
-            onChange={setContent}
-            fontSize={settings.fontSize}
-            focusMode={focusMode}
-            onToggleFocusMode={() => setFocusMode((f) => !f)}
-          />
-        ) : (
-          <MarkdownPreview
-            content={content}
-            fontSize={settings.fontSize}
-            vaultPath={vault?.path}
-          />
-        )}
-      </View>
+      {/* Word count bar + note position */}
+      {!focusMode && !isBoardContent(content) && (
+        <View style={[styles.statsBar, { backgroundColor: colors.bgSecondary, borderTopColor: colors.border }]}>
+          <Text style={[styles.statsText, { color: colors.textMuted }]}>
+            {content.trim() ? content.trim().split(/\s+/).length : 0} words
+          </Text>
+          <Text style={[styles.statsText, { color: colors.textMuted }]}>
+            {content.length} chars
+          </Text>
+          <Text style={[styles.statsText, { color: colors.textMuted }]}>
+            {content.split('\n').length} lines
+          </Text>
+          {siblingNotes.length > 1 && currentIndex >= 0 && (
+            <Text style={[styles.statsText, { color: colors.textMuted, marginLeft: 'auto' }]}>
+              {currentIndex + 1}/{siblingNotes.length} ← swipe →
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Editor / Preview / Board */}
+      <GestureDetector gesture={swipeGesture}>
+        <View style={styles.editorContainer}>
+          {isBoardContent(content) ? (
+            <BoardView content={content} onChange={setContent} />
+          ) : workspace.viewMode === 'edit' ? (
+            <MarkdownEditor
+              content={content}
+              onChange={setContent}
+              fontSize={settings.fontSize}
+              focusMode={focusMode}
+              onToggleFocusMode={() => setFocusMode((f) => !f)}
+            />
+          ) : (
+            <MarkdownPreview
+              content={content}
+              fontSize={settings.fontSize}
+              vaultPath={vault?.path}
+              onWikiLinkPress={handleWikiLink}
+            />
+          )}
+        </View>
+      </GestureDetector>
 
       {/* Lint Modal */}
       <Modal
@@ -390,6 +477,10 @@ export default function EditorScreen() {
         animationType="fade"
         onRequestClose={() => setRenameVisible(false)}
       >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
         <View style={styles.renameOverlay}>
           <View style={[styles.renameDialog, { backgroundColor: colors.bgTertiary }]}>
             <Text style={[styles.renameTitle, { color: colors.textPrimary }]}>Rename File</Text>
@@ -417,6 +508,7 @@ export default function EditorScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -557,6 +649,16 @@ const styles = StyleSheet.create({
   renameConfirmText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  statsBar: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  statsText: {
+    fontSize: 11,
   },
   lintOverlay: {
     flex: 1,

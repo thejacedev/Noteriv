@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -19,7 +21,8 @@ import {
   deleteSnapshot,
   SnapshotInfo,
 } from '@/lib/file-recovery';
-import { writeFile } from '@/lib/file-system';
+import { writeFile, readFile } from '@/lib/file-system';
+import { diffStrings, DiffLine } from '@/lib/note-history';
 import MarkdownPreview from '@/components/MarkdownPreview';
 
 export default function RecoveryScreen() {
@@ -32,6 +35,8 @@ export default function RecoveryScreen() {
   const [loading, setLoading] = useState(true);
   const [previewSnapshot, setPreviewSnapshot] = useState<SnapshotInfo | null>(null);
   const [previewContent, setPreviewContent] = useState('');
+  const [showDiff, setShowDiff] = useState(false);
+  const [diffLines, setDiffLines] = useState<DiffLine[]>([]);
 
   const loadSnapshots = useCallback(() => {
     if (!vault?.path || !filePath) return;
@@ -47,10 +52,18 @@ export default function RecoveryScreen() {
   const handlePreview = useCallback(
     async (snap: SnapshotInfo) => {
       setPreviewSnapshot(snap);
-      const content = await loadSnapshot(snap.snapshotPath);
-      setPreviewContent(content ?? '');
+      setShowDiff(false);
+      const snapshotContent = await loadSnapshot(snap.snapshotPath);
+      setPreviewContent(snapshotContent ?? '');
+      // Compute diff against current file
+      if (filePath) {
+        const currentContent = await readFile(filePath);
+        if (currentContent !== null && snapshotContent !== null) {
+          setDiffLines(diffStrings(snapshotContent, currentContent));
+        }
+      }
     },
-    []
+    [filePath]
   );
 
   const handleRestore = useCallback(() => {
@@ -146,12 +159,40 @@ export default function RecoveryScreen() {
               {formatRelativeAge(previewSnapshot.timestamp)}
             </Text>
           </View>
+          <TouchableOpacity
+            style={[styles.diffToggle, { backgroundColor: showDiff ? colors.accent + '22' : colors.bgTertiary, borderColor: showDiff ? colors.accent : colors.border }]}
+            onPress={() => setShowDiff((d) => !d)}
+          >
+            <Ionicons name="git-compare-outline" size={16} color={showDiff ? colors.accent : colors.textMuted} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.restoreBtn} onPress={handleRestore}>
             <Ionicons name="refresh" size={18} color={colors.bgPrimary} />
             <Text style={styles.restoreBtnText}>Restore</Text>
           </TouchableOpacity>
         </View>
-        <MarkdownPreview content={previewContent} fontSize={settings.fontSize} />
+        {showDiff ? (
+          <ScrollView style={styles.diffContainer} contentContainerStyle={styles.diffContent}>
+            {diffLines.map((line, i) => (
+              <Text
+                key={i}
+                style={[
+                  styles.diffLine,
+                  {
+                    color: line.type === 'add' ? colors.green : line.type === 'remove' ? colors.red : colors.textSecondary,
+                    backgroundColor: line.type === 'add' ? colors.green + '11' : line.type === 'remove' ? colors.red + '11' : 'transparent',
+                  },
+                ]}
+              >
+                {line.type === 'add' ? '+ ' : line.type === 'remove' ? '- ' : '  '}{line.text}
+              </Text>
+            ))}
+            {diffLines.length === 0 && (
+              <Text style={[styles.diffEmpty, { color: colors.textMuted }]}>No differences</Text>
+            )}
+          </ScrollView>
+        ) : (
+          <MarkdownPreview content={previewContent} fontSize={settings.fontSize} />
+        )}
       </SafeAreaView>
     );
   }
@@ -335,6 +376,34 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: 14,
       fontWeight: '600',
       color: colors.bgPrimary,
+    },
+    diffToggle: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      borderWidth: 1,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      marginRight: 6,
+    },
+    diffContainer: {
+      flex: 1,
+    },
+    diffContent: {
+      padding: 12,
+      paddingBottom: 32,
+    },
+    diffLine: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 12,
+      lineHeight: 18,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    diffEmpty: {
+      textAlign: 'center' as const,
+      paddingVertical: 32,
+      fontSize: 14,
     },
   });
 }

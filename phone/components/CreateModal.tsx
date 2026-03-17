@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -130,6 +131,10 @@ export default function CreateModal({
       animationType="fade"
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <Pressable style={styles.overlay} onPress={onClose}>
         <Animated.View
           style={[
@@ -267,6 +272,7 @@ export default function CreateModal({
           </Pressable>
         </Animated.View>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

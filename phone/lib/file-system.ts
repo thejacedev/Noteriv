@@ -61,7 +61,18 @@ export function deleteFile(filePath: string): boolean {
 export function deleteDir(dirPath: string): boolean {
   try {
     const dir = new Directory(dirPath);
-    if (dir.exists) dir.delete();
+    if (!dir.exists) return true;
+    // Recursively delete contents first
+    const items = dir.list();
+    for (const item of items) {
+      if (item instanceof Directory) {
+        deleteDir(item.uri);
+      } else {
+        try { (item as File).delete(); } catch {}
+      }
+    }
+    // Now delete the empty directory
+    dir.delete();
     return true;
   } catch {
     return false;

@@ -536,19 +536,7 @@ export default function Home() {
   const handleGitSync = performSync;
 
   // ============================================================
-  // Git auto-sync interval
-  // ============================================================
-
-  useEffect(() => {
-    if (appState !== "app" || settings.gitSyncInterval <= 0) return;
-    gitPushRef.current = setInterval(() => {
-      performSync();
-    }, settings.gitSyncInterval * 60_000);
-    return () => { if (gitPushRef.current) clearInterval(gitPushRef.current); };
-  }, [appState, settings.gitSyncInterval, performSync]);
-
-  // ============================================================
-  // Periodic git status check (every 30s)
+  // Auto-sync every 5s (pull + push if changes)
   // ============================================================
 
   useEffect(() => {
@@ -558,10 +546,14 @@ export default function Home() {
       try {
         const status = await window.electronAPI.gitStatus(activeVault.path);
         setGitChanges(status.changes);
+        // Auto-sync: always pull, push if there are local changes
+        if (status.isRepo && status.remote) {
+          performSync();
+        }
       } catch {}
-    }, 30_000);
+    }, 5_000);
     return () => clearInterval(interval);
-  }, [appState, activeVault]);
+  }, [appState, activeVault, performSync]);
 
   // ============================================================
   // Vault operations

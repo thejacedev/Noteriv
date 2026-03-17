@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Animated,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Alert,
-  FlatList,
   ActivityIndicator,
   Switch,
   Linking,
@@ -322,10 +322,7 @@ export default function SetupScreen() {
       // ═══════ VAULT NAME ═══════
       case 1:
         return (
-          <KeyboardAvoidingView
-            style={styles.stepContent}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
+          <View style={styles.stepContent}>
             <View style={[styles.iconContainer, { backgroundColor: colors.bgTertiary }]}>
               <Ionicons
                 name="library"
@@ -371,17 +368,13 @@ export default function SetupScreen() {
                 color={colors.bgPrimary}
               />
             </TouchableOpacity>
-          </KeyboardAvoidingView>
+          </View>
         );
 
       // ═══════ GITHUB CONNECT ═══════
       case 2:
         return (
-          <KeyboardAvoidingView
-            style={styles.stepContent}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={80}
-          >
+          <View style={styles.stepContent}>
             <View style={[styles.iconContainer, { backgroundColor: colors.bgTertiary }]}>
               <Ionicons
                 name="logo-github"
@@ -545,40 +538,36 @@ export default function SetupScreen() {
                 ) : (
                   <View style={styles.repoList}>
                     <Text style={[styles.repoListLabel, { color: colors.textMuted }]}>Or pick an existing repo:</Text>
-                    <FlatList
-                      data={repos.slice(0, 20)}
-                      keyExtractor={(r) => String(r.id)}
-                      style={{ maxHeight: 160 }}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[
-                            styles.repoItem,
-                            selectedRepo?.id === item.id &&
-                              { borderColor: colors.blue + '50', backgroundColor: colors.blue + '10' },
-                          ]}
-                          onPress={() => {
-                            setSelectedRepo(item);
-                            setCreateNewRepo(false);
-                            setEnableGit(true);
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.repoName, { color: colors.textPrimary }]}>{item.name}</Text>
-                            {item.description && (
-                              <Text
-                                style={[styles.repoDesc, { color: colors.textMuted }]}
-                                numberOfLines={1}
-                              >
-                                {item.description}
-                              </Text>
-                            )}
-                          </View>
-                          {item.private && (
-                            <Text style={[styles.privateBadge, { color: colors.yellow }]}>private</Text>
+                    {repos.slice(0, 20).map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.repoItem,
+                          selectedRepo?.id === item.id &&
+                            { borderColor: colors.blue + '50', backgroundColor: colors.blue + '10' },
+                        ]}
+                        onPress={() => {
+                          setSelectedRepo(item);
+                          setCreateNewRepo(false);
+                          setEnableGit(true);
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.repoName, { color: colors.textPrimary }]}>{item.name}</Text>
+                          {item.description && (
+                            <Text
+                              style={[styles.repoDesc, { color: colors.textMuted }]}
+                              numberOfLines={1}
+                            >
+                              {item.description}
+                            </Text>
                           )}
-                        </TouchableOpacity>
-                      )}
-                    />
+                        </View>
+                        {item.private && (
+                          <Text style={[styles.privateBadge, { color: colors.yellow }]}>private</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 )}
 
@@ -649,7 +638,7 @@ export default function SetupScreen() {
                 </TouchableOpacity>
               )}
             </View>
-          </KeyboardAvoidingView>
+          </View>
         );
 
       // ═══════ DONE ═══════
@@ -692,18 +681,30 @@ export default function SetupScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgPrimary }]}>
-      {renderStepIndicator()}
-      <Animated.View
-        style={[
-          styles.animatedContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {renderStep()}
-      </Animated.View>
+        {renderStepIndicator()}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View
+            style={[
+              styles.animatedContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            {renderStep()}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -711,6 +712,10 @@ export default function SetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   animatedContainer: {
     flex: 1,

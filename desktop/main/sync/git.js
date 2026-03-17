@@ -167,39 +167,27 @@ async function sync(dir, commitMessage, token = null) {
     remote = await git(["remote", "get-url", "origin"], dir);
   } catch {}
 
+  // 1. PULL FIRST — always fetch + pull before doing anything local
   if (remote) {
-    try {
-      if (token) {
-        const authUrl = makeAuthUrl(remote, token);
-        const hasChanges = await git(["status", "--porcelain"], dir);
-        if (hasChanges) {
-          await git(["stash", "push", "-m", "noteriv-sync-stash"], dir);
-          try {
-            await git(["pull", "--rebase", authUrl, branch], dir, token);
-          } catch {}
-          await git(["stash", "pop"], dir).catch(() => {});
-        } else {
-          try {
-            await git(["pull", "--rebase", authUrl, branch], dir, token);
-          } catch {}
-        }
-      } else {
-        const hasChanges = await git(["status", "--porcelain"], dir);
-        if (hasChanges) {
-          await git(["stash", "push", "-m", "noteriv-sync-stash"], dir);
-          try {
-            await git(["pull", "--rebase", "origin", branch], dir);
-          } catch {}
-          await git(["stash", "pop"], dir).catch(() => {});
-        } else {
-          try {
-            await git(["pull", "--rebase", "origin", branch], dir);
-          } catch {}
-        }
-      }
-    } catch {}
+    const pullUrl = token ? makeAuthUrl(remote, token) : "origin";
+    const hasChanges = await git(["status", "--porcelain"], dir).catch(() => "");
+    const needsStash = !!hasChanges;
+
+    if (needsStash) {
+      await git(["stash", "push", "-m", "noteriv-sync-stash"], dir).catch(() => {});
+    }
+
+    // Fetch first so we know what remote has
+    await git(["fetch", pullUrl], dir, token).catch(() => {});
+    // Pull with rebase
+    await git(["pull", "--rebase", pullUrl, branch], dir, token).catch(() => {});
+
+    if (needsStash) {
+      await git(["stash", "pop"], dir).catch(() => {});
+    }
   }
 
+  // 2. THEN PUSH — stage, commit, push local changes
   await git(["add", "-A"], dir);
 
   const status = await git(["status", "--porcelain"], dir);
@@ -208,14 +196,8 @@ async function sync(dir, commitMessage, token = null) {
   }
 
   if (remote) {
-    try {
-      if (token) {
-        const authUrl = makeAuthUrl(remote, token);
-        await git(["push", "-u", authUrl, branch], dir, token);
-      } else {
-        await git(["push", "-u", "origin", branch], dir);
-      }
-    } catch {}
+    const pushUrl = token ? makeAuthUrl(remote, token) : "origin";
+    await git(["push", "-u", pushUrl, branch], dir, token).catch(() => {});
   }
 
   return true;

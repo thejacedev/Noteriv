@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Image,
+  LayoutChangeEvent,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
@@ -34,11 +35,12 @@ type InlineNode =
   | { type: 'subscript'; text: string }
   | { type: 'code'; text: string }
   | { type: 'link'; text: string; url: string }
-  | { type: 'image'; alt: string; url: string }
+  | { type: 'image'; alt: string; url: string; width?: number; height?: number }
   | { type: 'wikilink'; name: string }
   | { type: 'tag'; tag: string }
   | { type: 'embed'; name: string }
-  | { type: 'math'; code: string };
+  | { type: 'math'; code: string }
+  | { type: 'footnote_ref'; id: string };
 
 function parseInline(raw: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -86,17 +88,24 @@ function parseInline(raw: string): InlineNode[] {
       }
     }
 
-    // Image ![alt](url)
+    // Image ![alt](url) or ![alt|300](url) or ![alt|300x200](url)
     if (raw[i] === '!' && raw[i + 1] === '[') {
       const altEnd = raw.indexOf(']', i + 2);
       if (altEnd !== -1 && raw[altEnd + 1] === '(') {
         const urlEnd = raw.indexOf(')', altEnd + 2);
         if (urlEnd !== -1) {
-          nodes.push({
-            type: 'image',
-            alt: raw.substring(i + 2, altEnd),
-            url: raw.substring(altEnd + 2, urlEnd),
-          });
+          const fullAlt = raw.substring(i + 2, altEnd);
+          const url = raw.substring(altEnd + 2, urlEnd);
+          let alt = fullAlt;
+          let width: number | undefined;
+          let height: number | undefined;
+          const sizeMatch = fullAlt.match(/^(.*?)\|(\d+)(?:x(\d+))?$/);
+          if (sizeMatch) {
+            alt = sizeMatch[1];
+            width = parseInt(sizeMatch[2], 10);
+            if (sizeMatch[3]) height = parseInt(sizeMatch[3], 10);
+          }
+          nodes.push({ type: 'image', alt, url, width, height });
           i = urlEnd + 1;
           continue;
         }
@@ -185,6 +194,19 @@ function parseInline(raw: string): InlineNode[] {
       }
     }
 
+    // Footnote reference [^id]
+    if (raw[i] === '[' && raw[i + 1] === '^') {
+      const end = raw.indexOf(']', i + 2);
+      if (end !== -1) {
+        const id = raw.substring(i + 2, end);
+        if (id && !id.includes(' ')) {
+          nodes.push({ type: 'footnote_ref', id });
+          i = end + 1;
+          continue;
+        }
+      }
+    }
+
     // #tag (standalone word starting with #, not heading context)
     if (raw[i] === '#' && (i === 0 || raw[i - 1] === ' ') && raw[i + 1] && /[a-zA-Z]/.test(raw[i + 1])) {
       const match = raw.substring(i).match(/^#([a-zA-Z0-9_/\-]+)/);
@@ -221,7 +243,9 @@ type BlockNode =
   | { type: 'table'; headers: string[]; alignments: string[]; rows: string[][]; line: number }
   | { type: 'math_block'; code: string; line: number }
   | { type: 'toc'; line: number }
-  | { type: 'embed'; name: string; line: number };
+  | { type: 'embed'; name: string; line: number }
+  | { type: 'footnote_def'; id: string; text: string; line: number }
+  | { type: 'definition_list'; items: { term: string; definition: string }[]; line: number };
 
 function parseBlocks(content: string): BlockNode[] {
   const lines = content.split('\n');
@@ -384,6 +408,32 @@ function parseBlocks(content: string): BlockNode[] {
       continue;
     }
 
+    // Footnote definition [^id]: text
+    const fnMatch = line.match(/^\[\^(\w+)\]:\s*(.+)$/);
+    if (fnMatch) {
+      blocks.push({ type: 'footnote_def', id: fnMatch[1], text: fnMatch[2], line: i });
+      i++;
+      continue;
+    }
+
+    // Definition list: Term followed by : Definition
+    if (i + 1 < lines.length && lines[i + 1].match(/^:\s+/)) {
+      const items: { term: string; definition: string }[] = [];
+      const startLine = i;
+      while (i < lines.length) {
+        const term = lines[i];
+        if (i + 1 >= lines.length || !lines[i + 1].match(/^:\s+/)) break;
+        i++;
+        const def = lines[i].replace(/^:\s+/, '');
+        items.push({ term, definition: def });
+        i++;
+      }
+      if (items.length > 0) {
+        blocks.push({ type: 'definition_list', items, line: startLine });
+        continue;
+      }
+    }
+
     // Paragraph (collect contiguous non-empty lines)
     const paraLines: string[] = [];
     const startLine = i;
@@ -484,9 +534,23 @@ function RenderInline({
             );
           case 'image':
             return (
-              <Text key={idx} style={{ color: colors.textMuted, fontSize: fontSize - 1 }}>
-                [Image: {node.alt}]
-              </Text>
+              <View key={idx} style={{ marginVertical: 4 }}>
+                <Image
+                  source={{ uri: node.url }}
+                  style={{
+                    width: node.width || '100%' as any,
+                    height: node.height || 200,
+                    borderRadius: 8,
+                    resizeMode: node.width && node.height ? 'stretch' : 'cover',
+                  }}
+                  accessibilityLabel={node.alt}
+                />
+                {node.alt ? (
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize - 2, marginTop: 2, textAlign: 'center' }}>
+                    {node.alt}
+                  </Text>
+                ) : null}
+              </View>
             );
           case 'wikilink':
             return (
@@ -533,6 +597,20 @@ function RenderInline({
             return (
               <Text key={idx} style={{ color: colors.blue, fontSize }}>
                 {'↗ '}{node.name}
+              </Text>
+            );
+          case 'footnote_ref':
+            return (
+              <Text
+                key={idx}
+                style={{
+                  color: colors.accent,
+                  fontSize: fontSize * 0.75,
+                  lineHeight: fontSize,
+                  fontWeight: '600',
+                }}
+              >
+                [{node.id}]
               </Text>
             );
           default:
@@ -807,6 +885,8 @@ export default function MarkdownPreview({
   const { colors } = useTheme();
   const blocks = useMemo(() => parseBlocks(content), [content]);
   const lineHeight = fontSize * 1.65;
+  const scrollRef = useRef<ScrollView>(null);
+  const headingYMap = useRef<Map<number, number>>(new Map());
 
   // Callout color map
   const calloutColors: Record<string, string> = {
@@ -834,7 +914,11 @@ export default function MarkdownPreview({
           const sizes = [fontSize * 2, fontSize * 1.65, fontSize * 1.35, fontSize * 1.15, fontSize, fontSize * 0.9];
           const size = sizes[block.level - 1] || fontSize;
           return (
-            <View key={index} style={[styles.block, { marginTop: block.level <= 2 ? 20 : 14 }]}>
+            <View
+              key={index}
+              style={[styles.block, { marginTop: block.level <= 2 ? 20 : 14 }]}
+              onLayout={(e) => { headingYMap.current.set(block.line, e.nativeEvent.layout.y); }}
+            >
               <InlineText
                 text={block.text}
                 fontSize={size}
@@ -1078,24 +1162,77 @@ export default function MarkdownPreview({
             />
           );
 
+        case 'footnote_def':
+          return (
+            <View key={index} style={[styles.block, { flexDirection: 'row', gap: 6, paddingLeft: 8 }]}>
+              <Text style={{ color: colors.accent, fontSize: fontSize - 2, fontWeight: '700', minWidth: 24 }}>[{block.id}]</Text>
+              <InlineText
+                text={block.text}
+                fontSize={fontSize - 1}
+                colors={colors}
+                onLinkPress={onLinkPress}
+                onWikiLinkPress={onWikiLinkPress}
+                style={{ color: colors.textSecondary, flex: 1 }}
+              />
+            </View>
+          );
+
+        case 'definition_list':
+          return (
+            <View key={index} style={[styles.block, { gap: 6 }]}>
+              {block.items.map((item, di) => (
+                <View key={di} style={{ marginBottom: 8 }}>
+                  <InlineText
+                    text={item.term}
+                    fontSize={fontSize}
+                    colors={colors}
+                    onLinkPress={onLinkPress}
+                    onWikiLinkPress={onWikiLinkPress}
+                    style={{ color: colors.textPrimary, fontWeight: '600' }}
+                  />
+                  <View style={{ flexDirection: 'row', paddingLeft: 16, marginTop: 2 }}>
+                    <InlineText
+                      text={item.definition}
+                      fontSize={fontSize - 1}
+                      colors={colors}
+                      onLinkPress={onLinkPress}
+                      onWikiLinkPress={onWikiLinkPress}
+                      style={{ color: colors.textSecondary, lineHeight: lineHeight * 0.95, flex: 1 }}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          );
+
         case 'toc': {
           const headings = blocks.filter((b): b is Extract<BlockNode, { type: 'heading' }> => b.type === 'heading');
           if (headings.length === 0) return null;
           return (
             <View key={index} style={[styles.block, styles.tocBlock, { borderColor: colors.border }]}>
               {headings.map((h, hi) => (
-                <Text
+                <TouchableOpacity
                   key={hi}
-                  style={{
-                    color: colors.blue,
-                    fontSize: fontSize - 1,
-                    lineHeight: lineHeight * 0.9,
-                    paddingLeft: (h.level - 1) * 14,
-                    marginBottom: 3,
+                  activeOpacity={0.6}
+                  onPress={() => {
+                    const y = headingYMap.current.get(h.line);
+                    if (y !== undefined && scrollRef.current) {
+                      scrollRef.current.scrollTo({ y, animated: true });
+                    }
                   }}
                 >
-                  {'· '}{h.text}
-                </Text>
+                  <Text
+                    style={{
+                      color: colors.blue,
+                      fontSize: fontSize - 1,
+                      lineHeight: lineHeight * 0.9,
+                      paddingLeft: (h.level - 1) * 14,
+                      marginBottom: 3,
+                    }}
+                  >
+                    {'· '}{h.text}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
           );
@@ -1110,6 +1247,7 @@ export default function MarkdownPreview({
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.bgPrimary }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator

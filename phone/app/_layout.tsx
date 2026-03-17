@@ -6,6 +6,7 @@ import { loadCustomThemes } from '@/lib/community';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 function AppThemeWrapper({ children }: { children: React.ReactNode }) {
@@ -157,6 +158,21 @@ function ThemedNavigation() {
           }}
         />
         <Stack.Screen
+          name="graph"
+          options={{
+            title: 'Graph',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="publish"
+          options={{
+            presentation: 'modal',
+            title: 'Publish',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="trash"
           options={{
             presentation: 'modal',
@@ -173,10 +189,12 @@ function ThemedNavigation() {
 
 export default function RootLayout() {
   return (
-    <AppProvider>
-      <AppThemeWrapper>
-        <ThemedNavigation />
-      </AppThemeWrapper>
-    </AppProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppProvider>
+        <AppThemeWrapper>
+          <ThemedNavigation />
+        </AppThemeWrapper>
+      </AppProvider>
+    </GestureHandlerRootView>
   );
 }

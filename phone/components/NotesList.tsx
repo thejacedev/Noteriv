@@ -9,6 +9,8 @@ import {
   TextInput,
   Modal,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -40,6 +42,19 @@ export default function NotesList({
   const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [sortMode, setSortMode] = useState<'name' | 'name-desc'>('name');
+
+  const sortedFiles = useMemo(() => {
+    const sorted = [...files];
+    if (sortMode === 'name-desc') {
+      sorted.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return b.name.localeCompare(a.name);
+      });
+    }
+    return sorted;
+  }, [files, sortMode]);
 
   const folderName = useMemo(() => {
     if (isAtRoot) return null;
@@ -146,7 +161,7 @@ export default function NotesList({
   return (
     <View style={styles.container}>
       <FlatList
-        data={files}
+        data={sortedFiles}
         keyExtractor={(item) => item.path}
         renderItem={renderItem}
         refreshControl={
@@ -159,15 +174,33 @@ export default function NotesList({
           />
         }
         ListHeaderComponent={
-          !isAtRoot ? (
-            <TouchableOpacity style={[styles.backRow, { borderBottomColor: colors.bgTertiary }]} onPress={onNavigateUp}>
-              <Ionicons name="chevron-back" size={20} color={colors.blue} />
-              <Text style={[styles.backText, { color: colors.blue }]}>Back</Text>
-              <Text style={[styles.folderTitle, { color: colors.textMuted }]} numberOfLines={1}>
-                {folderName}
-              </Text>
-            </TouchableOpacity>
-          ) : null
+          <>
+            {!isAtRoot && (
+              <TouchableOpacity style={[styles.backRow, { borderBottomColor: colors.bgTertiary }]} onPress={onNavigateUp}>
+                <Ionicons name="chevron-back" size={20} color={colors.blue} />
+                <Text style={[styles.backText, { color: colors.blue }]}>Back</Text>
+                <Text style={[styles.folderTitle, { color: colors.textMuted }]} numberOfLines={1}>
+                  {folderName}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {files.length > 0 && (
+              <View style={[styles.sortRow, { borderBottomColor: colors.bgTertiary }]}>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{files.length} items</Text>
+                <TouchableOpacity
+                  style={styles.sortBtn}
+                  onPress={() => setSortMode((m) => m === 'name' ? 'name-desc' : 'name')}
+                >
+                  <Ionicons
+                    name={sortMode === 'name' ? 'arrow-down' : 'arrow-up'}
+                    size={14}
+                    color={colors.textMuted}
+                  />
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>Name</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -189,6 +222,10 @@ export default function NotesList({
         animationType="fade"
         onRequestClose={() => setRenameTarget(null)}
       >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalDialog, { backgroundColor: colors.bgTertiary }]}>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Rename</Text>
@@ -218,6 +255,7 @@ export default function NotesList({
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -256,6 +294,20 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginLeft: 70,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4,
   },
   backRow: {
     flexDirection: 'row',

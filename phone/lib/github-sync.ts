@@ -248,6 +248,18 @@ export async function pull(
       shaCache.set(shaCacheKey(owner, repo, item.path), item.sha);
     }
 
+    // Delete local files that no longer exist on remote
+    const remotePathSet = new Set(remoteFiles.map((f) => f.path));
+    const localFiles = await FS.listAllMarkdownFiles(vaultPath);
+    for (const file of localFiles) {
+      let rel = relativePath(vaultPath, file.filePath);
+      if (rel.startsWith('/')) rel = rel.slice(1);
+      if (shouldSkipPath(rel) || rel.startsWith('.trash/')) continue;
+      if (!remotePathSet.has(rel)) {
+        FS.deleteFile(file.filePath);
+      }
+    }
+
     // Download each file
     for (const item of remoteFiles) {
       try {
@@ -409,6 +421,85 @@ export async function push(
   } catch (err) {
     result.errors.push(
       `Push failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  return result;
+}
+
+// --- Fresh Clone (delete all + pull) ---
+
+export async function freshClone(
+  vaultPath: string,
+  token: string,
+  remote: string,
+  branch?: string
+): Promise<SyncResult> {
+  const result: SyncResult = { pulled: 0, pushed: 0, errors: [] };
+  const parsed = parseRemote(remote);
+  if (!parsed) {
+    result.errors.push('Invalid GitHub remote URL');
+    return result;
+  }
+  const { owner, repo } = parsed;
+
+  try {
+    const branchName = branch ?? (await getDefaultBranch(owner, repo, token));
+    const tree = await getTree(owner, repo, branchName, token);
+
+    // Nuke all vault contents except .noteriv/ and .trash/
+    const base = vaultPath.endsWith('/') ? vaultPath.slice(0, -1) : vaultPath;
+    console.log('[FreshClone] Vault path:', base);
+    const entries = FS.readDir(base);
+    console.log('[FreshClone] Found', entries.length, 'entries to process');
+    for (const entry of entries) {
+      const name = entry.name;
+      if (name === '.noteriv' || name === '.trash') {
+        console.log('[FreshClone] Skipping:', name);
+        continue;
+      }
+      console.log('[FreshClone] Deleting:', entry.path, entry.isDirectory ? '(dir)' : '(file)');
+      if (entry.isDirectory) {
+        const ok = FS.deleteDir(entry.path);
+        console.log('[FreshClone] deleteDir result:', ok);
+      } else {
+        const ok = FS.deleteFile(entry.path);
+        console.log('[FreshClone] deleteFile result:', ok);
+      }
+    }
+    // Verify deletion
+    const remaining = FS.readDir(base);
+    console.log('[FreshClone] After delete:', remaining.length, 'entries remain:', remaining.map(e => e.name));
+
+    // Pull all remote files (not just markdown — clone everything)
+    const remoteFiles = tree.filter(
+      (item) =>
+        item.type === 'blob' &&
+        !shouldSkipPath(item.path)
+    );
+    console.log('[FreshClone] Remote files to download:', remoteFiles.length);
+
+    for (const item of remoteFiles) {
+      try {
+        const localPath = localFilePath(vaultPath, item.path);
+        console.log('[FreshClone] Downloading:', item.path, '->', localPath);
+        const remoteFile = await getFileContent(owner, repo, item.path, token, branchName);
+        const remoteContent = base64Decode(remoteFile.content.replace(/\n/g, ''));
+        const ok = FS.writeFile(localPath, remoteContent);
+        console.log('[FreshClone] Write result:', ok);
+        shaCache.set(shaCacheKey(owner, repo, item.path), item.sha);
+        result.pulled++;
+      } catch (err) {
+        console.log('[FreshClone] Error downloading:', item.path, err);
+        result.errors.push(
+          `Clone ${item.path}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+    console.log('[FreshClone] Done. Pulled:', result.pulled, 'Errors:', result.errors.length);
+  } catch (err) {
+    result.errors.push(
+      `Fresh clone failed: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 

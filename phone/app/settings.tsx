@@ -41,7 +41,7 @@ const AUTO_SAVE_OPTIONS = [
 const TAB_SIZE_OPTIONS = [2, 4, 8];
 
 export default function SettingsScreen() {
-  const { settings, updateSettings, vault } = useApp();
+  const { settings, updateSettings, vault, refreshFiles, refreshVaults } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -127,7 +127,8 @@ export default function SettingsScreen() {
 
     // Save the repo URL on the vault
     const { updateVault } = await import('@/lib/vault');
-    await updateVault(vault.id, { gitRemote: selectedRepoUrl, autoSync: true });
+    await updateVault(vault.id, { gitRemote: selectedRepoUrl });
+    await refreshVaults();
 
     // Reset modal state
     setTokenInput('');
@@ -177,6 +178,7 @@ export default function SettingsScreen() {
         vault.gitRemote,
         vault.gitBranch || undefined
       );
+      refreshFiles();
       const now = new Date().toLocaleTimeString();
       setLastSyncTime(now);
       if (result.errors.length > 0) {
@@ -193,6 +195,44 @@ export default function SettingsScreen() {
     } finally {
       setSyncing(false);
     }
+  }, [vault, ghToken, refreshFiles]);
+
+  const handleFreshClone = useCallback(async () => {
+    if (!vault || !ghToken || !vault.gitRemote) return;
+    Alert.alert(
+      'Fresh Clone',
+      'This will DELETE all local notes and re-download everything from GitHub. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete & Clone',
+          style: 'destructive',
+          onPress: async () => {
+            setSyncing(true);
+            setSyncStatus('Deleting local files & cloning...');
+            try {
+              const result = await GitSync.freshClone(
+                vault.path,
+                ghToken,
+                vault.gitRemote!,
+                vault.gitBranch || undefined
+              );
+              refreshFiles();
+              setLastSyncTime(new Date().toLocaleTimeString());
+              if (result.errors.length > 0) {
+                setSyncStatus(`Cloned: ${result.pulled} files, Errors: ${result.errors.length}`);
+              } else {
+                setSyncStatus(`Fresh clone: ${result.pulled} files downloaded`);
+              }
+            } catch (err) {
+              setSyncStatus(`Clone failed: ${err instanceof Error ? err.message : String(err)}`);
+            } finally {
+              setSyncing(false);
+            }
+          },
+        },
+      ]
+    );
   }, [vault, ghToken]);
 
   const handleBrowseCommunityThemes = useCallback(async () => {
@@ -689,7 +729,7 @@ export default function SettingsScreen() {
               </View>
             )}
 
-            <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={[s.settingRow, { borderBottomColor: colors.border, gap: 8 }]}>
               <TouchableOpacity
                 style={[
                   s.syncButton,
@@ -708,15 +748,26 @@ export default function SettingsScreen() {
                   {syncing ? 'Syncing...' : 'Sync Now'}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  s.syncButton,
+                  { backgroundColor: colors.red },
+                  syncing && { opacity: 0.6 },
+                ]}
+                onPress={handleFreshClone}
+                disabled={syncing}
+              >
+                <Ionicons name="cloud-download-outline" size={18} color={colors.bgPrimary} />
+                <Text style={[s.syncButtonText, { color: colors.bgPrimary }]}>
+                  Fresh Clone
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {renderToggle('Auto-sync', vault?.autoSync ?? false, (val) => {
-              // Auto-sync is stored on the vault, not settings
-              if (vault) {
-                const { updateVault } = require('@/lib/vault');
-                updateVault(vault.id, { autoSync: val });
-              }
-            })}
+            <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+              <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Auto-sync</Text>
+              <Text style={{ color: colors.green, fontSize: 13, fontWeight: '500' }}>Every 5s</Text>
+            </View>
 
             <TouchableOpacity
               style={[s.settingRow, { borderBottomColor: colors.border }]}
