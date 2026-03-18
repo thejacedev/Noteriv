@@ -831,6 +831,13 @@ body {
   background: rgba(205, 214, 244, 0.07);
 }
 
+.sb-row.sb-selected {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  outline-offset: -1px;
+}
+
 .sb-row.sb-folder {
   color: var(--text-secondary);
 }

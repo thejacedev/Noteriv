@@ -61,6 +61,7 @@ interface WorkspaceState {
   sidebarCollapsed: boolean;
   viewMode: "live" | "source" | "view";
   fileOrder?: Record<string, string[]>; // dir path -> ordered file/folder names
+  fileViewModes?: Record<string, "live" | "source" | "view">; // per-file default view modes
   pinnedTabs?: string[]; // file paths of pinned tabs
 }
 

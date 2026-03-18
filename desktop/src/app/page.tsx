@@ -6,6 +6,8 @@ import Sidebar from "@/components/Sidebar";
 import TitleBar from "@/components/TitleBar";
 import SetupWizard from "@/components/SetupWizard";
 import DocumentTitle from "@/components/DocumentTitle";
+import SplitPane from "@/components/SplitPane";
+import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import SettingsModal from "@/components/SettingsModal";
 import QuickOpen from "@/components/QuickOpen";
 import VaultSearch from "@/components/VaultSearch";
@@ -101,8 +103,14 @@ export default function Home() {
   const [tabs, setTabs] = useState<TabState[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
+  // Split editor
+  const [splitTab, setSplitTab] = useState<string | null>(null);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+
   // UI
   const [viewMode, setViewMode] = useState<ViewMode>("live");
+  const [fileViewModes, setFileViewModes] = useState<Record<string, ViewMode>>({});
+  const [editorContextMenu, setEditorContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
@@ -180,6 +188,17 @@ export default function Home() {
   const content = currentTab?.content || "";
   const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
 
+  // Apply per-file view mode when switching tabs
+  useEffect(() => {
+    if (activeTab && fileViewModes[activeTab]) {
+      setViewMode(fileViewModes[activeTab]);
+    }
+  }, [activeTab]);
+
+  // Split tab helpers
+  const splitTabState = splitTab ? tabs.find((t) => t.filePath === splitTab) || null : null;
+  const splitContent = splitTabState?.content || "";
+
   useEffect(() => {
     contentRef.current = content;
     activeTabRef.current = activeTab;
@@ -204,10 +223,11 @@ export default function Home() {
       sidebarCollapsed,
       viewMode,
       fileOrder,
+      fileViewModes,
       pinnedTabs: Array.from(pinnedTabs),
     };
     await window.electronAPI.saveWorkspace(activeVault.path, state);
-  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, pinnedTabs]);
+  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, fileViewModes, pinnedTabs]);
 
   // Debounced workspace save
   const debounceSaveWorkspace = useCallback(() => {
@@ -218,7 +238,7 @@ export default function Home() {
   // Save workspace when state changes
   useEffect(() => {
     if (appState === "app") debounceSaveWorkspace();
-  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, pinnedTabs, debounceSaveWorkspace]);
+  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, fileViewModes, pinnedTabs, debounceSaveWorkspace]);
 
   const loadWorkspace = useCallback(async (vault: Vault) => {
     if (!window.electronAPI) return;
@@ -230,6 +250,7 @@ export default function Home() {
     setViewMode(ws.viewMode ?? "live");
     setExpandedFolders(ws.expandedFolders ?? []);
     setFileOrder(ws.fileOrder ?? {});
+    setFileViewModes(ws.fileViewModes ?? {});
     setPinnedTabs(new Set(ws.pinnedTabs ?? []));
 
     // Restore tabs
@@ -658,6 +679,8 @@ export default function Home() {
   const closeTab = useCallback((filePath: string) => {
     // Pinned tabs cannot be closed
     if (pinnedTabs.has(filePath)) return;
+    // Close split if this tab is in the split pane
+    if (splitTab === filePath) setSplitTab(null);
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.filePath === filePath);
       const next = prev.filter((t) => t.filePath !== filePath);
@@ -668,7 +691,7 @@ export default function Home() {
       }
       return next;
     });
-  }, [activeTab, pinnedTabs]);
+  }, [activeTab, pinnedTabs, splitTab]);
 
   const handleTogglePin = useCallback((filePath: string) => {
     setPinnedTabs((prev) => {
@@ -766,6 +789,92 @@ export default function Home() {
       )
     );
   }, [activeTab]);
+
+  const handleSplitContentChange = useCallback((newContent: string) => {
+    if (!splitTab) return;
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.filePath === splitTab ? { ...t, content: newContent } : t
+      )
+    );
+  }, [splitTab]);
+
+  const handleSplitRight = useCallback((filePath?: string) => {
+    if (filePath) {
+      // Open specific file in split
+      setSplitTab(filePath);
+    } else if (activeTab) {
+      // Toggle split with current tab — if already split, close it
+      if (splitTab) {
+        setSplitTab(null);
+      }
+    }
+  }, [activeTab, splitTab]);
+
+  const handleCloseSplit = useCallback(() => {
+    setSplitTab(null);
+  }, []);
+
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    // Only show on right-click in the editor area, not on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest(".md-checkbox") || target.closest(".md-table-checkbox") || target.closest("button") || target.closest("a")) return;
+    e.preventDefault();
+    setEditorContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const getEditorContextMenuItems = useCallback((): ContextMenuItem[] => {
+    if (!activeTab) return [];
+    const currentFileMode = fileViewModes[activeTab];
+    const items: ContextMenuItem[] = [
+      {
+        label: `Default Mode: Live${currentFileMode === "live" ? " ✓" : ""}`,
+        onClick: () => {
+          setFileViewModes((prev) => ({ ...prev, [activeTab]: "live" }));
+          setViewMode("live");
+        },
+      },
+      {
+        label: `Default Mode: Source${currentFileMode === "source" ? " ✓" : ""}`,
+        onClick: () => {
+          setFileViewModes((prev) => ({ ...prev, [activeTab]: "source" }));
+          setViewMode("source");
+        },
+      },
+      {
+        label: `Default Mode: View${currentFileMode === "view" ? " ✓" : ""}`,
+        onClick: () => {
+          setFileViewModes((prev) => ({ ...prev, [activeTab]: "view" }));
+          setViewMode("view");
+        },
+      },
+      {
+        label: "Clear Default Mode",
+        onClick: () => {
+          setFileViewModes((prev) => {
+            const next = { ...prev };
+            delete next[activeTab!];
+            return next;
+          });
+        },
+      },
+      { label: "", separator: true, onClick: () => {} },
+      {
+        label: "Open in Split",
+        onClick: () => handleSplitRight(activeTab),
+      },
+      { label: "", separator: true, onClick: () => {} },
+      {
+        label: focusMode ? "Exit Focus Mode" : "Focus Mode",
+        onClick: () => setFocusMode((f) => !f),
+      },
+      {
+        label: zenMode ? "Exit Zen Mode" : "Zen Mode",
+        onClick: () => setZenMode((z) => !z),
+      },
+    ];
+    return items;
+  }, [activeTab, fileViewModes, focusMode, zenMode, handleSplitRight]);
 
   const handleSave = useCallback(async () => {
     if (!window.electronAPI || !currentTab) return;
@@ -1173,9 +1282,11 @@ export default function Home() {
       togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
       noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
       toggleLint: () => setShowLintPanel((l) => !l),
+      splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
+      closeSplit: handleCloseSplit,
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit]);
 
   // ============================================================
   // Recent commands handler
@@ -1333,6 +1444,8 @@ export default function Home() {
         togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
         noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
         toggleLint: () => setShowLintPanel((l) => !l),
+        splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
+        closeSplit: handleCloseSplit,
       };
 
       for (const binding of hotkeys) {
@@ -1440,6 +1553,7 @@ export default function Home() {
           onCopyPath={(filePath) => {
             navigator.clipboard.writeText(filePath);
           }}
+          onSplitRight={(filePath) => handleSplitRight(filePath)}
         />
       )}
 
@@ -1535,25 +1649,63 @@ export default function Home() {
         )}
 
         {/* Editor */}
-        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""}>
+        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} onContextMenu={handleEditorContextMenu}>
           {currentTab ? (
-            <>
-              <DocumentTitle
-                filePath={currentTab.filePath}
-                onRename={handleRenameCurrentFile}
-              />
-              <div className="flex-1 overflow-hidden">
-                {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
-                  <BoardView content={content} onChange={handleContentChange} />
-                ) : viewMode === "view" ? (
-                  <ReadOnlyView content={content} />
-                ) : viewMode === "source" ? (
-                  <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
-                ) : (
-                  <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} focusMode={focusMode} />
-                )}
-              </div>
-            </>
+            <SplitPane
+              left={
+                <div className="flex flex-col h-full overflow-hidden">
+                  <DocumentTitle
+                    filePath={currentTab.filePath}
+                    onRename={handleRenameCurrentFile}
+                  />
+                  <div className="flex-1 overflow-hidden">
+                    {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
+                      <BoardView content={content} onChange={handleContentChange} />
+                    ) : viewMode === "view" ? (
+                      <ReadOnlyView content={content} onChange={handleContentChange} />
+                    ) : viewMode === "source" ? (
+                      <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
+                    ) : (
+                      <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} focusMode={focusMode} />
+                    )}
+                  </div>
+                </div>
+              }
+              right={
+                splitTabState ? (
+                  <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+                      <span className="text-xs text-[var(--text-secondary)] truncate">
+                        {splitTabState.filePath.split("/").pop()}
+                      </span>
+                      <button
+                        onClick={handleCloseSplit}
+                        className="p-0.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        title="Close split"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      {(isBoardFile(splitTabState.filePath) || isBoardContent(splitContent)) && viewMode !== "source" ? (
+                        <BoardView content={splitContent} onChange={handleSplitContentChange} />
+                      ) : viewMode === "view" ? (
+                        <ReadOnlyView content={splitContent} onChange={handleSplitContentChange} />
+                      ) : viewMode === "source" ? (
+                        <SourceEditor content={splitContent} onChange={handleSplitContentChange} vaultPath={activeVault?.path} />
+                      ) : (
+                        <Editor content={splitContent} onChange={handleSplitContentChange} vaultPath={activeVault?.path} focusMode={false} />
+                      )}
+                    </div>
+                  </div>
+                ) : null
+              }
+              splitRatio={splitRatio}
+              onSplitRatioChange={setSplitRatio}
+              direction="horizontal"
+            />
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-3">
@@ -1568,6 +1720,16 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* Editor context menu */}
+        {editorContextMenu && (
+          <ContextMenu
+            x={editorContextMenu.x}
+            y={editorContextMenu.y}
+            items={getEditorContextMenuItems()}
+            onClose={() => setEditorContextMenu(null)}
+          />
+        )}
 
         {/* Right side panels */}
         {showOutline && currentTab && (

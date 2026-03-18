@@ -35,6 +35,7 @@ interface TitleBarProps {
   onCloseTabsToRight?: (filePath: string) => void;
   onRevealInSidebar?: (filePath: string) => void;
   onCopyPath?: (filePath: string) => void;
+  onSplitRight?: (filePath: string) => void;
 }
 
 export default function TitleBar({
@@ -62,6 +63,7 @@ export default function TitleBar({
   onCloseTabsToRight,
   onRevealInSidebar,
   onCopyPath,
+  onSplitRight,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [platform, setPlatform] = useState("linux");
@@ -157,6 +159,10 @@ export default function TitleBar({
       },
       { label: "", separator: true, onClick: () => {} },
       {
+        label: "Open in Split",
+        onClick: () => onSplitRight?.(fp),
+      },
+      {
         label: "Reveal in Sidebar",
         onClick: () => onRevealInSidebar?.(fp),
       },
@@ -168,7 +174,7 @@ export default function TitleBar({
       },
     ];
     return items;
-  }, [tabContextMenu, pinnedTabs, onTogglePin, onTabClose, onTabSelect, onCloseOtherTabs, onCloseAllTabs, onCloseTabsToRight, onRevealInSidebar, onCopyPath]);
+  }, [tabContextMenu, pinnedTabs, onTogglePin, onTabClose, onTabSelect, onCloseOtherTabs, onCloseAllTabs, onCloseTabsToRight, onRevealInSidebar, onCopyPath, onSplitRight]);
 
   return (
     <div className="titlebar">

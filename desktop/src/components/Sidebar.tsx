@@ -83,6 +83,8 @@ function FolderItem({
   onDragEnd,
   onFolderDragOver,
   onFolderDrop,
+  selectedFiles,
+  onFileClick,
 }: {
   entry: FileEntry;
   index: number;
@@ -108,6 +110,8 @@ function FolderItem({
   onDragEnd: () => void;
   onFolderDragOver: (e: React.DragEvent, folderPath: string) => void;
   onFolderDrop: (e: React.DragEvent, folderPath: string) => void;
+  selectedFiles?: Set<string>;
+  onFileClick?: (e: React.MouseEvent, entry: FileEntry) => boolean;
 }) {
   const expanded = expandedFolders.includes(entry.path);
   const [children, setChildren] = useState<FileEntry[]>([]);
@@ -129,15 +133,17 @@ function FolderItem({
     }
   }, [expanded, loaded, entry.isDirectory, entry.path, renamingPath, refreshKey]);
 
-  const toggle = useCallback(() => {
+  const toggle = useCallback((e?: React.MouseEvent) => {
     if (entry.isDirectory) {
       onToggleFolder(entry.path);
     } else {
+      if (e && onFileClick && onFileClick(e, entry)) return;
       onFileSelect(entry.path);
     }
-  }, [entry, onFileSelect, onToggleFolder]);
+  }, [entry, onFileSelect, onToggleFolder, onFileClick]);
 
   const isActive = currentFile === entry.path;
+  const isSelected = selectedFiles?.has(entry.path) ?? false;
   const isRenaming = renamingPath === entry.path;
 
   const didFocusRef = useRef(false);
@@ -201,10 +207,11 @@ function FolderItem({
         }}
       >
         <button
-          onClick={toggle}
+          onClick={(e) => toggle(e)}
           onContextMenu={(e) => onContextMenu(e, entry, parentDir)}
-          className={rowClass}
+          className={`${rowClass}${isSelected ? " sb-selected" : ""}`}
           style={{ paddingLeft: `${indent}px` }}
+          data-filepath={entry.isDirectory ? undefined : entry.path}
         >
           {/* Indent guides */}
           {Array.from({ length: depth }, (_, i) => (
@@ -284,6 +291,8 @@ function FolderItem({
               onDragEnd={onDragEnd}
               onFolderDragOver={onFolderDragOver}
               onFolderDrop={onFolderDrop}
+              selectedFiles={selectedFiles}
+              onFileClick={onFileClick}
             />
           ))}
           {dropIndicator?.type === "between" && dropIndicator.dirPath === entry.path && dropIndicator.index === sorted.length && (
@@ -316,6 +325,8 @@ export default function Sidebar({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const lastClickedFile = useRef<string | null>(null);
 
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -377,20 +388,25 @@ export default function Sidebar({
     const source = dragSourceRef.current;
     if (!source) return;
     if (source.entry.path === folderPath) return;
-    const sourceParent = source.entry.path.substring(0, source.entry.path.lastIndexOf("/"));
-    if (sourceParent === folderPath) {
-      setDropIndicator(null);
-      dragSourceRef.current = null;
-      return;
+
+    // Collect all files to move: selected files + dragged file
+    const filesToMove = new Set(selectedFiles);
+    filesToMove.add(source.entry.path);
+
+    for (const filePath of filesToMove) {
+      const parent = filePath.substring(0, filePath.lastIndexOf("/"));
+      if (parent === folderPath) continue;
+      onMoveFile(filePath, folderPath);
     }
-    onMoveFile(source.entry.path, folderPath);
+
     if (!expandedFolders.includes(folderPath)) {
       onExpandedFoldersChange([...expandedFolders, folderPath]);
     }
     setDropIndicator(null);
     dragSourceRef.current = null;
+    setSelectedFiles(new Set());
     setTimeout(() => { refreshEntries(); setRefreshKey((k) => k + 1); }, 100);
-  }, [onMoveFile, expandedFolders, onExpandedFoldersChange, refreshEntries]);
+  }, [onMoveFile, expandedFolders, onExpandedFoldersChange, refreshEntries, selectedFiles]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -404,23 +420,24 @@ export default function Sidebar({
     const { dirPath, index } = indicator;
     const sourceParent = source.entry.path.substring(0, source.entry.path.lastIndexOf("/"));
 
+    // Collect all files to move: selected files + dragged file
+    const filesToMove = new Set(selectedFiles);
+    filesToMove.add(source.entry.path);
+
     if (sourceParent !== dirPath) {
-      onMoveFile(source.entry.path, dirPath);
+      // Moving to a different directory — move all selected
+      for (const filePath of filesToMove) {
+        const parent = filePath.substring(0, filePath.lastIndexOf("/"));
+        if (parent === dirPath) continue;
+        onMoveFile(filePath, dirPath);
+      }
+      setSelectedFiles(new Set());
       setTimeout(async () => {
-        if (window.electronAPI) {
-          const dirEntries = await window.electronAPI.readDir(dirPath);
-          const sorted = sortEntries(dirEntries, fileOrder[dirPath]);
-          const names = sorted.map((e) => e.name);
-          const movedName = source.entry.name;
-          const filtered = names.filter((n) => n !== movedName);
-          const insertIdx = Math.min(index, filtered.length);
-          filtered.splice(insertIdx, 0, movedName);
-          onFileOrderChange({ ...fileOrder, [dirPath]: filtered });
-        }
         refreshEntries();
         setRefreshKey((k) => k + 1);
       }, 100);
     } else {
+      // Reorder within same directory (only single file reorder makes sense)
       let currentEntries: FileEntry[] = [];
       if (window.electronAPI) currentEntries = await window.electronAPI.readDir(dirPath);
       const sorted = sortEntries(currentEntries, fileOrder[dirPath]);
@@ -437,12 +454,101 @@ export default function Sidebar({
     }
     setDropIndicator(null);
     dragSourceRef.current = null;
-  }, [dropIndicator, onMoveFile, fileOrder, onFileOrderChange, refreshEntries]);
+  }, [dropIndicator, onMoveFile, fileOrder, onFileOrderChange, refreshEntries, selectedFiles]);
+
+  // Build flat list of visible files from DOM order for shift-select
+  const getAllVisibleFiles = useCallback((): string[] => {
+    const container = document.querySelector(".sidebar-root .flex-1.overflow-y-auto");
+    if (!container) return [];
+    const buttons = container.querySelectorAll<HTMLElement>(".sb-row:not(.sb-folder)");
+    const paths: string[] = [];
+    buttons.forEach((btn) => {
+      const path = btn.getAttribute("data-filepath");
+      if (path) paths.push(path);
+    });
+    return paths;
+  }, []);
+
+  const handleFileClick = useCallback((e: React.MouseEvent, entry: FileEntry) => {
+    if (entry.isDirectory) return false;
+
+    // Ctrl/Cmd+Click: toggle individual file
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        if (next.has(entry.path)) next.delete(entry.path);
+        else next.add(entry.path);
+        return next;
+      });
+      lastClickedFile.current = entry.path;
+      return true;
+    }
+
+    // Shift+Click: select range from last clicked to this one
+    if (e.shiftKey && lastClickedFile.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      const allFiles = getAllVisibleFiles();
+      const startIdx = allFiles.indexOf(lastClickedFile.current);
+      const endIdx = allFiles.indexOf(entry.path);
+      if (startIdx !== -1 && endIdx !== -1) {
+        const from = Math.min(startIdx, endIdx);
+        const to = Math.max(startIdx, endIdx);
+        setSelectedFiles((prev) => {
+          const next = new Set(prev);
+          for (let i = from; i <= to; i++) {
+            next.add(allFiles[i]);
+          }
+          return next;
+        });
+      }
+      return true;
+    }
+
+    // Normal click: clear selection
+    setSelectedFiles(new Set());
+    lastClickedFile.current = entry.path;
+    return false;
+  }, [getAllVisibleFiles]);
+
+  const handleMergeNotes = useCallback(async () => {
+    if (!window.electronAPI || selectedFiles.size < 2) return;
+    const paths = Array.from(selectedFiles).sort();
+    const contents: string[] = [];
+    const names: string[] = [];
+    for (const p of paths) {
+      const c = await window.electronAPI.readFile(p);
+      if (c !== null) {
+        contents.push(c);
+        names.push(p.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "");
+      }
+    }
+    if (contents.length < 2) return;
+
+    const merged = contents.join("\n\n---\n\n");
+    const mergedName = `Merged - ${names[0]} + ${names.length - 1} more.md`;
+    const dir = paths[0].substring(0, paths[0].lastIndexOf("/"));
+    const mergedPath = `${dir}/${mergedName}`;
+    await window.electronAPI.writeFile(mergedPath, merged);
+    await refreshEntries();
+    setSelectedFiles(new Set());
+    onFileSelect(mergedPath);
+  }, [selectedFiles, refreshEntries, onFileSelect]);
 
   // Context menu
   const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry, parentDir: string) => {
     e.preventDefault();
     e.stopPropagation();
+    // Add to selection if ctrl-clicking
+    if ((e.ctrlKey || e.metaKey) && !entry.isDirectory) {
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        next.add(entry.path);
+        return next;
+      });
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, entry, parentDir });
   }, []);
 
@@ -489,7 +595,6 @@ export default function Sidebar({
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
     if (!window.electronAPI) return;
-    // Use trash for files when onTrashFile is available
     if (!entry.isDirectory && onTrashFile) {
       onTrashFile(entry.path);
       await refreshEntries();
@@ -501,6 +606,21 @@ export default function Sidebar({
       : await window.electronAPI.deleteFile(entry.path);
     if (success) { onFileDelete(entry.path); await refreshEntries(); setRefreshKey((k) => k + 1); }
   }, [onFileDelete, refreshEntries, onTrashFile]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (!window.electronAPI || selectedFiles.size === 0) return;
+    for (const path of selectedFiles) {
+      if (onTrashFile) {
+        onTrashFile(path);
+      } else {
+        await window.electronAPI.deleteFile(path);
+        onFileDelete(path);
+      }
+    }
+    setSelectedFiles(new Set());
+    await refreshEntries();
+    setRefreshKey((k) => k + 1);
+  }, [selectedFiles, onTrashFile, onFileDelete, refreshEntries]);
 
   const handleNewFileIn = useCallback(async (dirPath: string) => {
     if (!window.electronAPI) return;
@@ -543,19 +663,48 @@ export default function Sidebar({
     const isVaultRoot = vault && entry.path === vault.path;
     const targetDir = entry.isDirectory ? entry.path : contextMenu.parentDir;
     const items: ContextMenuItem[] = [];
+
+    // Count selection (include right-clicked file)
+    const selectionIncludesEntry = selectedFiles.has(entry.path);
+    const totalSelected = selectedFiles.size + (!entry.isDirectory && !selectionIncludesEntry ? 1 : 0);
+    const hasMultiSelect = totalSelected >= 2;
+
+    // Ensure right-clicked file is in selection for multi-ops
+    if (!entry.isDirectory && !selectionIncludesEntry && selectedFiles.size > 0) {
+      setSelectedFiles((prev) => new Set([...prev, entry.path]));
+    }
+
     items.push({ label: "New File", onClick: () => handleNewFileIn(targetDir) });
     items.push({ label: "New Folder", onClick: () => handleNewFolderIn(targetDir) });
-    if (!isVaultRoot) {
+
+    if (hasMultiSelect) {
       items.push({ label: "", separator: true, onClick: () => {} });
-      items.push({ label: "Rename", onClick: () => startRename(entry) });
       items.push({
-        label: "Delete",
+        label: `Merge ${totalSelected} Notes`,
+        onClick: handleMergeNotes,
+      });
+      items.push({
+        label: `Delete ${totalSelected} Files`,
         danger: true,
-        onClick: () => handleDelete(entry),
+        onClick: handleDeleteSelected,
       });
     }
+
+    if (!isVaultRoot) {
+      items.push({ label: "", separator: true, onClick: () => {} });
+      if (!hasMultiSelect) {
+        items.push({ label: "Rename", onClick: () => startRename(entry) });
+      }
+      if (!hasMultiSelect) {
+        items.push({
+          label: "Delete",
+          danger: true,
+          onClick: () => handleDelete(entry),
+        });
+      }
+    }
     return items;
-  }, [contextMenu, vault, handleNewFileIn, handleNewFolderIn, startRename, handleDelete]);
+  }, [contextMenu, vault, handleNewFileIn, handleNewFolderIn, startRename, handleDelete, selectedFiles, handleMergeNotes, handleDeleteSelected]);
 
   if (collapsed) return null;
 
@@ -615,6 +764,8 @@ export default function Sidebar({
                   onDragEnd={handleDragEnd}
                   onFolderDragOver={handleFolderDragOver}
                   onFolderDrop={handleFolderDrop}
+                  selectedFiles={selectedFiles}
+                  onFileClick={handleFileClick}
                 />
               ))
             ) : (

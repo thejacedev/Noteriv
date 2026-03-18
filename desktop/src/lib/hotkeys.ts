@@ -77,7 +77,9 @@ export type HotkeyAction =
   | "openTrash"
   | "togglePinTab"
   | "noteHistory"
-  | "toggleLint";
+  | "toggleLint"
+  | "splitEditor"
+  | "closeSplit";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -113,7 +115,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "toggleSidebar", label: "Toggle Sidebar", keys: "Ctrl+B", category: "View" },
   { action: "toggleViewMode", label: "Toggle View Mode", keys: "Ctrl+E", category: "View" },
   { action: "toggleFullscreen", label: "Toggle Fullscreen", keys: "F11", category: "View" },
-  { action: "zenMode", label: "Zen Mode", keys: "", category: "View" },
+  { action: "zenMode", label: "Zen Mode", keys: "Ctrl+Shift+E", category: "View" },
   { action: "settings", label: "Settings", keys: "Ctrl+,", category: "View" },
 
   // Edit
@@ -134,7 +136,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "insertTable", label: "Insert Table", keys: "", category: "Formatting" },
 
   // Sync
-  { action: "gitSync", label: "Sync Now", keys: "", category: "Sync" },
+  { action: "gitSync", label: "Sync Now", keys: "Ctrl+Shift+G", category: "Sync" },
 
   // Daily notes
   { action: "dailyNote", label: "Open Daily Note", keys: "Ctrl+D", category: "Navigation" },
@@ -147,8 +149,8 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "toggleBacklinks", label: "Toggle Backlinks", keys: "", category: "View" },
   { action: "toggleTags", label: "Toggle Tag Pane", keys: "", category: "View" },
   { action: "insertTemplate", label: "Insert Template", keys: "Ctrl+T", category: "Edit" },
-  { action: "toggleBookmark", label: "Toggle Bookmark", keys: "", category: "File" },
-  { action: "randomNote", label: "Open Random Note", keys: "", category: "Navigation" },
+  { action: "toggleBookmark", label: "Toggle Bookmark", keys: "Ctrl+Shift+B", category: "File" },
+  { action: "randomNote", label: "Open Random Note", keys: "Ctrl+Shift+R", category: "Navigation" },
   { action: "noteComposer", label: "Note Composer", keys: "", category: "Edit" },
   { action: "fileRecovery", label: "File Recovery", keys: "", category: "File" },
   { action: "exportPDF", label: "Export as PDF", keys: "", category: "File" },
@@ -165,7 +167,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "insertToc", label: "Insert Table of Contents", keys: "", category: "Edit" },
   { action: "updateToc", label: "Update Table of Contents", keys: "", category: "Edit" },
   { action: "insertDataview", label: "Insert Dataview Query", keys: "", category: "Edit" },
-  { action: "focusMode", label: "Toggle Focus Mode", keys: "", category: "View" },
+  { action: "focusMode", label: "Toggle Focus Mode", keys: "Ctrl+Shift+D", category: "View" },
   { action: "publishNote", label: "Publish Note as HTML", keys: "", category: "File" },
   { action: "flashcardReview", label: "Flashcard Review", keys: "", category: "Navigation" },
   { action: "startCollab", label: "Live Collaboration", keys: "", category: "Edit" },
@@ -176,10 +178,12 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   // Trash
   { action: "openTrash", label: "Open Trash", keys: "", category: "File" },
   // Tab pinning
-  { action: "togglePinTab", label: "Pin/Unpin Tab", keys: "", category: "File" },
+  { action: "togglePinTab", label: "Pin/Unpin Tab", keys: "Ctrl+Shift+T", category: "File" },
   // Note history & lint
   { action: "noteHistory", label: "Note History", keys: "", category: "View" },
-  { action: "toggleLint", label: "Toggle Lint Warnings", keys: "", category: "View" },
+  { action: "toggleLint", label: "Toggle Lint Warnings", keys: "Ctrl+Shift+L", category: "View" },
+  { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
+  { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
 ];
 
 /**
