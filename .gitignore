@@ -24,7 +24,7 @@ coverage/
 
 # env
 .env*
-
+credentials.json
 # os
 .DS_Store
 Thumbs.db
@@ -52,3 +52,7 @@ next-env.d.ts
 # misc
 *.pem
 .vercel
+eas.json
+# build tools
+bundletool-*.jar
+phone/eas.json

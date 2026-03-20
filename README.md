@@ -53,7 +53,10 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Auto-save</strong> &mdash; Configurable intervals (10s, 30s, 1m, 5m) or manual</li>
         <li><strong>Spell check</strong> &mdash; Toggle on/off</li>
         <li><strong>Vim mode</strong> &mdash; Optional vim keybindings (desktop)</li>
-        <li><strong>Focus mode</strong> &mdash; Dims all lines except the active one for distraction-free writing. Toggle from command palette</li>
+        <li><strong>Focus mode</strong> &mdash; Dims all lines except the active one for distraction-free writing. <code>Ctrl+Shift+D</code></li>
+        <li><strong>Split editor</strong> &mdash; Open two notes side by side. Right-click tab → "Open in Split" or <code>Ctrl+\</code></li>
+        <li><strong>Per-file view mode</strong> &mdash; Right-click in editor to set a default mode (Live/Source/View) per file, persisted across restarts</li>
+        <li><strong>Multi-select sidebar</strong> &mdash; <code>Ctrl+Click</code> to toggle, <code>Shift+Click</code> for range. Merge, delete, or move in bulk</li>
       </ul>
     </td>
     <td width="50%">
@@ -63,7 +66,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li>Bold, italic, strikethrough, highlight</li>
         <li>Ordered &amp; unordered lists</li>
         <li>Task lists with checkboxes</li>
-        <li>Tables with alignment</li>
+        <li>Tables with alignment + interactive checkboxes in cells</li>
         <li>Fenced code blocks with syntax highlighting</li>
         <li>Block &amp; inline math (LaTeX via KaTeX)</li>
         <li><strong>Mermaid diagrams</strong> &mdash; Flowcharts, sequence diagrams, Gantt charts, pie charts, and more rendered inline from <code>```mermaid</code> code blocks</li>
@@ -116,6 +119,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>Templates</strong> &mdash; Create notes from templates with variables (<code>{{date}}</code>, <code>{{time}}</code>, <code>{{title}}</code>, and more)</li>
         <li><strong>Frontmatter editor</strong> &mdash; YAML metadata editing with property suggestions</li>
         <li><strong>Note composer</strong> &mdash; Merge multiple notes or split by heading level</li>
+        <li><strong>Note merge from sidebar</strong> &mdash; <code>Ctrl+Click</code> multiple files → right-click → "Merge N Notes" to combine with <code>---</code> separators</li>
         <li><strong>File recovery</strong> &mdash; Automatic snapshots (up to 50 per file) with one-tap restore</li>
         <li><strong>Slide presentations</strong> &mdash; Present markdown as slides (split by <code>---</code>), with speaker notes</li>
         <li><strong>PDF export</strong> &mdash; Export notes to PDF (desktop)</li>
@@ -142,9 +146,8 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
       <h4>Sync</h4>
       <ul>
         <li><strong>GitHub sync</strong> &mdash; Push and pull notes to/from any GitHub repository</li>
-        <li><strong>Auto-sync</strong> &mdash; Automatic background sync at configurable intervals</li>
+        <li><strong>Auto-sync every 5 seconds</strong> &mdash; Always-on background sync, pull first then push. No config needed</li>
         <li><strong>Pull on open</strong> &mdash; Automatically pull latest changes when opening a vault</li>
-        <li><strong>Sync on save</strong> &mdash; Push after every manual save</li>
         <li><strong>Folder sync</strong> &mdash; Sync with Google Drive, Dropbox, OneDrive, iCloud (desktop)</li>
         <li><strong>WebDAV sync</strong> &mdash; Sync with Nextcloud, ownCloud, or any WebDAV server (desktop)</li>
         <li><strong>Vault file watcher</strong> &mdash; Monitors the vault directory for external changes (from the MCP server, git pulls, other editors). Sidebar refreshes automatically; open files with no unsaved changes reload instantly; open files with unsaved changes are saved first before reloading</li>
@@ -200,8 +203,8 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
         <li><strong>MCP resources</strong> &mdash; vault notes are exposed as <code>note:///</code> resources for direct access</li>
       </ul>
       <strong>Setup (Claude Code):</strong>
-      <pre><code>claude mcp add noteriv node /path/to/Noteriv/mcp/index.js</code></pre>
-      <p>Then restart Claude Code. The server auto-detects your active vault from the Noteriv config.</p>
+      <pre><code>claude mcp add --scope user noteriv -- npx -y noteriv-mcp</code></pre>
+      <p>Or install from npm: <code>npx noteriv-mcp</code>. Auto-detects your active vault from the Noteriv config.</p>
     </td>
   </tr>
 </table>
@@ -298,7 +301,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
 
 | Setting | Options |
 |---|---|
-| Auto-save interval | Off, 10s, 30s, 1 min, 5 min |
+| Auto-save interval | Off, 10s, 30s, 1 min, 5 min (sync auto every 5s) |
 | Font size | 12px &ndash; 24px |
 | Line height | 1.2 &ndash; 2.0 |
 | Tab size | 2, 4, 8 |
@@ -486,7 +489,12 @@ phone/
 │   ├── frontmatter.tsx    YAML frontmatter editor
 │   ├── slides.tsx         Slide presentation viewer
 │   ├── snippets.tsx       CSS snippets (installed + community)
-│   └── plugins.tsx        Plugin manager (installed + community)
+│   ├── plugins.tsx        Plugin manager (installed + community)
+│   ├── calendar.tsx       Monthly calendar with daily note dots + due tasks
+│   ├── flashcards.tsx     SM-2 spaced repetition flashcard review
+│   ├── graph.tsx          Force-directed wiki-link graph (WebView canvas)
+│   ├── trash.tsx          Trash / soft delete with restore
+│   └── publish.tsx        Publish note as HTML + share sheet
 ├── components/
 │   ├── MarkdownEditor.tsx   TextInput editor + formatting toolbar
 │   ├── MarkdownPreview.tsx  Custom markdown renderer
@@ -496,7 +504,8 @@ phone/
 │   ├── VaultSwitcher.tsx    Switch/create vaults
 │   ├── OutlinePanel.tsx     Document outline
 │   ├── BookmarksPanel.tsx   Bookmarked files
-│   └── TagsPanel.tsx        Hierarchical tag browser
+│   ├── TagsPanel.tsx        Hierarchical tag browser
+│   └── BoardView.tsx        Board view with columns + cards
 ├── context/
 │   ├── AppContext.tsx       Global state (vault, settings, files, auto-sync)
 │   └── ThemeContext.tsx     Dynamic theme provider
@@ -517,7 +526,14 @@ phone/
 │   ├── random-note.ts       Random note picker
 │   ├── css-snippets.ts      CSS snippet system
 │   ├── plugins.ts           Plugin management
-│   └── community.ts         Community theme support
+│   ├── community.ts         Community theme support
+│   ├── calendar-utils.ts    Month grid, task extraction
+│   ├── flashcard-utils.ts   SM-2 algorithm, card extraction
+│   ├── markdown-lint.ts     Linting rules (wiki-links, headings, code blocks)
+│   ├── note-history.ts      Line-based diff (LCS algorithm)
+│   ├── publish.ts           Markdown-to-HTML converter
+│   ├── board-utils.ts       Board parse/serialize, card CRUD
+│   └── dataview.ts          Vault query engine
 ├── constants/
 │   └── theme.ts             10 built-in themes + accent colors
 └── types/
@@ -531,16 +547,21 @@ Both apps share the same feature set with platform-appropriate adaptations:
 | Feature | Desktop | Mobile |
 |---|---|---|
 | Editor | CodeMirror 6 | TextInput + toolbar |
-| Git sync | Native git binary | GitHub REST API |
+| Git sync | Native git binary | GitHub REST API + fresh clone |
 | File storage | Any filesystem path | App document directory |
 | Themes | 10 built-in + custom creator | 10 built-in + community install |
 | Plugins | Sandbox execution | Install + enable/disable |
-| Navigation | Sidebar + tabs | Stack navigation + modals |
-| Graph view | Force-directed canvas | &mdash; |
+| Navigation | Sidebar + tabs + split editor | Stack navigation + swipe between notes |
+| Graph view | Force-directed canvas | Force-directed WebView canvas |
+| Board view | Drag-drop columns | Horizontal scroll columns with move actions |
+| Calendar | Monthly grid | Monthly grid with daily note dots |
+| Flashcards | SM-2 spaced repetition | SM-2 spaced repetition |
 | Canvas | SVG whiteboard | &mdash; |
 | Vim mode | CodeMirror vim extension | &mdash; |
 | Audio recorder | MediaRecorder API | &mdash; |
-| Keyboard shortcuts | 60+ rebindable | System defaults |
+| Drawing editor | Canvas with tools | &mdash; |
+| PDF viewer | Inline annotations | &mdash; |
+| Keyboard shortcuts | 70+ rebindable | System defaults |
 
 ---
 
@@ -673,9 +694,9 @@ Noteriv/
 ├── mcp/                  MCP server for AI assistant integration (22 tools, auto-discovers vaults)
 ├── extension/            Web Clipper browser extension (Manifest V3)
 ├── phone/                Expo + React Native mobile application
-│   ├── app/              14 screens (Expo Router)
-│   ├── components/       10 UI components
-│   ├── lib/              17 utility modules
+│   ├── app/              19 screens (Expo Router)
+│   ├── components/       11 UI components
+│   ├── lib/              24 utility modules
 │   └── context/          App state + theme contexts
 ├── .github/workflows/    CI/CD (build + release)
 ├── LICENSE               MIT License
