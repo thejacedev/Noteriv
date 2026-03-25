@@ -14,20 +14,20 @@ import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 
 const sourceHighlight = HighlightStyle.define([
   { tag: tags.heading1, color: "var(--accent)", fontWeight: "bold", fontSize: "1.2em" },
-  { tag: tags.heading2, color: "#cba6f7", fontWeight: "bold", fontSize: "1.1em" },
-  { tag: tags.heading3, color: "#a6e3a1", fontWeight: "bold" },
+  { tag: tags.heading2, color: "var(--mauve)", fontWeight: "bold", fontSize: "1.1em" },
+  { tag: tags.heading3, color: "var(--green)", fontWeight: "bold" },
   { tag: tags.strong, fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.monospace, color: "#cba6f7", fontFamily: "monospace" },
+  { tag: tags.monospace, color: "var(--mauve)", fontFamily: "monospace" },
   { tag: tags.link, color: "var(--accent)" },
   { tag: tags.url, color: "var(--accent)", opacity: "0.7" },
-  { tag: tags.quote, color: "#a6adc8" },
-  { tag: tags.meta, color: "#6c7086" },
+  { tag: tags.quote, color: "var(--text-secondary)" },
+  { tag: tags.meta, color: "var(--text-muted)" },
 ]);
 
 const sourceTheme = EditorView.theme({
-  "&": { height: "100%", background: "#1e1e2e", color: "#cdd6f4", fontSize: "14px" },
+  "&": { height: "100%", background: "var(--bg-primary)", color: "var(--text-primary)", fontSize: "14px" },
   ".cm-scroller": {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     lineHeight: "1.7",
@@ -36,11 +36,11 @@ const sourceTheme = EditorView.theme({
   },
   ".cm-content": { caretColor: "var(--accent)" },
   ".cm-cursor": { borderLeftColor: "var(--accent) !important", borderLeftWidth: "2px !important" },
-  ".cm-activeLine": { background: "rgba(49, 50, 68, 0.3) !important" },
+  ".cm-activeLine": { background: "color-mix(in srgb, var(--bg-tertiary) 30%, transparent) !important" },
   ".cm-selectionBackground": { background: "color-mix(in srgb, var(--accent) 20%, transparent) !important" },
   "&.cm-focused .cm-selectionBackground": { background: "color-mix(in srgb, var(--accent) 30%, transparent) !important" },
-  ".cm-gutters": { background: "transparent !important", border: "none !important", color: "#6c7086" },
-  ".cm-activeLineGutter": { background: "transparent !important", color: "#a6adc8" },
+  ".cm-gutters": { background: "transparent !important", border: "none !important", color: "var(--text-muted)" },
+  ".cm-activeLineGutter": { background: "transparent !important", color: "var(--text-secondary)" },
 });
 
 interface SourceEditorProps {

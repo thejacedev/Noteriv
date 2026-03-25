@@ -6,24 +6,24 @@ import { tags } from "@lezer/highlight";
 export const markdownRenderTheme = EditorView.baseTheme({
   // Headings
   ".md-h1": { fontSize: "2em", fontWeight: "700", color: "var(--accent)", lineHeight: "1.3", padding: "0.3em 0" },
-  ".md-h2": { fontSize: "1.5em", fontWeight: "600", color: "#cba6f7", lineHeight: "1.3", padding: "0.2em 0" },
-  ".md-h3": { fontSize: "1.25em", fontWeight: "600", color: "#a6e3a1", lineHeight: "1.3", padding: "0.15em 0" },
-  ".md-h4": { fontSize: "1.1em", fontWeight: "600", color: "#f9e2af", lineHeight: "1.3" },
-  ".md-h5": { fontSize: "1.05em", fontWeight: "600", color: "#fab387", lineHeight: "1.3" },
-  ".md-h6": { fontSize: "1em", fontWeight: "600", color: "#f38ba8", lineHeight: "1.3" },
+  ".md-h2": { fontSize: "1.5em", fontWeight: "600", color: "var(--mauve)", lineHeight: "1.3", padding: "0.2em 0" },
+  ".md-h3": { fontSize: "1.25em", fontWeight: "600", color: "var(--green)", lineHeight: "1.3", padding: "0.15em 0" },
+  ".md-h4": { fontSize: "1.1em", fontWeight: "600", color: "var(--yellow)", lineHeight: "1.3" },
+  ".md-h5": { fontSize: "1.05em", fontWeight: "600", color: "var(--peach)", lineHeight: "1.3" },
+  ".md-h6": { fontSize: "1em", fontWeight: "600", color: "var(--red)", lineHeight: "1.3" },
 
   // Inline formatting
-  "& .md-bold strong": { fontWeight: "700", color: "#cdd6f4" },
-  "& .md-italic em": { fontStyle: "italic", color: "#cdd6f4" },
+  "& .md-bold strong": { fontWeight: "700", color: "var(--text-primary)" },
+  "& .md-italic em": { fontStyle: "italic", color: "var(--text-primary)" },
   "& .md-bold-italic strong em": { fontWeight: "700", fontStyle: "italic" },
   "& .md-strikethrough del": { textDecoration: "line-through", opacity: "0.6" },
   "& .md-inline-code code": {
-    background: "#313244",
+    background: "var(--bg-tertiary)",
     padding: "0.15em 0.4em",
     borderRadius: "4px",
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     fontSize: "0.9em",
-    color: "#cba6f7",
+    color: "var(--mauve)",
   },
 
   // Links
@@ -46,7 +46,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
   ".md-blockquote": {
     borderLeft: "3px solid var(--accent)",
     paddingLeft: "1em",
-    color: "#a6adc8",
+    color: "var(--text-secondary)",
     background: "color-mix(in srgb, var(--accent) 5%, transparent)",
   },
 
@@ -61,7 +61,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
   "& .md-table-checkbox.checked .md-cb-box": {
     background: "var(--accent)",
     borderColor: "var(--accent)",
-    color: "#1e1e2e",
+    color: "var(--bg-primary)",
   },
   "& .md-cb-box": {
     display: "inline-flex",
@@ -69,7 +69,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     justifyContent: "center",
     width: "16px",
     height: "16px",
-    border: "2px solid #6c7086",
+    border: "2px solid var(--text-muted)",
     borderRadius: "3px",
     marginRight: "6px",
     fontSize: "12px",
@@ -80,13 +80,13 @@ export const markdownRenderTheme = EditorView.baseTheme({
   "& .md-checkbox.checked .md-cb-box": {
     background: "var(--accent)",
     borderColor: "var(--accent)",
-    color: "#1e1e2e",
+    color: "var(--bg-primary)",
   },
 
   // Horizontal rule
   "& .md-hr hr": {
     border: "none",
-    borderTop: "1px solid #313244",
+    borderTop: "1px solid var(--bg-tertiary)",
     margin: "0.5em 0",
   },
 
@@ -241,26 +241,26 @@ export const markdownRenderTheme = EditorView.baseTheme({
     letterSpacing: "0.05em",
   },
   "& .md-callout-title": {
-    color: "#cdd6f4",
+    color: "var(--text-primary)",
     fontWeight: "500",
   },
 
   // Math
   ".md-math-fence": {
-    color: "#6c7086",
+    color: "var(--text-muted)",
     fontSize: "0.85em",
   },
   ".md-math-block-line": {
-    background: "rgba(203, 166, 247, 0.04)",
+    background: "color-mix(in srgb, var(--mauve) 4%, transparent)",
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     fontSize: "0.9em",
-    color: "#cba6f7",
+    color: "var(--mauve)",
   },
   "& .md-math-inline": {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     fontSize: "0.9em",
-    color: "#cba6f7",
-    background: "rgba(203, 166, 247, 0.08)",
+    color: "var(--mauve)",
+    background: "color-mix(in srgb, var(--mauve) 8%, transparent)",
     padding: "0.1em 0.35em",
     borderRadius: "3px",
   },
@@ -268,8 +268,8 @@ export const markdownRenderTheme = EditorView.baseTheme({
   // Footnotes
   ".md-footnote-def": {
     fontSize: "0.9em",
-    color: "#a6adc8",
-    borderLeft: "2px solid #6c7086",
+    color: "var(--text-secondary)",
+    borderLeft: "2px solid var(--text-muted)",
     paddingLeft: "0.75em",
   },
   "& .md-footnote-label": {
@@ -295,7 +295,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     display: "inline-flex",
     alignItems: "center",
     gap: "4px",
-    color: "#a6adc8",
+    color: "var(--text-secondary)",
     background: "color-mix(in srgb, var(--accent) 6%, transparent)",
     padding: "0.15em 0.5em",
     borderRadius: "4px",
@@ -309,26 +309,26 @@ export const markdownRenderTheme = EditorView.baseTheme({
 
   // Highlight
   "& .md-highlight mark": {
-    background: "rgba(249, 226, 175, 0.2)",
-    color: "#f9e2af",
+    background: "color-mix(in srgb, var(--yellow) 20%, transparent)",
+    color: "var(--yellow)",
     padding: "0.05em 0.2em",
     borderRadius: "2px",
   },
 
   // Superscript / Subscript
   "& .md-superscript sup": {
-    color: "#89dceb",
+    color: "var(--teal)",
     fontSize: "0.8em",
   },
   "& .md-subscript sub": {
-    color: "#89dceb",
+    color: "var(--teal)",
     fontSize: "0.8em",
   },
 
   // Tags
   "& .md-tag": {
-    color: "#a6e3a1",
-    background: "rgba(166, 227, 161, 0.08)",
+    color: "var(--green)",
+    background: "color-mix(in srgb, var(--green) 8%, transparent)",
     padding: "0.1em 0.4em",
     borderRadius: "3px",
     fontSize: "0.9em",
@@ -344,17 +344,17 @@ export const markdownRenderTheme = EditorView.baseTheme({
     padding: "0.1em 0.45em",
     fontSize: "0.85em",
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    color: "#cdd6f4",
-    background: "#313244",
-    border: "1px solid #45475a",
-    borderBottom: "2px solid #45475a",
+    color: "var(--text-primary)",
+    background: "var(--bg-tertiary)",
+    border: "1px solid var(--border)",
+    borderBottom: "2px solid var(--border)",
     borderRadius: "4px",
     boxShadow: "0 1px 0 rgba(0,0,0,0.2)",
     lineHeight: "1.2",
   },
   "& .md-inline-html mark": {
-    background: "rgba(249, 226, 175, 0.2)",
-    color: "#f9e2af",
+    background: "color-mix(in srgb, var(--yellow) 20%, transparent)",
+    color: "var(--yellow)",
     padding: "0.05em 0.2em",
     borderRadius: "2px",
   },
@@ -364,7 +364,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     textUnderlineOffset: "2px",
   },
   "& .md-inline-html abbr": {
-    borderBottom: "1px dotted #6c7086",
+    borderBottom: "1px dotted var(--text-muted)",
     cursor: "help",
   },
   "& .md-inline-html small": {
@@ -382,8 +382,8 @@ export const markdownRenderTheme = EditorView.baseTheme({
     overflow: "hidden",
   },
   ".md-html-block": {
-    background: "rgba(49, 50, 68, 0.15)",
-    borderLeft: "2px solid rgba(108, 112, 134, 0.3)",
+    background: "color-mix(in srgb, var(--bg-tertiary) 15%, transparent)",
+    borderLeft: "2px solid color-mix(in srgb, var(--text-muted) 30%, transparent)",
     paddingLeft: "0.75em",
   },
   "& .md-html-inline-block": {
@@ -394,7 +394,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
   // Definition lists
   ".md-definition": {
     paddingLeft: "1.5em",
-    color: "#a6adc8",
+    color: "var(--text-secondary)",
   },
   "& .md-def-marker": {
     display: "inline-block",
@@ -407,7 +407,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     width: "6px",
     height: "6px",
     borderRadius: "50%",
-    background: "#6c7086",
+    background: "var(--text-muted)",
     marginRight: "6px",
     verticalAlign: "middle",
   },
@@ -416,28 +416,28 @@ export const markdownRenderTheme = EditorView.baseTheme({
 /** Syntax highlighting for raw markdown (cursor lines show source). */
 export const mdHighlightStyle = HighlightStyle.define([
   { tag: tags.heading1, color: "var(--accent)", fontWeight: "bold", fontSize: "1.4em" },
-  { tag: tags.heading2, color: "#cba6f7", fontWeight: "bold", fontSize: "1.2em" },
-  { tag: tags.heading3, color: "#a6e3a1", fontWeight: "bold", fontSize: "1.1em" },
-  { tag: tags.heading4, color: "#f9e2af", fontWeight: "bold" },
-  { tag: tags.heading5, color: "#fab387", fontWeight: "bold" },
-  { tag: tags.heading6, color: "#f38ba8", fontWeight: "bold" },
-  { tag: tags.strong, color: "#cdd6f4", fontWeight: "bold" },
-  { tag: tags.emphasis, color: "#cdd6f4", fontStyle: "italic" },
+  { tag: tags.heading2, color: "var(--mauve)", fontWeight: "bold", fontSize: "1.2em" },
+  { tag: tags.heading3, color: "var(--green)", fontWeight: "bold", fontSize: "1.1em" },
+  { tag: tags.heading4, color: "var(--yellow)", fontWeight: "bold" },
+  { tag: tags.heading5, color: "var(--peach)", fontWeight: "bold" },
+  { tag: tags.heading6, color: "var(--red)", fontWeight: "bold" },
+  { tag: tags.strong, color: "var(--text-primary)", fontWeight: "bold" },
+  { tag: tags.emphasis, color: "var(--text-primary)", fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through", opacity: "0.6" },
-  { tag: tags.monospace, color: "#cba6f7", fontFamily: "monospace" },
+  { tag: tags.monospace, color: "var(--mauve)", fontFamily: "monospace" },
   { tag: tags.link, color: "var(--accent)" },
   { tag: tags.url, color: "var(--accent)", opacity: "0.7" },
-  { tag: tags.quote, color: "#a6adc8" },
-  { tag: tags.meta, color: "#6c7086" },
-  { tag: tags.processingInstruction, color: "#6c7086" },
+  { tag: tags.quote, color: "var(--text-secondary)" },
+  { tag: tags.meta, color: "var(--text-muted)" },
+  { tag: tags.processingInstruction, color: "var(--text-muted)" },
 ]);
 
 /** Main editor appearance theme. */
 export const editorTheme = EditorView.theme({
   "&": {
     height: "100%",
-    background: "#1e1e2e",
-    color: "#cdd6f4",
+    background: "var(--bg-primary)",
+    color: "var(--text-primary)",
     fontSize: "15px",
   },
   ".cm-scroller": {
@@ -456,7 +456,7 @@ export const editorTheme = EditorView.theme({
     borderLeftWidth: "2px !important",
   },
   ".cm-activeLine": {
-    background: "rgba(49, 50, 68, 0.3) !important",
+    background: "color-mix(in srgb, var(--bg-tertiary) 30%, transparent) !important",
   },
   ".cm-selectionBackground": {
     background: "color-mix(in srgb, var(--accent) 20%, transparent) !important",
