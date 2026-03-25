@@ -310,6 +310,7 @@ export function applyTheme(theme: ThemeDefinition): void {
   root.setProperty("--text-primary", theme.colors.textPrimary);
   root.setProperty("--text-secondary", theme.colors.textSecondary);
   root.setProperty("--text-muted", theme.colors.textMuted);
+  root.setProperty("--accent", theme.colors.accent);
   root.setProperty("--green", theme.colors.green);
   root.setProperty("--red", theme.colors.red);
   root.setProperty("--yellow", theme.colors.yellow);
