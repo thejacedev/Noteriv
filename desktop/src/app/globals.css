@@ -107,7 +107,7 @@ body {
 }
 
 .cm-editor .cm-activeLine {
-  background: rgba(49, 50, 68, 0.5) !important;
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent) !important;
 }
 
 .cm-editor .cm-selectionBackground {
