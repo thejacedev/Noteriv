@@ -13,6 +13,7 @@
   <p>
     <a href="https://www.noteriv.com"><strong>Website</strong></a> &middot;
     <a href="https://docs.noteriv.com"><strong>Docs</strong></a> &middot;
+    <a href="https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv"><strong>Google Play</strong></a> &middot;
     <a href="#-features"><strong>Features</strong></a> &middot;
     <a href="#-getting-started"><strong>Getting Started</strong></a> &middot;
     <a href="#-desktop-app"><strong>Desktop</strong></a> &middot;
