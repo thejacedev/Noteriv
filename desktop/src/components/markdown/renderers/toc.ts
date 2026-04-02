@@ -69,18 +69,19 @@ class TocWidget extends WidgetType {
 /**
  * Process a [TOC] line — call from buildDecorations in plugin.ts.
  * Returns true if the line was a [TOC] block and was handled.
+ * Accepts pre-cached headings to avoid re-extracting on every rebuild.
  */
 export function processTocLine(
   builder: import("@codemirror/state").RangeSetBuilder<Decoration>,
   line: import("@codemirror/state").Line,
   text: string,
   isCursorLine: boolean,
-  fullDoc: string
+  cachedHeadings: { level: number; text: string; line: number }[] | null
 ): boolean {
   if (text.trim() !== "[TOC]") return false;
   if (isCursorLine) return true; // Show raw [TOC] when cursor is on it
 
-  const headings = extractHeadings(fullDoc);
+  const headings = cachedHeadings ?? [];
 
   builder.add(
     line.from,

@@ -255,10 +255,9 @@ function findMermaidBlocks(state: EditorState): MermaidBlock[] {
 
 // ─── Decoration builder ────────────────────────────────────────────────
 
-function buildMermaidDecorations(view: EditorView): DecorationSet {
+function buildMermaidDecorations(view: EditorView, blocks: MermaidBlock[]): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const cursorLines = getCursorLines(view.state);
-  const blocks = findMermaidBlocks(view.state);
 
   for (const block of blocks) {
     // Check if any cursor line intersects this block
@@ -294,14 +293,19 @@ function buildMermaidDecorations(view: EditorView): DecorationSet {
 const mermaidPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    private cachedBlocks: MermaidBlock[] = [];
     constructor(view: EditorView) {
-      this.decorations = buildMermaidDecorations(view);
+      this.cachedBlocks = findMermaidBlocks(view.state);
+      this.decorations = buildMermaidDecorations(view, this.cachedBlocks);
       // Pre-load mermaid in background
       ensureMermaid();
     }
     update(update: ViewUpdate) {
+      if (update.docChanged) {
+        this.cachedBlocks = findMermaidBlocks(update.view.state);
+      }
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildMermaidDecorations(update.view);
+        this.decorations = buildMermaidDecorations(update.view, this.cachedBlocks);
       }
     }
   },

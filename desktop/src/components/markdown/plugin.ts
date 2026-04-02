@@ -94,18 +94,42 @@ function getInlineContent(
   return null;
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
+/** Get the visible line range with a buffer for smooth scrolling. */
+function getVisibleRange(view: EditorView, buffer: number = 50): { from: number; to: number } {
+  const { from, to } = view.viewport;
+  const doc = view.state.doc;
+  const firstLine = doc.lineAt(from).number;
+  const lastLine = doc.lineAt(to).number;
+  return {
+    from: Math.max(1, firstLine - buffer),
+    to: Math.min(doc.lines, lastLine + buffer),
+  };
+}
+
+function buildDecorations(
+  view: EditorView,
+  codeTracker: CodeBlockTracker,
+  htmlTracker: HtmlBlockTracker,
+  cachedHeadings: { level: number; text: string; line: number }[] | null
+): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const cursorLines = getCursorLines(view.state);
   const doc = view.state.doc;
   const blockRenderers = getBlockRenderers();
-  const codeTracker = new CodeBlockTracker();
-  codeTracker.preScan(doc);
   const mathTracker = new MathBlockTracker();
-  const htmlTracker = new HtmlBlockTracker();
-  htmlTracker.preScan(doc, cursorLines);
+  const visible = getVisibleRange(view);
 
-  for (let i = 1; i <= doc.lines; i++) {
+  // Math tracker needs to know state up to the visible range
+  // Pre-run math tracker from line 1 to visible.from to get correct state
+  for (let i = 1; i < visible.from; i++) {
+    const line = doc.line(i);
+    mathTracker.process(
+      { builder: new RangeSetBuilder<Decoration>(), line, text: line.text, lineNumber: i },
+      false
+    );
+  }
+
+  for (let i = visible.from; i <= visible.to; i++) {
     const line = doc.line(i);
     const text = line.text;
 
@@ -131,8 +155,10 @@ function buildDecorations(view: EditorView): DecorationSet {
     );
     if (htmlResult) continue;
 
-    // [TOC] block
-    if (processTocLine(builder, line, text, cursorLines.has(i), doc.toString())) continue;
+    // [TOC] block — use cached headings
+    if (text.trim() === "[TOC]") {
+      if (processTocLine(builder, line, text, cursorLines.has(i), cachedHeadings)) continue;
+    }
 
     // Skip cursor lines — show raw markdown
     if (cursorLines.has(i)) continue;
@@ -178,12 +204,44 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const liveMarkdownPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    private codeTracker: CodeBlockTracker;
+    private htmlTracker: HtmlBlockTracker;
+    private cachedHeadings: { level: number; text: string; line: number }[] | null = null;
+    private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+
     constructor(view: EditorView) {
-      this.decorations = buildDecorations(view);
+      this.codeTracker = new CodeBlockTracker();
+      this.htmlTracker = new HtmlBlockTracker();
+      this.runPreScans(view);
+      this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
     }
+
+    private runPreScans(view: EditorView) {
+      const doc = view.state.doc;
+      const cursorLines = getCursorLines(view.state);
+      this.codeTracker = new CodeBlockTracker();
+      this.codeTracker.preScan(doc);
+      this.htmlTracker = new HtmlBlockTracker();
+      this.htmlTracker.preScan(doc, cursorLines);
+      this.cachedHeadings = null; // lazily computed
+    }
+
+    private getHeadings(view: EditorView) {
+      if (!this.cachedHeadings) {
+        const { extractHeadings } = require("@/lib/toc-utils");
+        this.cachedHeadings = extractHeadings(view.state.doc.toString());
+      }
+      return this.cachedHeadings;
+    }
+
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildDecorations(update.view);
+      if (update.docChanged) {
+        // Document changed — re-scan block structure and rebuild
+        this.runPreScans(update.view);
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
+      } else if (update.selectionSet || update.viewportChanged) {
+        // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
       }
     }
   },

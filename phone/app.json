@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ironstacksoftware.noteriv",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -42,7 +46,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b2a16ae3-95bf-498a-a2d5-35de4a0bc2ca"
+        "projectId": "451c68d9-b93d-4d30-8274-42d85b027d3c"
       }
     }
   }
