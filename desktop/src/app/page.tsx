@@ -81,6 +81,7 @@ const SlidePresentation = dynamic(() => import("@/components/SlidePresentation")
 const BoardView = dynamic(() => import("@/components/BoardView"), { ssr: false });
 const DrawingEditor = dynamic(() => import("@/components/DrawingEditor"), { ssr: false });
 const PDFViewer = dynamic(() => import("@/components/PDFViewer"), { ssr: false });
+const VaultInsights = dynamic(() => import("@/components/VaultInsights"), { ssr: false });
 
 type ViewMode = "live" | "source" | "view";
 type AppState = "loading" | "setup" | "app";
@@ -154,6 +155,7 @@ export default function Home() {
   const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
   const [showNoteHistory, setShowNoteHistory] = useState(false);
   const [showLintPanel, setShowLintPanel] = useState(false);
+  const [showVaultInsights, setShowVaultInsights] = useState(false);
   const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
   const [canvasFile, setCanvasFile] = useState<string | null>(null);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
@@ -1262,6 +1264,7 @@ export default function Home() {
       pluginManager: () => setShowPluginManager(true),
       cssSnippets: () => setShowCSSSnippets(true),
       calendarView: () => setShowCalendarView(true),
+      vaultInsights: () => setShowVaultInsights(true),
       newBoard: handleNewBoard,
       newCanvas: handleNewCanvas,
       insertDrawing: handleNewDrawing,
@@ -1426,6 +1429,7 @@ export default function Home() {
         pluginManager: () => setShowPluginManager(true),
         cssSnippets: () => setShowCSSSnippets(true),
         calendarView: () => setShowCalendarView(true),
+        vaultInsights: () => setShowVaultInsights(true),
         newBoard: handleNewBoard,
         newCanvas: handleNewCanvas,
         insertDrawing: handleNewDrawing,
@@ -1609,6 +1613,13 @@ export default function Home() {
                   <circle cx="5.5" cy="10" r="1" fill="currentColor" />
                   <circle cx="8" cy="10" r="1" fill="currentColor" />
                   <circle cx="10.5" cy="10" r="1" fill="currentColor" />
+                </svg>
+              </button>
+              <button className="ribbon-btn" title="Vault insights" onClick={() => setShowVaultInsights(true)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="9" width="3" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="6.5" y="5" width="3" height="9" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="11" y="2" width="3" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
                 </svg>
               </button>
               <button className="ribbon-btn" title="Presentation" onClick={() => setShowSlidePresentation(true)}>
@@ -2089,6 +2100,15 @@ export default function Home() {
           currentContent={content}
           onRestore={(restored) => { handleContentChange(restored); setShowNoteHistory(false); }}
           onClose={() => setShowNoteHistory(false)}
+        />
+      )}
+
+      {/* Vault Insights */}
+      {showVaultInsights && activeVault && (
+        <VaultInsights
+          vaultPath={activeVault.path}
+          onFileSelect={(f) => { openFile(f); setShowVaultInsights(false); }}
+          onClose={() => setShowVaultInsights(false)}
         />
       )}
     </div>

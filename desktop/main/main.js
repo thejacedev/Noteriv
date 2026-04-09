@@ -491,6 +491,43 @@ ipcMain.handle("fs:listAllFiles", async (_, dir) => {
   return files;
 });
 
+ipcMain.handle("fs:getFileStats", async (_, dir) => {
+  const files = [];
+  if (!dir) return files;
+
+  function walkDir(currentDir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walkDir(fullPath);
+      } else if (entry.name.endsWith(".md") || entry.name.endsWith(".markdown")) {
+        try {
+          const stat = fs.statSync(fullPath);
+          files.push({
+            filePath: fullPath,
+            fileName: entry.name.replace(/\.(md|markdown)$/i, ""),
+            relativePath: fullPath.replace(dir + "/", "").replace(dir + "\\", ""),
+            mtimeMs: stat.mtimeMs,
+            birthtimeMs: stat.birthtimeMs,
+          });
+        } catch {
+          // skip files we can't stat
+        }
+      }
+    }
+  }
+
+  walkDir(dir);
+  return files;
+});
+
 // ============================================================
 // Web Clipper IPC handlers
 // ============================================================

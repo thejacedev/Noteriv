@@ -95,6 +95,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   searchInFiles: (dir, query) =>
     ipcRenderer.invoke("fs:searchInFiles", { dir, query }),
   listAllFiles: (dir) => ipcRenderer.invoke("fs:listAllFiles", dir),
+  getFileStats: (dir) => ipcRenderer.invoke("fs:getFileStats", dir),
 
   // Shell
   saveHtmlDialog: (defaultPath) =>

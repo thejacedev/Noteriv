@@ -79,7 +79,8 @@ export type HotkeyAction =
   | "noteHistory"
   | "toggleLint"
   | "splitEditor"
-  | "closeSplit";
+  | "closeSplit"
+  | "vaultInsights";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -184,6 +185,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "toggleLint", label: "Toggle Lint Warnings", keys: "Ctrl+Shift+L", category: "View" },
   { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
+  { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
 ];
 
 /**

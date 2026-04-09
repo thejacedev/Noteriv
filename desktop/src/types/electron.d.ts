@@ -191,6 +191,13 @@ interface ElectronAPI {
     fileName: string;
     relativePath: string;
   }[]>;
+  getFileStats: (dir: string) => Promise<{
+    filePath: string;
+    fileName: string;
+    relativePath: string;
+    mtimeMs: number;
+    birthtimeMs: number;
+  }[]>;
 
   // Menu events
   onMenuSave: (callback: () => void) => () => void;
