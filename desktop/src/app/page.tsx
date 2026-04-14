@@ -34,6 +34,7 @@ import FlashcardReview from "@/components/FlashcardReview";
 import CollabPanel from "@/components/CollabPanel";
 import TrashPanel from "@/components/TrashPanel";
 import NoteHistory from "@/components/NoteHistory";
+import TimeScrubber from "@/components/TimeScrubber";
 import LintPanel from "@/components/LintPanel";
 import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
@@ -154,6 +155,7 @@ export default function Home() {
   const [showTrash, setShowTrash] = useState(false);
   const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
   const [showNoteHistory, setShowNoteHistory] = useState(false);
+  const [showTimeScrubber, setShowTimeScrubber] = useState(false);
   const [showLintPanel, setShowLintPanel] = useState(false);
   const [showVaultInsights, setShowVaultInsights] = useState(false);
   const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
@@ -1284,6 +1286,7 @@ export default function Home() {
       openTrash: () => setShowTrash(true),
       togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
       noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
+      timeScrubber: () => { if (currentTab) setShowTimeScrubber(true); },
       toggleLint: () => setShowLintPanel((l) => !l),
       splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
       closeSplit: handleCloseSplit,
@@ -1447,6 +1450,7 @@ export default function Home() {
         openTrash: () => setShowTrash(true),
         togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
         noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
+        timeScrubber: () => { if (currentTab) setShowTimeScrubber(true); },
         toggleLint: () => setShowLintPanel((l) => !l),
         splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
         closeSplit: handleCloseSplit,
@@ -2100,6 +2104,17 @@ export default function Home() {
           currentContent={content}
           onRestore={(restored) => { handleContentChange(restored); setShowNoteHistory(false); }}
           onClose={() => setShowNoteHistory(false)}
+        />
+      )}
+
+      {/* Time Scrubber */}
+      {showTimeScrubber && activeVault && currentTab && (
+        <TimeScrubber
+          filePath={currentTab.filePath}
+          vaultPath={activeVault.path}
+          currentContent={content}
+          onRestore={(restored) => { handleContentChange(restored); setShowTimeScrubber(false); }}
+          onClose={() => setShowTimeScrubber(false)}
         />
       )}
 

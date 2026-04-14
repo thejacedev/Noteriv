@@ -77,6 +77,7 @@ export type HotkeyAction =
   | "openTrash"
   | "togglePinTab"
   | "noteHistory"
+  | "timeScrubber"
   | "toggleLint"
   | "splitEditor"
   | "closeSplit"
@@ -182,6 +183,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "togglePinTab", label: "Pin/Unpin Tab", keys: "Ctrl+Shift+T", category: "File" },
   // Note history & lint
   { action: "noteHistory", label: "Note History", keys: "", category: "View" },
+  { action: "timeScrubber", label: "Time Scrubber", keys: "Ctrl+Shift+H", category: "View" },
   { action: "toggleLint", label: "Toggle Lint Warnings", keys: "Ctrl+Shift+L", category: "View" },
   { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },

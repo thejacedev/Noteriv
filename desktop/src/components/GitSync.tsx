@@ -15,7 +15,22 @@ export default function GitSync({ vault, onVaultUpdate }: GitSyncProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState(vault.gitRemote || "");
   const [autoSync, setAutoSync] = useState(vault.autoSync);
+  const [ghUser, setGhUser] = useState<GitHubUser | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshGhUser = useCallback(async () => {
+    if (!window.electronAPI) return;
+    try {
+      const u = await window.electronAPI.authGetUser(vault.id);
+      setGhUser(u);
+    } catch {
+      setGhUser(null);
+    }
+  }, [vault.id]);
+
+  useEffect(() => {
+    if (showSettings) refreshGhUser();
+  }, [showSettings, refreshGhUser]);
 
   const refreshStatus = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -95,6 +110,23 @@ export default function GitSync({ vault, onVaultUpdate }: GitSyncProps) {
     }
   };
 
+  const handleSaveToken = async (newToken: string): Promise<string | null> => {
+    if (!window.electronAPI) return "Electron unavailable";
+    const trimmed = newToken.trim();
+    if (!trimmed) return "Token is required";
+    const result = await window.electronAPI.authValidateToken(trimmed);
+    if (!result.valid) return result.error || "Invalid token";
+    await window.electronAPI.authSaveToken(vault.id, trimmed);
+    setGhUser(result);
+    return null;
+  };
+
+  const handleDisconnectToken = async () => {
+    if (!window.electronAPI) return;
+    await window.electronAPI.authRemoveToken(vault.id);
+    setGhUser(null);
+  };
+
   if (!status) {
     return null;
   }
@@ -120,8 +152,11 @@ export default function GitSync({ vault, onVaultUpdate }: GitSyncProps) {
             remoteUrl={remoteUrl}
             autoSync={autoSync}
             error={error}
+            ghUser={ghUser}
             onRemoteChange={setRemoteUrl}
             onAutoSyncChange={setAutoSync}
+            onSaveToken={handleSaveToken}
+            onDisconnectToken={handleDisconnectToken}
             onSave={handleSaveSettings}
             onClose={() => setShowSettings(false)}
           />
@@ -219,8 +254,11 @@ export default function GitSync({ vault, onVaultUpdate }: GitSyncProps) {
           remoteUrl={remoteUrl}
           autoSync={autoSync}
           error={error}
+          ghUser={ghUser}
           onRemoteChange={setRemoteUrl}
           onAutoSyncChange={setAutoSync}
+          onSaveToken={handleSaveToken}
+          onDisconnectToken={handleDisconnectToken}
           onSave={handleSaveSettings}
           onClose={() => setShowSettings(false)}
         />
@@ -233,19 +271,46 @@ function GitSettingsModal({
   remoteUrl,
   autoSync,
   error,
+  ghUser,
   onRemoteChange,
   onAutoSyncChange,
+  onSaveToken,
+  onDisconnectToken,
   onSave,
   onClose,
 }: {
   remoteUrl: string;
   autoSync: boolean;
   error: string;
+  ghUser: GitHubUser | null;
   onRemoteChange: (v: string) => void;
   onAutoSyncChange: (v: boolean) => void;
+  onSaveToken: (token: string) => Promise<string | null>;
+  onDisconnectToken: () => void;
   onSave: () => void;
   onClose: () => void;
 }) {
+  const [tokenInput, setTokenInput] = useState("");
+  const [tokenError, setTokenError] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [editingToken, setEditingToken] = useState(false);
+
+  const submitToken = async () => {
+    setSavingToken(true);
+    setTokenError("");
+    const err = await onSaveToken(tokenInput);
+    setSavingToken(false);
+    if (err) {
+      setTokenError(err);
+      return;
+    }
+    setTokenInput("");
+    setEditingToken(false);
+  };
+
+  const isConnected = !!ghUser?.valid;
+  const showTokenInput = !isConnected || editingToken;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div
@@ -271,6 +336,83 @@ function GitSettingsModal({
               placeholder="https://github.com/user/repo.git"
               className="w-full px-3 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
             />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs text-[var(--text-muted)]">GitHub Token</label>
+              <button
+                type="button"
+                onClick={() => window.electronAPI?.authOpenTokenPage()}
+                className="text-[10px] text-[var(--accent)] hover:opacity-80"
+              >
+                Generate on GitHub →
+              </button>
+            </div>
+
+            {isConnected && !editingToken ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)]">
+                {ghUser?.avatar && (
+                  <img src={ghUser.avatar} alt="" className="w-6 h-6 rounded-full" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-[var(--text-primary)] truncate">
+                    {ghUser?.name || ghUser?.username}
+                  </div>
+                  <div className="text-[10px] text-[var(--green)] truncate">@{ghUser?.username}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setEditingToken(true); setTokenInput(""); setTokenError(""); }}
+                  className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={onDisconnectToken}
+                  className="text-[10px] text-[var(--text-muted)] hover:text-[var(--red)]"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : null}
+
+            {showTokenInput && (
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    placeholder="ghp_xxxx..."
+                    className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                    onKeyDown={(e) => { if (e.key === "Enter" && tokenInput.trim() && !savingToken) submitToken(); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={submitToken}
+                    disabled={!tokenInput.trim() || savingToken}
+                    className="px-3 py-2 text-xs rounded-lg bg-[var(--accent)] text-[var(--bg-primary)] font-medium hover:opacity-90 disabled:opacity-40"
+                  >
+                    {savingToken ? "..." : "Save"}
+                  </button>
+                  {editingToken && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditingToken(false); setTokenError(""); setTokenInput(""); }}
+                      className="px-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  Needs <span className="text-[var(--text-secondary)]">repo</span> scope. Stored encrypted locally.
+                </p>
+                {tokenError && <p className="text-[10px] text-[var(--red)]">{tokenError}</p>}
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
