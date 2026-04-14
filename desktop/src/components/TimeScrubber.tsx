@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { getSnapshots, loadSnapshot } from "@/lib/file-recovery";
-import ReadOnlyView from "./ReadOnlyView";
+
+const ReadOnlyView = dynamic(() => import("./ReadOnlyView"), { ssr: false });
 
 interface TimeScrubberProps {
   vaultPath: string;
