@@ -1840,8 +1840,10 @@ export default function Home() {
           hotkeys={hotkeys}
           platform={platform}
           vaultPath={activeVault?.path || ""}
+          vault={activeVault}
           onSettingsChange={handleSettingsChange}
           onHotkeysChange={handleHotkeysChange}
+          onVaultUpdate={(v) => { setActiveVault(v); setVaults((prev) => prev.map((x) => x.id === v.id ? v : x)); }}
           onOpenPlugins={() => { setShowSettings(false); setShowPluginManager(true); }}
           onOpenSnippets={() => { setShowSettings(false); setShowCSSSnippets(true); }}
           onClose={() => setShowSettings(false)}

@@ -12,6 +12,7 @@ import { CodeBlockTracker } from "./renderers/code-blocks";
 import { MathBlockTracker } from "./renderers/math";
 import { HtmlBlockTracker } from "./renderers/html";
 import { processTocLine } from "./renderers/toc";
+import { extractHeadings } from "@/lib/toc-utils";
 import type { BlockContext, InlineReplacement } from "./types";
 
 /** When true, all lines render as non-cursor (pure view mode). */
@@ -223,15 +224,12 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       this.codeTracker.preScan(doc);
       this.htmlTracker = new HtmlBlockTracker();
       this.htmlTracker.preScan(doc, cursorLines);
-      this.cachedHeadings = null; // lazily computed
-    }
-
-    private getHeadings(view: EditorView) {
-      if (!this.cachedHeadings) {
-        const { extractHeadings } = require("@/lib/toc-utils");
-        this.cachedHeadings = extractHeadings(view.state.doc.toString());
-      }
-      return this.cachedHeadings;
+      // Extract headings once per doc change so any [TOC] widgets have them.
+      this.cachedHeadings = extractHeadings(doc.toString()).map((h) => ({
+        level: h.level,
+        text: h.text,
+        line: h.line,
+      }));
     }
 
     update(update: ViewUpdate) {

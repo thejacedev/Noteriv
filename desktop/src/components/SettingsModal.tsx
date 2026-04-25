@@ -39,8 +39,10 @@ interface SettingsModalProps {
   hotkeys: HotkeyBinding[];
   platform: string;
   vaultPath: string;
+  vault: Vault | null;
   onSettingsChange: (settings: AppSettings) => void;
   onHotkeysChange: (hotkeys: HotkeyBinding[]) => void;
+  onVaultUpdate: (vault: Vault) => void;
   onOpenPlugins: () => void;
   onOpenSnippets: () => void;
   onClose: () => void;
@@ -51,8 +53,10 @@ export default function SettingsModal({
   hotkeys,
   platform,
   vaultPath,
+  vault,
   onSettingsChange,
   onHotkeysChange,
+  onVaultUpdate,
   onOpenPlugins,
   onOpenSnippets,
   onClose,
@@ -386,6 +390,97 @@ export default function SettingsModal({
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);
 
+  // ── Git remote + GitHub auth (per-vault) ──
+  const [ghUser, setGhUser] = useState<GitHubUser | null>(null);
+  const [tokenInput, setTokenInput] = useState("");
+  const [tokenError, setTokenError] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [editingToken, setEditingToken] = useState(false);
+  const [remoteUrl, setRemoteUrl] = useState(vault?.gitRemote || "");
+  const [remoteError, setRemoteError] = useState("");
+  const [savingRemote, setSavingRemote] = useState(false);
+  const [remoteSaved, setRemoteSaved] = useState(false);
+
+  // Reset remote URL when vault changes
+  useEffect(() => {
+    setRemoteUrl(vault?.gitRemote || "");
+    setRemoteError("");
+    setRemoteSaved(false);
+    setTokenInput("");
+    setTokenError("");
+    setEditingToken(false);
+  }, [vault?.id, vault?.gitRemote]);
+
+  // Load GitHub user when sync section is active
+  useEffect(() => {
+    if (active !== "sync" || !vault?.id || !window.electronAPI) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await window.electronAPI!.authGetUser(vault.id);
+        if (!cancelled) setGhUser(u);
+      } catch {
+        if (!cancelled) setGhUser(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [active, vault?.id]);
+
+  const handleSaveRemote = async () => {
+    if (!window.electronAPI || !vault) return;
+    setSavingRemote(true);
+    setRemoteError("");
+    setRemoteSaved(false);
+    try {
+      const status = await window.electronAPI.gitStatus(vault.path);
+      if (!status.isRepo) {
+        await window.electronAPI.gitInit(vault.path);
+      }
+      const trimmed = remoteUrl.trim();
+      if (trimmed) {
+        await window.electronAPI.gitSetRemote(vault.path, trimmed);
+      }
+      const updated = await window.electronAPI.updateVault(vault.id, {
+        gitRemote: trimmed || null,
+      });
+      if (updated) onVaultUpdate(updated);
+      setRemoteSaved(true);
+    } catch (err: unknown) {
+      setRemoteError(err instanceof Error ? err.message : "Failed to save remote");
+    } finally {
+      setSavingRemote(false);
+    }
+  };
+
+  const submitToken = async () => {
+    if (!window.electronAPI || !vault) return;
+    const trimmed = tokenInput.trim();
+    if (!trimmed) { setTokenError("Token is required"); return; }
+    setSavingToken(true);
+    setTokenError("");
+    try {
+      const result = await window.electronAPI.authValidateToken(trimmed);
+      if (!result.valid) {
+        setTokenError(result.error || "Invalid token");
+        return;
+      }
+      await window.electronAPI.authSaveToken(vault.id, trimmed);
+      setGhUser(result);
+      setTokenInput("");
+      setEditingToken(false);
+    } catch (err: unknown) {
+      setTokenError(err instanceof Error ? err.message : "Failed to save token");
+    } finally {
+      setSavingToken(false);
+    }
+  };
+
+  const handleDisconnectToken = async () => {
+    if (!window.electronAPI || !vault) return;
+    await window.electronAPI.authRemoveToken(vault.id);
+    setGhUser(null);
+  };
+
   const handleTestConnection = async () => {
     if (!window.electronAPI) return;
     setTesting(true);
@@ -405,8 +500,130 @@ export default function SettingsModal({
     }
   };
 
-  const renderSync = () => (
+  const renderSync = () => {
+    const isConnected = !!ghUser?.valid;
+    const showTokenInput = !isConnected || editingToken;
+    const remoteDirty = (vault?.gitRemote || "") !== remoteUrl.trim();
+
+    return (
     <div className="st-section">
+      <div className="st-group-label">Git Repository</div>
+      {!vault ? (
+        <div className="st-row-desc" style={{ padding: "8px 0" }}>
+          Open a vault to configure Git sync.
+        </div>
+      ) : (
+        <>
+          <Row label="Remote URL" desc="GitHub repository URL for syncing this vault.">
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input
+                type="text"
+                className="st-text-input"
+                value={remoteUrl}
+                onChange={(e) => { setRemoteUrl(e.target.value); setRemoteSaved(false); }}
+                placeholder="https://github.com/user/repo.git"
+                style={{ minWidth: 240 }}
+              />
+              <button
+                type="button"
+                className="st-test-btn"
+                onClick={handleSaveRemote}
+                disabled={savingRemote || !remoteDirty}
+              >
+                {savingRemote ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </Row>
+          {remoteError && (
+            <div className="st-test-result st-test-fail" style={{ padding: "0 0 8px" }}>
+              {remoteError}
+            </div>
+          )}
+          {remoteSaved && !remoteError && (
+            <div className="st-test-result st-test-ok" style={{ padding: "0 0 8px" }}>
+              Saved
+            </div>
+          )}
+
+          <Row label="GitHub Account" desc="Personal access token with repo scope. Stored encrypted locally.">
+            <button
+              type="button"
+              className="st-test-btn"
+              onClick={() => window.electronAPI?.authOpenTokenPage()}
+            >
+              Generate token →
+            </button>
+          </Row>
+
+          {isConnected && !editingToken && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+              {ghUser?.avatar && (
+                <img src={ghUser.avatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="st-row-label" style={{ fontSize: 12 }}>
+                  {ghUser?.name || ghUser?.username}
+                </div>
+                <div className="st-row-desc" style={{ color: "var(--green)" }}>
+                  @{ghUser?.username}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="st-test-btn"
+                onClick={() => { setEditingToken(true); setTokenInput(""); setTokenError(""); }}
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                className="st-test-btn"
+                onClick={handleDisconnectToken}
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+
+          {showTokenInput && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0" }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  type="password"
+                  className="st-text-input"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  placeholder="ghp_xxxx..."
+                  onKeyDown={(e) => { if (e.key === "Enter" && tokenInput.trim() && !savingToken) submitToken(); }}
+                  style={{ flex: 1, fontFamily: "var(--font-mono, monospace)" }}
+                />
+                <button
+                  type="button"
+                  className="st-test-btn"
+                  onClick={submitToken}
+                  disabled={!tokenInput.trim() || savingToken}
+                >
+                  {savingToken ? "..." : "Save"}
+                </button>
+                {editingToken && (
+                  <button
+                    type="button"
+                    className="st-test-btn"
+                    onClick={() => { setEditingToken(false); setTokenError(""); setTokenInput(""); }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+              {tokenError && (
+                <div className="st-test-result st-test-fail">{tokenError}</div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="st-divider" />
       <div className="st-group-label">Git Sync</div>
       <Row label="Auto sync interval" desc="Periodically commit and push changes in the background.">
         <select
@@ -541,7 +758,8 @@ export default function SettingsModal({
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const renderEcosystem = () => (
     <div className="st-section">

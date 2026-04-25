@@ -118,7 +118,7 @@ interface PluginConfig {
   enabled: string[];
 }
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.2.2";
 const PLUGINS_DIR = ".noteriv/plugins";
 const CONFIG_FILE = ".noteriv/plugin-config.json";
 
