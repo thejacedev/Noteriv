@@ -103,7 +103,7 @@ Plugins can listen for the following events:
 
 ## Security
 
-Plugins run in the same process as the application. While they are sandboxed through the `Function` constructor (they cannot directly access Node.js APIs or Electron internals), they do have access to the Plugin API, which includes reading and writing vault files.
+Plugins run in the same WebView as the application. While they are sandboxed through the `Function` constructor (they cannot directly invoke Tauri commands or reach the Rust backend), they do have access to the Plugin API, which includes reading and writing vault files.
 
 Only install plugins from sources you trust. Review a plugin's code before enabling it if you are unsure. The community repository is curated, but third-party plugins may not be reviewed.
 

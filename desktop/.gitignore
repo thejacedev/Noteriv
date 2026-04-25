@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.log
+.DS_Store
+
+# Tauri updater signing key — NEVER commit the private key.
+src-tauri/noteriv-updater.key
+# (the .pub file is safe to commit, but we already inlined it into tauri.conf.json)
+src-tauri/noteriv-updater.key.pub

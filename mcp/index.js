@@ -29,12 +29,15 @@ function findConfigDir() {
   const platform = os.platform();
   if (platform === "darwin") return path.join(os.homedir(), "Library", "Application Support", "Noteriv");
   if (platform === "win32") return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "Noteriv");
-  // Linux: ~/.config/noteriv (Electron uses lowercase app name)
+  // Linux: prefer the Tauri config dir (~/.config/Noteriv). Fall back to the
+  // legacy Electron lowercase dir only if the Tauri one has no config.json,
+  // so users mid-migration keep working.
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
-  // Try lowercase first (how Electron names it on Linux), fall back to capitalized
-  const lower = path.join(base, "noteriv");
-  if (fs.existsSync(lower)) return lower;
-  return path.join(base, "Noteriv");
+  const tauri = path.join(base, "Noteriv");
+  if (fs.existsSync(path.join(tauri, "config.json"))) return tauri;
+  const legacy = path.join(base, "noteriv");
+  if (fs.existsSync(path.join(legacy, "config.json"))) return legacy;
+  return tauri;
 }
 
 function loadNoterivConfig() {

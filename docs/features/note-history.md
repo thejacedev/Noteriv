@@ -13,7 +13,7 @@ Note history requires:
 
 1. **A Git repository.** Your vault must be initialized as a Git repo (`git init` in the vault root, or let Noteriv's setup wizard handle it).
 2. **Git sync enabled.** Noteriv's built-in sync (`Ctrl+Shift+G`) commits and pushes changes. Each sync creates a commit, which becomes an entry in the file's history.
-3. **Git installed on the system.** Noteriv calls `git log` and `git show` through the Electron backend. Git must be available in the system PATH.
+3. **Git installed on the system.** Noteriv calls `git log` and `git show` through the Tauri backend. Git must be available in the system PATH.
 
 If any of these are missing, the note history panel will show an empty state.
 

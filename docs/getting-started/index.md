@@ -5,7 +5,7 @@ order: 1
 
 # Getting Started with Noteriv
 
-Noteriv is an open-source markdown note-taking application built for writers, developers, researchers, and anyone who thinks in plain text. It runs on desktop (Windows, macOS, Linux) via Electron and on mobile (Android, iOS) via React Native, giving you access to your notes on every device you own.
+Noteriv is an open-source markdown note-taking application built for writers, developers, researchers, and anyone who thinks in plain text. It runs on desktop (Windows, macOS, Linux) via Tauri 2 and on mobile (Android, iOS) via React Native, giving you access to your notes on every device you own.
 
 ## What makes Noteriv different
 
@@ -15,7 +15,7 @@ Most note-taking applications lock you into a proprietary cloud, a proprietary f
 
 - **Local-first storage.** Notes live on your device by default. You own your data completely. If you want cloud sync, you can connect a GitHub repository, set up folder sync with Dropbox or Google Drive, or use a WebDAV server. But none of that is required.
 
-- **Cross-platform with feature parity.** The desktop app (Electron + Next.js) and the mobile app (Expo + React Native) share the same feature set with platform-appropriate adaptations. Write a note on your laptop, review it on your phone.
+- **Cross-platform with feature parity.** The desktop app (Tauri 2 + Next.js) and the mobile app (Expo + React Native) share the same feature set with platform-appropriate adaptations. Write a note on your laptop, review it on your phone.
 
 - **Extensible.** Plugins extend functionality, themes change the look, and CSS snippets let you fine-tune every visual detail. Community repositories for all three are available on GitHub.
 
@@ -87,14 +87,14 @@ Noteriv is built with modern web technologies on both platforms:
 | Framework | Next.js 16 | Expo 54 |
 | UI | React 19 | React Native 0.81 |
 | Editor | CodeMirror 6 | TextInput + custom renderer |
-| Runtime | Electron 40 | Expo Router 6 |
-| File I/O | Node.js fs | expo-file-system |
-| Sync | child_process git | GitHub REST API |
+| Runtime | Tauri 2 (Rust) | Expo Router 6 |
+| File I/O | Rust std::fs | expo-file-system |
+| Sync | std::process git | GitHub REST API |
 | Styling | Tailwind CSS 4 | StyleSheet + dynamic themes |
 | Math | KaTeX | -- |
 | Diagrams | Mermaid | -- |
 
-The desktop app uses Electron to provide native OS integration (file system access, window management, system tray, auto-updates) while rendering the UI with Next.js and React. The editor is powered by CodeMirror 6, a highly extensible code editor framework that provides fast, responsive text editing with full markdown support.
+The desktop app uses Tauri 2 to provide native OS integration (file system access, window management, system tray, auto-updates) while rendering the UI with Next.js and React inside the platform's WebView. The editor is powered by CodeMirror 6, a highly extensible code editor framework that provides fast, responsive text editing with full markdown support.
 
 The mobile app uses Expo and React Native to deliver a native experience on Android and iOS. Notes are stored in the app's document directory and synced via the GitHub REST API rather than the native git binary.
 

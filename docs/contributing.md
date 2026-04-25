@@ -68,7 +68,7 @@ cd Noteriv
 
 ### Desktop App
 
-The desktop app is an Electron + Next.js application.
+The desktop app is a Tauri 2 + Next.js application (Rust backend, Next.js renderer).
 
 ```bash
 cd desktop
@@ -76,7 +76,7 @@ npm install
 npm run dev
 ```
 
-This starts the Next.js development server and opens the Electron window. Hot reload is enabled, so changes to source files are reflected immediately.
+This starts the Next.js development server and opens the Tauri window. Hot reload is enabled for both the renderer and the Rust backend.
 
 To build a production binary:
 
@@ -130,13 +130,14 @@ The Noteriv repository is a monorepo with four main packages:
 
 ```
 Noteriv/
-  desktop/          # Electron + Next.js desktop app
+  desktop/          # Tauri 2 + Next.js desktop app
     src/
-      app/          # Next.js pages and API routes
+      app/          # Next.js pages and routes
       components/   # React components (Editor, Sidebar, Canvas, etc.)
       lib/          # Business logic (sync, dataview, flashcards, etc.)
       styles/       # CSS modules
       types/        # TypeScript type definitions
+    src-tauri/      # Rust backend (IPC commands, file watcher, clipper, updater)
   phone/            # React Native + Expo mobile app
     app/            # Expo Router screens
     components/     # React Native components
@@ -152,8 +153,8 @@ Noteriv/
 
 The desktop app uses:
 
-- **Electron** for the native window, file system access, git operations, and system integration.
-- **Next.js** for the React-based UI, server-side rendering is not used since everything runs in Electron.
+- **Tauri 2 (Rust)** for the native window, file system access, git operations, and system integration.
+- **Next.js** for the React-based UI, statically exported and loaded inside the Tauri WebView.
 - **CodeMirror 6** for the text editor with custom plugins for markdown rendering, syntax highlighting, and vim mode.
 - **Yjs + WebRTC** for real-time collaborative editing.
 

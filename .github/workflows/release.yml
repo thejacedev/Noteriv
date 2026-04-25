@@ -1,0 +1,166 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run build -- ${{ matrix.args }}
+
+      - name: Collect bundles
+        shell: bash
+        run: |
+          mkdir -p ../bundles
+          # Linux
+          find src-tauri/target/release/bundle/appimage -type f \( -name '*.AppImage' -o -name '*.AppImage.sig' \) -exec cp {} ../bundles/ \; || true
+          find src-tauri/target/release/bundle/deb -type f -name '*.deb' -exec cp {} ../bundles/ \; || true
+          find src-tauri/target/release/bundle/rpm -type f -name '*.rpm' -exec cp {} ../bundles/ \; || true
+          # macOS
+          find src-tauri/target -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -exec cp {} ../bundles/ \; || true
+          # Windows
+          find src-tauri/target -type f \( -name '*.msi' -o -name '*.msi.zip' -o -name '*.msi.zip.sig' -o -name '*-setup.exe' -o -name '*-setup.nsis.zip' -o -name '*-setup.nsis.zip.sig' \) -exec cp {} ../bundles/ \; || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.platform }}
+          path: bundles/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundles/
+          merge-multiple: true
+
+      - name: Generate latest.json
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME#v}"
+          PUBDATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          read_sig() { [ -f "$1" ] && cat "$1" || echo ""; }
+
+          LINUX_FILE=$(ls bundles/*.AppImage 2>/dev/null | head -1 || true)
+          LINUX_SIG=$([ -n "$LINUX_FILE" ] && read_sig "${LINUX_FILE}.sig" || echo "")
+          MAC_FILE=$(ls bundles/*.app.tar.gz 2>/dev/null | head -1 || true)
+          MAC_SIG=$([ -n "$MAC_FILE" ] && read_sig "${MAC_FILE}.sig" || echo "")
+          WIN_FILE=$(ls bundles/*-setup.nsis.zip 2>/dev/null | head -1 || ls bundles/*.msi.zip 2>/dev/null | head -1 || true)
+          WIN_SIG=$([ -n "$WIN_FILE" ] && read_sig "${WIN_FILE}.sig" || echo "")
+
+          BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+          cat > bundles/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "See release notes on GitHub.",
+            "pub_date": "${PUBDATE}",
+            "platforms": {
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG}",
+                "url": "${BASE_URL}/$(basename "${LINUX_FILE:-noop}")"
+              },
+              "darwin-x86_64": {
+                "signature": "${MAC_SIG}",
+                "url": "${BASE_URL}/$(basename "${MAC_FILE:-noop}")"
+              },
+              "darwin-aarch64": {
+                "signature": "${MAC_SIG}",
+                "url": "${BASE_URL}/$(basename "${MAC_FILE:-noop}")"
+              },
+              "windows-x86_64": {
+                "signature": "${WIN_SIG}",
+                "url": "${BASE_URL}/$(basename "${WIN_FILE:-noop}")"
+              }
+            }
+          }
+          EOF
+          echo "--- latest.json ---"
+          cat bundles/latest.json
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            bundles/*.AppImage
+            bundles/*.AppImage.sig
+            bundles/*.deb
+            bundles/*.rpm
+            bundles/*.dmg
+            bundles/*.app.tar.gz
+            bundles/*.app.tar.gz.sig
+            bundles/*-setup.exe
+            bundles/*-setup.nsis.zip
+            bundles/*-setup.nsis.zip.sig
+            bundles/*.msi
+            bundles/*.msi.zip
+            bundles/*.msi.zip.sig
+            bundles/latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

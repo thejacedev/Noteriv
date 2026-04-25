@@ -68,9 +68,9 @@ A few features are available only on the desktop app due to platform constraints
 | Vim mode | Touch keyboards do not support modal editing |
 | Canvas / whiteboard | Requires precise mouse interaction for node layout |
 | Drawing editor | Freehand drawing tools are desktop-optimized |
-| PDF annotation viewer | Native PDF rendering requires Electron APIs |
+| PDF annotation viewer | Native PDF rendering requires desktop WebView APIs |
 | Real-time collaboration | WebRTC peer-to-peer connections require desktop networking APIs |
-| Audio recorder | Desktop microphone access via Electron |
+| Audio recorder | Desktop microphone access via the OS portal |
 | Folder sync (Dropbox/Drive) | File system watcher requires native OS integration |
 | WebDAV sync | Desktop network stack handles authentication and large transfers |
 | Web clipper | Browser extension communicates with the desktop app |

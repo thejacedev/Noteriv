@@ -1,59 +1,21 @@
 {
   "name": "noteriv",
-  "version": "1.2.2",
-  "description": "A modern markdown editor with plugin API, themes, and sync",
+  "version": "2.0.0",
+  "description": "Noteriv — modern markdown editor with plugins, themes, sync",
   "author": {
     "name": "Jace Sleeman",
     "email": "jace@noteriv.com"
   },
   "homepage": "https://noteriv.com",
   "private": true,
-  "main": "main/main.js",
   "scripts": {
     "dev:next": "next dev --port 3456 --webpack",
-    "dev:electron": "wait-on http://localhost:3456 && electron .",
-    "dev": "concurrently --kill-others \"npm run dev:next\" \"npm run dev:electron\"",
-    "build": "next build && electron-builder",
+    "dev:tauri": "wait-on http-get://localhost:3456 && WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "dev": "concurrently --kill-others \"npm run dev:next\" \"npm run dev:tauri\"",
     "build:next": "next build",
-    "start": "electron .",
+    "build": "npm run build:next && tauri build",
+    "tauri": "tauri",
     "lint": "eslint"
-  },
-  "build": {
-    "appId": "com.noteriv.app",
-    "productName": "Noteriv",
-    "files": [
-      "main/**/*",
-      "out/**/*",
-      "public/**/*",
-      "package.json"
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "resources"
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.productivity",
-      "icon": "public/macos/icon.icns"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "public/windows/icon.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb",
-        "rpm"
-      ],
-      "category": "Office",
-      "icon": "public/linux/icons"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "thejacedev",
-      "repo": "Noteriv"
-    }
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -67,9 +29,11 @@
     "@codemirror/view": "^6.39.16",
     "@lezer/highlight": "^1.2.3",
     "@replit/codemirror-vim": "^6.3.0",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-shell": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.3.0",
     "concurrently": "^9.2.1",
-    "electron-serve": "^3.0.1",
-    "electron-updater": "^6.8.3",
     "katex": "^0.16.38",
     "mermaid": "^11.13.0",
     "next": "16.1.6",
@@ -77,18 +41,16 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "wait-on": "^9.0.4",
-    "webdav": "^5.9.0",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.30"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.1.0",
     "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "electron": "^40.8.0",
-    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

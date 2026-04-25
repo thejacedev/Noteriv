@@ -15,7 +15,7 @@ There is nothing special about the folder itself. It is a regular directory that
 
 ## Vault configuration storage
 
-Noteriv uses `electron-store` (on desktop) and `AsyncStorage` (on mobile) to keep track of your vaults. This configuration includes:
+Noteriv stores vault metadata in a JSON config file (`~/.config/Noteriv/config.json` on Linux, equivalent locations on macOS / Windows) on desktop, and `AsyncStorage` on mobile. This configuration includes:
 
 - **Vault metadata** -- Each vault has an ID, a display name, and the absolute path to its folder on disk.
 - **Git remote** -- If you connected GitHub sync, the remote URL is stored alongside the vault.

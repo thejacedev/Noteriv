@@ -98,7 +98,7 @@ To uninstall, drag Noteriv from Applications to the Trash.
 
 ## Auto-updater
 
-Noteriv includes a built-in auto-updater powered by `electron-updater`. When a new version is available on GitHub Releases, the app detects it and offers to download and install the update.
+Noteriv includes a built-in auto-updater powered by `tauri-plugin-updater`. When a new version is available on GitHub Releases, the app detects it and offers to download and install the update.
 
 - **Checking for updates** happens automatically when the app starts, or you can trigger it manually from Settings.
 - **Download and install** -- When an update is found, Noteriv downloads it in the background. Once the download completes, you are prompted to restart the app to apply the update.
@@ -123,7 +123,7 @@ npm install
 npm run dev
 ```
 
-This starts both the Next.js dev server (on port 3456) and the Electron window simultaneously.
+This starts both the Next.js dev server (on port 3456) and the Tauri window simultaneously.
 
 ## Building from source
 

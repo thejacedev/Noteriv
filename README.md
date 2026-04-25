@@ -334,7 +334,7 @@ cd Noteriv
 
 ## 🖥 Desktop App
 
-> **Electron + Next.js** &mdash; Windows, macOS, Linux
+> **Tauri 2 + Next.js** &mdash; Windows, macOS, Linux
 
 The desktop app provides the full Noteriv experience with a CodeMirror-based editor, native file system access, and Git integration via the system's git binary.
 
@@ -346,7 +346,7 @@ npm install
 npm run dev
 ```
 
-This starts both the Next.js dev server (port 3456) and the Electron window simultaneously.
+This starts both the Next.js dev server (port 3456) and the Tauri window simultaneously.
 
 ### Build
 
@@ -367,18 +367,23 @@ Builds distributable packages to `desktop/dist/`:
 
 ```
 desktop/
-├── main/                 Electron main process
-│   ├── main.js           App entry, IPC handlers, window management
-│   ├── preload.js        Context bridge (92 methods)
-│   ├── store.js          Persistent config (vaults, settings)
-│   ├── auth.js           GitHub token encryption (OS keychain)
-│   ├── updater.js        Auto-update via electron-updater
-│   └── sync/
-│       ├── git.js        Git operations via child_process
-│       ├── folder.js     Folder sync (bidirectional, mtime-based)
-│       ├── webdav.js     WebDAV sync
-│       ├── helpers.js    Shared sync utilities
-│       └── index.js      Sync orchestrator
+├── src-tauri/             Rust backend (Tauri 2)
+│   ├── src/
+│   │   ├── lib.rs           App entry, plugin registration, startup
+│   │   ├── shim.rs          window.electronAPI shim + drag/resize polyfill
+│   │   ├── store.rs         Persistent config (vaults, settings)
+│   │   ├── auth.rs          GitHub token storage + API
+│   │   ├── updater_cmds.rs  Auto-update via tauri-plugin-updater
+│   │   ├── clipper.rs       Web clipper local HTTP server
+│   │   ├── watcher.rs       Vault file watcher (debounced)
+│   │   ├── menu.rs          Hidden menu for keyboard accelerators
+│   │   ├── commands_git.rs  Git operations via std::process::Command
+│   │   ├── commands_sync.rs Folder + WebDAV sync providers
+│   │   └── commands_*.rs    Other IPC commands
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── capabilities/
+├── package.json           # renderer deps + tauri scripts
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx      Main app (90+ state variables)
@@ -689,8 +694,8 @@ Save to `.noteriv/themes/my-theme.json` or submit a PR to [NoterivThemes](https:
 
 ```
 Noteriv/
-├── desktop/              Electron + Next.js desktop application
-│   ├── main/             Electron main process (IPC, file I/O, Git, sync, clipper server, vault watcher)
+├── desktop/              Tauri 2 + Next.js desktop application
+│   ├── src-tauri/        Rust backend (IPC, file I/O, Git, sync, clipper server, vault watcher)
 │   ├── src/components/   41 React components + markdown rendering engine
 │   ├── src/lib/          33 utility modules
 │   └── public/           Platform icons + pdf.js worker
@@ -714,7 +719,7 @@ Noteriv/
 
 | Command | Description |
 |---|---|
-| `cd desktop && npm run dev` | Desktop dev mode (Next.js + Electron) |
+| `cd desktop && npm run dev` | Desktop dev mode (Next.js + Tauri) |
 | `cd desktop && npm run build` | Build desktop distributables |
 | `cd desktop && npm run build:next` | Build Next.js only |
 | `cd mcp && npm install` | Install MCP server dependencies |
@@ -731,9 +736,9 @@ Noteriv/
 | Framework | Next.js 16 | Expo 54 |
 | UI | React 19 | React Native 0.81 |
 | Editor | CodeMirror 6 | TextInput + custom renderer |
-| Runtime | Electron 40 | Expo Router 6 |
-| File I/O | Node.js fs | expo-file-system |
-| Sync | child_process git | GitHub REST API |
+| Runtime | Tauri 2 (Rust) | Expo Router 6 |
+| File I/O | Rust std::fs | expo-file-system |
+| Sync | std::process git | GitHub REST API |
 | Storage | JSON files | AsyncStorage |
 | Styling | Tailwind CSS 4 | StyleSheet + dynamic themes |
 | Math | KaTeX | &mdash; |

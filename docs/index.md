@@ -7,7 +7,7 @@ order: 1
 
 Welcome to the Noteriv documentation. Noteriv is an open-source, cross-platform markdown note-taking application built for writers, developers, researchers, and anyone who wants their notes in a portable, future-proof format. Notes are plain `.md` files stored on your filesystem -- no proprietary format, no cloud lock-in, no database.
 
-Noteriv runs on desktop (Windows, macOS, Linux) via Electron and on mobile (Android, iOS) via React Native. Both platforms share the same file format and vault structure, so your notes work identically everywhere.
+Noteriv runs on desktop (Windows, macOS, Linux) via Tauri 2 and on mobile (Android, iOS) via React Native. Both platforms share the same file format and vault structure, so your notes work identically everywhere.
 
 ## Documentation Sections
 
