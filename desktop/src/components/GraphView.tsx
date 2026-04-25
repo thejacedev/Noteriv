@@ -36,11 +36,11 @@ interface TooltipInfo {
 
 // ── Constants ──
 
-const REPULSION_STRENGTH = 300;
-const ATTRACTION_STRENGTH = 0.008;
-const CENTER_GRAVITY = 0.005;
-const ORPHAN_GRAVITY = 0.015;
-const DAMPING = 0.82;
+const REPULSION_STRENGTH = 1200;
+const ATTRACTION_STRENGTH = 0.004;
+const CENTER_GRAVITY = 0.0025;
+const ORPHAN_GRAVITY = 0.012;
+const DAMPING = 0.85;
 const MIN_NODE_RADIUS = 6;
 const MAX_NODE_RADIUS = 22;
 const LABEL_FONT_SIZE = 11;
@@ -212,15 +212,28 @@ export default function GraphView({
   });
 
   useEffect(() => {
-    const style = getComputedStyle(document.documentElement);
-    colorsRef.current = {
-      bgSurface: style.getPropertyValue("--bg-surface").trim() || "#313244",
-      accent: style.getPropertyValue("--accent").trim() || "#89b4fa",
-      border: style.getPropertyValue("--border").trim() || "#313244",
-      textPrimary: style.getPropertyValue("--text-primary").trim() || "#cdd6f4",
-      textMuted: style.getPropertyValue("--text-muted").trim() || "#6c7086",
-      bgPrimary: style.getPropertyValue("--bg-primary").trim() || "#1e1e2e",
+    const readColors = () => {
+      const style = getComputedStyle(document.documentElement);
+      colorsRef.current = {
+        bgSurface: style.getPropertyValue("--bg-surface").trim() || "#313244",
+        accent: style.getPropertyValue("--accent").trim() || "#89b4fa",
+        border: style.getPropertyValue("--border").trim() || "#313244",
+        textPrimary: style.getPropertyValue("--text-primary").trim() || "#cdd6f4",
+        textMuted: style.getPropertyValue("--text-muted").trim() || "#6c7086",
+        bgPrimary: style.getPropertyValue("--bg-primary").trim() || "#1e1e2e",
+      };
     };
+    readColors();
+
+    // Re-read whenever the theme system updates CSS vars (it toggles classes
+    // and / or inline styles on <html>). Without this the canvas keeps the
+    // first theme it saw and looks broken after a theme switch.
+    const observer = new MutationObserver(readColors);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style", "data-theme"],
+    });
+    return () => observer.disconnect();
   }, []);
 
   // ── Force simulation + render loop ──

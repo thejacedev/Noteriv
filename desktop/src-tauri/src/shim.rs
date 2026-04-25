@@ -179,8 +179,17 @@ pub const SHIM_JS: &str = r#"
     // even expose it via getComputedStyle, so detect the renderer's known
     // titlebar classes directly.
     var INTERACTIVE = /^(?:BUTTON|INPUT|TEXTAREA|SELECT|A|LABEL|SUMMARY)$/;
-    var DRAG_CLASSES = ["drag-region", "titlebar-controls", "titlebar"];
-    var NO_DRAG_CLASSES = ["no-drag", "titlebar-section", "titlebar-btn"];
+    // Only the top row of the titlebar is a drag region. The `.titlebar`
+    // wrapper also contains the `.tab-bar` row, which must remain clickable
+    // and HTML5-draggable for tab selection / reordering.
+    var DRAG_CLASSES = ["drag-region", "titlebar-controls"];
+    var NO_DRAG_CLASSES = [
+      "no-drag",
+      "titlebar-section", "titlebar-btn",
+      "tab-bar", "tab", "tab-close", "tab-new", "tab-pinned", "tab-label",
+      "view-toggle", "view-toggle-btn",
+      "mac-controls", "mac-dot", "win-controls", "win-btn"
+    ];
 
     function classListHasAny(cl, list) {
       if (!cl) return false;
