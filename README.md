@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="desktop/public/icon.png" alt="Noteriv" width="140" height="140" />
+  <img src="desktop/public/banner.png" alt="Noteriv" />
   <h1>Noteriv</h1>
-  <p><strong>Markdown notes, everywhere.</strong></p>
+  <p><strong>Fast markdown notes, everywhere.</strong></p>
   <p>
-    A powerful, open-source note-taking app built for writers, developers, and anyone who thinks in plain text.<br />
-    Available on <strong>desktop</strong> (Windows, macOS, Linux) and <strong>mobile</strong> (Android, iOS).
+    The open-source markdown editor with a graph view, plugin API, themes, Git/WebDAV sync, and an AI MCP server &mdash; built on <strong>Tauri 2</strong>.<br />
+    ~15 MB. Linux, macOS, Windows. React Native mobile companion app.
   </p>
   <p>
     <strong>Note:</strong> The mobile app is a work in progress. All features ship to desktop first.
