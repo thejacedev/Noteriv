@@ -16,8 +16,14 @@ mod store;
 mod updater_cmds;
 mod watcher;
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
+
+/// Re-export for `main.rs` (which can't see the private `paths` module directly).
+pub fn portable_root_public() -> Option<PathBuf> {
+    paths::portable_root()
+}
 
 /// Mutable app-wide state. Wrapped in Mutex because Tauri commands take `&State<...>`.
 pub struct AppState {
@@ -161,9 +167,12 @@ pub fn run() {
                 }
             }
 
-            // Auto-update check on startup (if enabled).
+            // Auto-update check on startup (if enabled). Skipped in portable
+            // mode — the running EXE can't reliably replace itself from a
+            // USB stick or read-only mount, and portable users expect no
+            // surprise writes to the executable directory.
             #[cfg(desktop)]
-            {
+            if !paths::is_portable() {
                 let settings = store::load_settings();
                 let auto = settings
                     .get("autoUpdate")

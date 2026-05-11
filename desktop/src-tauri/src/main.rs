@@ -2,6 +2,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // Portable mode (Windows): redirect WebView2's user data folder
+    // (IndexedDB, localStorage, cache) alongside the EXE. Must be set
+    // before WebView2 is initialized — i.e., before Tauri starts.
+    // No-op on macOS / Linux (different webview runtimes).
+    #[cfg(target_os = "windows")]
+    if let Some(root) = noteriv_lib::portable_root_public() {
+        let wv = root.join("data").join("webview");
+        // SAFETY: single-threaded, before any other code runs.
+        unsafe { std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &wv); }
+    }
+
     // WebKitGTK on Wayland (GNOME on Fedora, recent KDE) crashes with
     // "Gdk-Message: Error 71 (Protocol error) dispatching to Wayland display"
     // because of dmabuf renderer + accelerated compositing on certain GPU /

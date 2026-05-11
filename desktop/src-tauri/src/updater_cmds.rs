@@ -20,6 +20,13 @@ pub struct UpdateInfo {
 
 #[tauri::command]
 pub async fn updater_check(app: AppHandle) -> UpdateInfo {
+    if crate::paths::is_portable() {
+        return UpdateInfo {
+            available: false,
+            error: Some("Portable build: update manually by downloading the latest zip.".into()),
+            ..Default::default()
+        };
+    }
     #[cfg(desktop)]
     {
         match app.updater() {
@@ -57,6 +64,9 @@ pub async fn updater_check(app: AppHandle) -> UpdateInfo {
 
 #[tauri::command]
 pub async fn updater_download(app: AppHandle) -> bool {
+    if crate::paths::is_portable() {
+        return false;
+    }
     #[cfg(desktop)]
     {
         let updater = match app.updater() {

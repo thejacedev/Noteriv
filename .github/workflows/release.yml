@@ -78,6 +78,29 @@ jobs:
           # Windows
           find src-tauri/target -type f \( -name '*.msi' -o -name '*.msi.zip' -o -name '*.msi.zip.sig' -o -name '*-setup.exe' -o -name '*-setup.nsis.zip' -o -name '*-setup.nsis.zip.sig' \) -exec cp {} ../bundles/ \; || true
 
+      - name: Package Windows portable (lite)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $exe = "src-tauri\target\release\noteriv.exe"
+          if (-not (Test-Path $exe)) { throw "noteriv.exe not found at $exe" }
+          $stage = Join-Path $env:RUNNER_TEMP "noteriv-portable"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item $exe (Join-Path $stage "noteriv.exe")
+          Set-Content -Path (Join-Path $stage "portable.txt") -Value "Marker file. Triggers portable mode: all settings, vaults, and cache stay in this folder."
+          @"
+          Noteriv $version - Portable
+
+          Run noteriv.exe. All settings and data live in the 'data' folder
+          next to the EXE. Auto-updates are disabled in portable builds.
+          Delete portable.txt to switch back to standard (AppData) mode.
+          "@ | Set-Content -Path (Join-Path $stage "README.txt")
+          $zip = "..\bundles\Noteriv-$version-windows-x64-portable.zip"
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
+          Write-Host "Created $zip"
+
       - uses: actions/upload-artifact@v4
         with:
           name: bundles-${{ matrix.platform }}
@@ -161,6 +184,7 @@ jobs:
             bundles/*.msi
             bundles/*.msi.zip
             bundles/*.msi.zip.sig
+            bundles/Noteriv-*-windows-x64-portable.zip
             bundles/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
