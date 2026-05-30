@@ -169,6 +169,7 @@ interface ElectronAPI {
   updaterDownload: () => Promise<boolean>;
   updaterInstall: () => Promise<void>;
   updaterGetVersion: () => Promise<string>;
+  updaterIsManaged: () => Promise<boolean>;
   onUpdaterUpdateAvailable: (callback: (data: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => () => void;
   onUpdaterUpdateNotAvailable: (callback: () => void) => () => void;
   onUpdaterDownloadProgress: (callback: (data: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => () => void;

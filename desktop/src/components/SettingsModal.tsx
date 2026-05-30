@@ -149,11 +149,17 @@ export default function SettingsModal({
         </Row>
       )}
 
-      <Row label="Automatic updates" desc="Check for updates on startup and notify when a new version is available.">
-        <Toggle checked={settings.autoUpdate} onChange={(v) => update({ autoUpdate: v })} />
-      </Row>
+      {updateManaged ? (
+        <Row label="Automatic updates" desc="Updates are managed by your package manager (Flatpak/Flathub).">
+          <span className="st-test-result">Managed externally</span>
+        </Row>
+      ) : (
+        <Row label="Automatic updates" desc="Check for updates on startup and notify when a new version is available.">
+          <Toggle checked={settings.autoUpdate} onChange={(v) => update({ autoUpdate: v })} />
+        </Row>
+      )}
 
-      <div className="st-update-row">
+      <div className="st-update-row" hidden={updateManaged}>
         {updateStatus === "idle" && (
           <button className="st-test-btn" onClick={handleCheckForUpdates}>
             Check for Updates
@@ -330,10 +336,18 @@ export default function SettingsModal({
     "idle" | "checking" | "available" | "downloading" | "downloaded" | "error" | "up-to-date"
   >("idle");
   const [updateInfo, setUpdateInfo] = useState<{ version?: string; percent?: number; error?: string }>({});
+  // True when the platform manages updates itself (Flatpak/Flathub) or self-update
+  // is unavailable (portable). The whole update UI is hidden in that case.
+  const [updateManaged, setUpdateManaged] = useState(false);
 
   useEffect(() => {
     if (!window.electronAPI?.updaterGetVersion) return;
     window.electronAPI.updaterGetVersion().then(setAppVersion);
+  }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI?.updaterIsManaged) return;
+    window.electronAPI.updaterIsManaged().then(setUpdateManaged);
   }, []);
 
   const handleCheckForUpdates = async () => {

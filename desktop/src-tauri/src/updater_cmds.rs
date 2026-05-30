@@ -136,6 +136,13 @@ pub async fn updater_get_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
+/// True when self-update is unavailable and the update UI should be hidden:
+/// inside Flatpak (managed by Flathub) or in a portable build.
+#[tauri::command]
+pub async fn updater_is_managed() -> bool {
+    crate::paths::is_flatpak() || crate::paths::is_portable()
+}
+
 #[cfg(desktop)]
 pub async fn check_and_emit(app: &AppHandle) -> Result<(), String> {
     let updater = app.updater().map_err(|e| e.to_string())?;

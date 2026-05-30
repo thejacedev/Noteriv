@@ -134,6 +134,7 @@ pub fn run() {
             updater_cmds::updater_download,
             updater_cmds::updater_install,
             updater_cmds::updater_get_version,
+            updater_cmds::updater_is_managed,
         ])
         .setup(|app| {
             // Inject the window.electronAPI shim so unmodified renderer code works.

@@ -130,6 +130,7 @@ pub const SHIM_JS: &str = r#"
       updaterDownload: function () { return invoke("updater_download"); },
       updaterInstall: function () { return invoke("updater_install"); },
       updaterGetVersion: function () { return invoke("updater_get_version"); },
+      updaterIsManaged: function () { return invoke("updater_is_managed"); },
       onUpdaterUpdateAvailable: function (cb) { return on("updater:update-available", cb); },
       onUpdaterUpdateNotAvailable: function (cb) { return on("updater:update-not-available", function () { return undefined; }); },
       onUpdaterDownloadProgress: function (cb) { return on("updater:download-progress", cb); },
