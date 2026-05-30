@@ -34,12 +34,9 @@ modules:
       - install -Dm644 com.noteriv.app.desktop /app/share/applications/com.noteriv.app.desktop
       - install -Dm644 com.noteriv.app.metainfo.xml /app/share/metainfo/com.noteriv.app.metainfo.xml
     sources:
-      # NOTE: sha256 is a PLACEHOLDER. After the v2.0.3 release is built, run:
-      #   sha256sum Noteriv_2.0.3_amd64.deb
-      # and paste the result below. Flathub's build will fail until this matches.
       - type: file
         url: https://github.com/thejacedev/Noteriv/releases/download/v2.0.3/Noteriv_2.0.3_amd64.deb
-        sha256: 0000000000000000000000000000000000000000000000000000000000000000
+        sha256: bc1eb721ef08b7b9a321a9ff52e5aa0846aafceb21484bfaf72627de93fadc79
       - type: file
         path: com.noteriv.app.desktop
       - type: file
