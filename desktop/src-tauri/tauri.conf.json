@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Noteriv",
-  "version": "2.1.0",
-  "identifier": "com.noteriv.app",
+  "version": "2.1.1",
+  "identifier": "com.noteriv.Noteriv",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "npm run build:next",
