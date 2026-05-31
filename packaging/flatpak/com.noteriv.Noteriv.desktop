@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Noteriv
-Comment=Write and sync Markdown notes
-Exec=noteriv
-Icon=com.noteriv.Noteriv
-Terminal=false
-Categories=Office;TextEditor;
-StartupWMClass=noteriv

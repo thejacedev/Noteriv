@@ -338,6 +338,23 @@ cd Noteriv
 
 The desktop app provides the full Noteriv experience with a CodeMirror-based editor, native file system access, and Git integration via the system's git binary.
 
+### Install
+
+**Fedora (COPR)**
+
+```bash
+sudo dnf copr enable jacedev/noteriv
+sudo dnf install noteriv
+```
+
+`dnf upgrade` keeps it current. For other platforms, grab a build from the [latest release](https://github.com/thejacedev/Noteriv/releases/latest):
+
+| Platform | Formats |
+|---|---|
+| Linux | `.rpm`, `.deb`, AppImage |
+| Windows | `.exe` installer, portable `.zip` |
+| macOS | `.dmg` |
+
 ### Development
 
 ```bash
