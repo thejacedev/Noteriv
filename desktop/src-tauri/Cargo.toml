@@ -5,6 +5,7 @@ description = "Noteriv — markdown editor with plugins, themes, sync"
 authors = ["Jace Sleeman <jace@noteriv.com>"]
 edition = "2021"
 rust-version = "1.77"
+license = "MIT"
 
 [lib]
 name = "noteriv_lib"
