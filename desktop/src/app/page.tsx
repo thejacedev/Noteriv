@@ -91,6 +91,9 @@ interface TabState {
   filePath: string;
   content: string;
   savedContent: string;
+  // Non-markdown tabs render a dedicated view instead of the text editor.
+  // Absent = a normal markdown note.
+  kind?: "canvas" | "drawing" | "pdf";
 }
 
 export default function Home() {
@@ -146,8 +149,6 @@ export default function Home() {
 
   // New features
   const [showCalendarView, setShowCalendarView] = useState(false);
-  const [drawingFile, setDrawingFile] = useState<string | null>(null);
-  const [pdfFile, setPdfFile] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
@@ -159,7 +160,6 @@ export default function Home() {
   const [showLintPanel, setShowLintPanel] = useState(false);
   const [showVaultInsights, setShowVaultInsights] = useState(false);
   const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
-  const [canvasFile, setCanvasFile] = useState<string | null>(null);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -189,6 +189,10 @@ export default function Home() {
 
   // Current tab helpers
   const currentTab = tabs.find((t) => t.filePath === activeTab) || null;
+  // Dedicated views are driven by the active tab's kind, so they live in the
+  // tab strip and own the title bar / export the same way notes do.
+  const drawingFile = currentTab?.kind === "drawing" ? currentTab.filePath : null;
+  const pdfFile = currentTab?.kind === "pdf" ? currentTab.filePath : null;
   const content = currentTab?.content || "";
   const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
 
@@ -260,6 +264,16 @@ export default function Home() {
     // Restore tabs
     const restoredTabs: TabState[] = [];
     for (const filePath of ws.openTabs || []) {
+      // Dedicated-view tabs (canvas/drawing/pdf) carry no text content; they
+      // load their own files. Restore them by kind, not by reading as markdown.
+      let kind: TabState["kind"];
+      if (isDrawingFile(filePath)) kind = "drawing";
+      else if (filePath.endsWith(".canvas")) kind = "canvas";
+      else if (isPdfFile(filePath)) kind = "pdf";
+      if (kind) {
+        restoredTabs.push({ filePath, content: "", savedContent: "", kind });
+        continue;
+      }
       const fileContent = await window.electronAPI.readFile(filePath);
       if (fileContent !== null) {
         restoredTabs.push({ filePath, content: fileContent, savedContent: fileContent });
@@ -629,21 +643,21 @@ export default function Home() {
   const openingFilesRef = useRef(new Set<string>());
 
   const openFile = useCallback(async (filePath: string) => {
-    // Excalidraw files open in the drawing editor
-    if (isDrawingFile(filePath)) {
-      setDrawingFile(filePath);
-      return;
-    }
+    // Canvas / drawing / PDF open as dedicated-view tabs (no text content;
+    // each view manages its own file I/O). This makes them first-class tabs:
+    // they show in the tab strip, own the title bar, and gate the export action.
+    let kind: TabState["kind"];
+    if (isDrawingFile(filePath)) kind = "drawing";
+    else if (filePath.endsWith(".canvas")) kind = "canvas";
+    else if (isPdfFile(filePath)) kind = "pdf";
 
-    // Canvas files open in the canvas/whiteboard
-    if (filePath.endsWith(".canvas")) {
-      setCanvasFile(filePath);
-      return;
-    }
-
-    // PDF files open in the PDF viewer
-    if (isPdfFile(filePath)) {
-      setPdfFile(filePath);
+    if (kind) {
+      setTabs((prev) =>
+        prev.some((t) => t.filePath === filePath)
+          ? prev
+          : [...prev, { filePath, content: "", savedContent: "", kind }]
+      );
+      setActiveTab(filePath);
       return;
     }
 
@@ -1136,9 +1150,9 @@ export default function Home() {
     while (names.includes(name)) { counter++; name = `Canvas ${counter}.canvas`; }
     const filePath = `${activeVault.path}/${name}`;
     await window.electronAPI.writeFile(filePath, JSON.stringify({ nodes: [], edges: [] }, null, 2));
-    setCanvasFile(filePath);
+    openFile(filePath);
     setSidebarRefresh((k) => k + 1);
-  }, [activeVault]);
+  }, [activeVault, openFile]);
 
   // Create new excalidraw drawing
   const handleNewDrawing = useCallback(async () => {
@@ -1148,9 +1162,9 @@ export default function Home() {
     const name = generateDrawingName(names);
     const filePath = `${activeVault.path}/${name}`;
     await window.electronAPI.writeFile(filePath, serializeDrawing(createEmptyDrawing()));
-    setDrawingFile(filePath);
+    openFile(filePath);
     setSidebarRefresh((k) => k + 1);
-  }, [activeVault]);
+  }, [activeVault, openFile]);
 
   // Insert TOC placeholder
   const handleInsertToc = useCallback(() => {
@@ -1259,7 +1273,7 @@ export default function Home() {
       randomNote: async () => { if (activeVault) { const f = await getRandomNote(activeVault.path); if (f) openFile(f); } },
       noteComposer: () => setShowNoteComposer(true),
       fileRecovery: () => setShowFileRecovery(true),
-      exportPDF: () => { if (currentTab) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
+      exportPDF: () => { if (currentTab && !currentTab.kind) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
       audioRecorder: () => setShowAudioRecorder(true),
       attachments: () => setShowAttachments(true),
       slidePresentation: () => setShowSlidePresentation(true),
@@ -1278,7 +1292,7 @@ export default function Home() {
       flashcardReview: () => setShowFlashcards(true),
       startCollab: () => setShowCollab(true),
       openPdfViewer: () => {
-        if (activeTab && isPdfFile(activeTab)) setPdfFile(activeTab);
+        if (activeTab && isPdfFile(activeTab)) openFile(activeTab);
       },
       exportPdfAnnotations: () => {
         if (pdfFile) { /* export handled inside PDFViewer */ }
@@ -1425,7 +1439,7 @@ export default function Home() {
         randomNote: async () => { if (activeVault) { const f = await getRandomNote(activeVault.path); if (f) openFile(f); } },
         noteComposer: () => setShowNoteComposer(true),
         fileRecovery: () => setShowFileRecovery(true),
-        exportPDF: () => { if (currentTab) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
+        exportPDF: () => { if (currentTab && !currentTab.kind) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
         audioRecorder: () => setShowAudioRecorder(true),
         attachments: () => setShowAttachments(true),
         slidePresentation: () => setShowSlidePresentation(true),
@@ -1444,7 +1458,7 @@ export default function Home() {
         flashcardReview: () => setShowFlashcards(true),
         startCollab: () => setShowCollab(true),
         openPdfViewer: () => {
-          if (activeTab && isPdfFile(activeTab)) setPdfFile(activeTab);
+          if (activeTab && isPdfFile(activeTab)) openFile(activeTab);
         },
         exportPdfAnnotations: () => {},
         openTrash: () => setShowTrash(true),
@@ -1522,6 +1536,7 @@ export default function Home() {
           activeVault={activeVault}
           sidebarCollapsed={sidebarCollapsed}
           viewMode={viewMode}
+          showViewModes={!currentTab?.kind}
           pinnedTabs={pinnedTabs}
           onTabSelect={setActiveTab}
           onTabClose={closeTab}
@@ -1665,7 +1680,7 @@ export default function Home() {
 
         {/* Editor */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} onContextMenu={handleEditorContextMenu}>
-          {currentTab ? (
+          {currentTab && !currentTab.kind ? (
             <SplitPane
               left={
                 <div className="flex flex-col h-full overflow-hidden">
@@ -1721,7 +1736,7 @@ export default function Home() {
               onSplitRatioChange={setSplitRatio}
               direction="horizontal"
             />
-          ) : (
+          ) : !currentTab ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-3">
                 <p className="text-[var(--text-muted)] text-sm">No file open</p>
@@ -1733,7 +1748,15 @@ export default function Home() {
                 </button>
               </div>
             </div>
-          )}
+          ) : currentTab.kind === "canvas" && activeVault ? (
+            <Canvas
+              filePath={currentTab.filePath}
+              vaultPath={activeVault.path}
+              onSave={async (c) => { if (window.electronAPI) await window.electronAPI.writeFile(currentTab.filePath, c); }}
+              onFileSelect={(f) => openFile(f)}
+              onClose={() => closeTab(currentTab.filePath)}
+            />
+          ) : null}
         </div>
 
         {/* Editor context menu */}
@@ -1817,9 +1840,13 @@ export default function Home() {
                 {syncStatus === "syncing" ? "syncing" : syncStatus === "error" ? "sync failed" : gitChanges > 0 ? `${gitChanges} changes` : lastSyncTime ? `synced ${lastSyncTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "sync"}
               </button>
             )}
-            <span>{content.split("\n").length} lines</span>
-            <span>{content.length} chars</span>
-            {pluginManagerRef.current?.getStatusBarItems().map((item) => (
+            {currentTab && !currentTab.kind && (
+              <>
+                <span>{content.split("\n").length} lines</span>
+                <span>{content.length} chars</span>
+              </>
+            )}
+            {!currentTab?.kind && pluginManagerRef.current?.getStatusBarItems().map((item) => (
               <span
                 key={item.id}
                 className={item.onClick ? "cursor-pointer hover:text-[var(--text-secondary)]" : ""}
@@ -2029,25 +2056,13 @@ export default function Home() {
         />
       )}
 
-      {/* Canvas / Whiteboard */}
-      {canvasFile && activeVault && (
-        <Canvas
-          filePath={canvasFile}
-          vaultPath={activeVault.path}
-          onSave={async (content) => {
-            if (window.electronAPI) await window.electronAPI.writeFile(canvasFile, content);
-          }}
-          onFileSelect={(f) => { setCanvasFile(null); openFile(f); }}
-          onClose={() => setCanvasFile(null)}
-        />
-      )}
       {/* Drawing Editor */}
       {drawingFile && activeVault && (
         <DrawingEditor
           filePath={drawingFile}
           vaultPath={activeVault.path}
           onSave={() => setSidebarRefresh((k) => k + 1)}
-          onClose={() => setDrawingFile(null)}
+          onClose={() => closeTab(drawingFile)}
         />
       )}
 
@@ -2057,7 +2072,7 @@ export default function Home() {
           filePath={pdfFile}
           vaultPath={activeVault.path}
           onExportedNote={(mdPath) => { openFile(mdPath); setSidebarRefresh((k) => k + 1); }}
-          onClose={() => setPdfFile(null)}
+          onClose={() => closeTab(pdfFile)}
         />
       )}
 

@@ -23,6 +23,8 @@ interface TitleBarProps {
   onTabReorder: (from: number, to: number) => void;
   onToggleSidebar: () => void;
   onViewModeChange: (mode: "live" | "source" | "view") => void;
+  // Hidden for non-markdown tabs (canvas/pdf/drawing). Defaults to shown.
+  showViewModes?: boolean;
   onNewFile: () => void;
   onSave: () => void;
   onOpenSettings: () => void;
@@ -51,6 +53,7 @@ export default function TitleBar({
   onTabReorder,
   onToggleSidebar,
   onViewModeChange,
+  showViewModes = true,
   onNewFile,
   onSave,
   onOpenSettings,
@@ -215,6 +218,7 @@ export default function TitleBar({
 
         {/* Right: view toggle + window controls */}
         <div className="titlebar-section" style={{ paddingRight: 8 }}>
+          {showViewModes && (
           <div className="view-toggle">
             <button
               onClick={() => onViewModeChange("live")}
@@ -235,6 +239,7 @@ export default function TitleBar({
               Source
             </button>
           </div>
+          )}
 
           <button onClick={onOpenSettings} className="titlebar-btn" title="Settings (Ctrl+,)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">

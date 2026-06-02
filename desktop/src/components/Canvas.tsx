@@ -462,18 +462,29 @@ function ImageNodeView({
   const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!node.imagePath) return;
-    // Read the image via Electron and create an object URL or use file:// protocol
+    if (!node.imagePath) { setImageSrc(null); return; }
+    let cancelled = false;
+    // file:// is blocked in the Tauri/WebKitGTK webview, so read the bytes and
+    // build a data: URL — same mechanism the markdown image renderer uses.
     async function loadImage() {
-      if (!node.imagePath) return;
+      const path = node.imagePath;
+      if (!path || !window.electronAPI?.readBinaryFile) { setImageSrc(null); return; }
       try {
-        // Use file:// protocol for Electron (works in webview)
-        setImageSrc(`file://${node.imagePath}`);
+        const base64 = await window.electronAPI.readBinaryFile(path);
+        if (cancelled) return;
+        if (!base64) { setImageSrc(null); return; }
+        const ext = path.split(".").pop()?.toLowerCase() || "";
+        const mime: Record<string, string> = {
+          png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+          gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp",
+        };
+        setImageSrc(`data:${mime[ext] || "image/png"};base64,${base64}`);
       } catch {
-        setImageSrc(null);
+        if (!cancelled) setImageSrc(null);
       }
     }
     loadImage();
+    return () => { cancelled = true; };
   }, [node.imagePath]);
 
   return (
