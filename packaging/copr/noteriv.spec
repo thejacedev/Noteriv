@@ -6,7 +6,7 @@
 #   2. rebuild the SRPM and upload to COPR (see README notes at bottom)
 
 Name:           noteriv
-Version:        2.2.0
+Version:        2.2.1
 Release:        1%{?dist}
 Summary:        Modern markdown editor with plugins, themes, and sync
 
@@ -57,8 +57,8 @@ cp -a usr %{buildroot}/
 %{_datadir}/icons/hicolor/*/apps/noteriv.png
 
 %changelog
-* Tue Jun 02 2026 Jace Sleeman <jace@noteriv.com> - 2.2.0-1
-- Repackage upstream v2.2.0 .deb (canvas/pdf/drawing tabs, canvas image fix)
+* Tue Jun 02 2026 Jace Sleeman <jace@noteriv.com> - 2.2.1-1
+- Repackage upstream v2.2.1 .deb (image preview, PDF viewer fixes, canvas fit)
 
 * Sat May 30 2026 Jace Sleeman <jace@noteriv.com> - 2.1.1-1
 - Repackage upstream v2.1.1 .deb
