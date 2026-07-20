@@ -1,6 +1,6 @@
 [package]
 name = "noteriv"
-version = "2.3.0"
+version = "2.4.0"
 description = "Noteriv — markdown editor with plugins, themes, sync"
 authors = ["Jace Sleeman <jace@noteriv.com>"]
 edition = "2021"
