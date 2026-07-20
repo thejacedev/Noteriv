@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import TitleBar from "@/components/TitleBar";
 import SetupWizard from "@/components/SetupWizard";
 import DocumentTitle from "@/components/DocumentTitle";
+import FormattingToolbar from "@/components/FormattingToolbar";
 import SplitPane from "@/components/SplitPane";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import SettingsModal from "@/components/SettingsModal";
@@ -1696,6 +1697,12 @@ export default function Home() {
                     filePath={currentTab.filePath}
                     onRename={handleRenameCurrentFile}
                   />
+                  {!zenMode &&
+                    !isBoardFile(currentTab.filePath) &&
+                    !isBoardContent(content) &&
+                    viewMode !== "view" && (
+                      <FormattingToolbar onAction={handleCommandExecute} />
+                    )}
                   <div className="flex-1 overflow-hidden">
                     {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
                       <BoardView content={content} onChange={handleContentChange} />

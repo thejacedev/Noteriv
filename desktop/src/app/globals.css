@@ -422,6 +422,49 @@ body {
   height: 0;
 }
 
+/* ─── Formatting Toolbar ─── */
+
+.formatting-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding: 4px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.formatting-toolbar::-webkit-scrollbar {
+  height: 0;
+}
+
+.formatting-toolbar-button {
+  min-width: 28px;
+  height: 25px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.formatting-toolbar-button:hover,
+.formatting-toolbar-button:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.formatting-toolbar-bold { font-weight: 700; font-size: 13px; }
+.formatting-toolbar-italic { font-size: 13px; font-style: italic; }
+.formatting-toolbar-strike { text-decoration: line-through; }
+
 .tab {
   position: relative;
   display: flex;
