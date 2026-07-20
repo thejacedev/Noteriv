@@ -512,11 +512,8 @@ export default function Home() {
         const tab = prev.find((t) => t.filePath === changedPath);
         if (!tab) return prev;
         (async () => {
-          // Save unsaved changes first so they're not lost
-          if (tab.content !== tab.savedContent) {
-            await window.electronAPI.writeFile(changedPath, tab.content);
-          }
-          // Reload from disk
+          // External filesystem changes are authoritative. Never replay an
+          // in-memory edit over them, or a stale tab can undo another writer.
           const newContent = await window.electronAPI.readFile(changedPath);
           if (newContent !== null) {
             setTabs((tabs) =>
