@@ -27,10 +27,10 @@ const sourceHighlight = HighlightStyle.define([
 ]);
 
 const sourceTheme = EditorView.theme({
-  "&": { height: "100%", background: "var(--bg-primary)", color: "var(--text-primary)", fontSize: "14px" },
+  "&": { height: "100%", background: "var(--bg-primary)", color: "var(--text-primary)", fontSize: "var(--editor-font-size, 15px)" },
   ".cm-scroller": {
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    lineHeight: "1.7",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', 'Fira Code', monospace)",
+    lineHeight: "var(--editor-line-height, 1.7)",
     padding: "1rem",
     overflow: "auto",
   },

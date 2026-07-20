@@ -189,6 +189,16 @@ export default function Home() {
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gitPushRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workspaceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef = useRef(settings);
+  const fontSizeSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => () => {
+    if (fontSizeSaveRef.current) clearTimeout(fontSizeSaveRef.current);
+  }, []);
 
   // Current tab helpers
   const currentTab = tabs.find((t) => t.filePath === activeTab) || null;
@@ -1345,6 +1355,7 @@ export default function Home() {
   }, []);
 
   const handleSettingsChange = useCallback(async (newSettings: AppSettings) => {
+    settingsRef.current = newSettings;
     setSettings(newSettings);
     applySettings(newSettings);
     // Apply theme if changed
@@ -1367,6 +1378,24 @@ export default function Home() {
     }
   }, [activeVault]);
 
+  const adjustEditorFontSize = useCallback((delta: number) => {
+    const currentSettings = settingsRef.current;
+    const fontSize = Math.max(11, Math.min(24, currentSettings.fontSize + delta));
+    if (fontSize !== currentSettings.fontSize) {
+      const nextSettings = { ...currentSettings, fontSize };
+      settingsRef.current = nextSettings;
+      setSettings(nextSettings);
+      applySettings(nextSettings);
+
+      if (fontSizeSaveRef.current) clearTimeout(fontSizeSaveRef.current);
+      fontSizeSaveRef.current = setTimeout(async () => {
+        if (!window.electronAPI) return;
+        const stored = await window.electronAPI.loadSettings();
+        await window.electronAPI.saveSettings({ ...stored, ...nextSettings });
+      }, 250);
+    }
+  }, []);
+
   // ============================================================
   // Keyboard shortcuts (driven by configurable hotkeys)
   // ============================================================
@@ -1382,6 +1411,17 @@ export default function Home() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const view = editorViewRef.current;
+
+      // Support both the main keyboard and numpad variants. Tauri does not
+      // provide browser zoom controls, so these adjust the editor font size.
+      const primaryModifier = e.ctrlKey || e.metaKey;
+      const zoomIn = e.key === "+" || e.key === "=" || e.code === "NumpadAdd";
+      const zoomOut = e.key === "-" || e.code === "NumpadSubtract";
+      if (primaryModifier && !e.altKey && (zoomIn || zoomOut)) {
+        e.preventDefault();
+        adjustEditorFontSize(zoomIn ? 1 : -1);
+        return;
+      }
 
       // Map actions to handlers
       const actions: Record<HotkeyAction, () => void> = {
@@ -1492,7 +1532,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize]);
 
   // Electron menu events
   useEffect(() => {

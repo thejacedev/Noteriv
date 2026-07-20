@@ -166,7 +166,7 @@ Press `F11` to toggle fullscreen mode. This expands Noteriv to fill your entire 
 
 You can adjust many aspects of the interface from Settings (`Ctrl+,`):
 
-- **Font size** -- Editor font size from 12px to 24px.
+- **Font size** -- Editor font size from 11px to 24px. Use `Ctrl++` or `Ctrl+-` (`Cmd` on macOS) to adjust it while editing.
 - **Line height** -- From 1.2 to 2.0.
 - **Editor font** -- Choose from JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, SF Mono, or system monospace.
 - **Tab size** -- 2, 4, or 8 spaces.
