@@ -100,6 +100,7 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [active, setActive] = useState<Section>("general");
   const [recording, setRecording] = useState<HotkeyAction | null>(null);
+  const [shortcutQuery, setShortcutQuery] = useState("");
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const update = (patch: Partial<AppSettings>) => {
@@ -158,6 +159,13 @@ export default function SettingsModal({
   };
 
   const categories = Array.from(new Set(hotkeys.map((h) => h.category)));
+  const normalizedShortcutQuery = shortcutQuery.trim().toLowerCase();
+  const filteredHotkeys = normalizedShortcutQuery
+    ? hotkeys.filter((h) =>
+        [h.label, h.action, h.category, h.keys, formatHotkey(h.keys, platform)]
+          .some((value) => value.toLowerCase().includes(normalizedShortcutQuery))
+      )
+    : hotkeys;
 
   // Render sections
   const renderGeneral = () => (
@@ -320,11 +328,40 @@ export default function SettingsModal({
         <span className="st-hint">Click a shortcut to rebind it</span>
         <button onClick={resetAllHotkeys} className="st-reset-all">Reset All</button>
       </div>
+      <div className="st-shortcut-search">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="m10.5 10.5 3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={shortcutQuery}
+          onChange={(e) => setShortcutQuery(e.target.value)}
+          placeholder="Search commands or keys"
+          aria-label="Search shortcuts"
+        />
+        {shortcutQuery && (
+          <button
+            type="button"
+            className="st-shortcut-search-clear"
+            onClick={() => setShortcutQuery("")}
+            aria-label="Clear shortcut search"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {normalizedShortcutQuery && (
+        <div className="st-shortcut-results">
+          {filteredHotkeys.length} {filteredHotkeys.length === 1 ? "shortcut" : "shortcuts"}
+        </div>
+      )}
       {categories.map((cat) => (
-        <div key={cat} className="st-shortcut-group">
-          <div className="st-shortcut-cat">{cat}</div>
-          {hotkeys
-            .filter((h) => h.category === cat)
+        filteredHotkeys.some((h) => h.category === cat) && (
+          <div key={cat} className="st-shortcut-group">
+            <div className="st-shortcut-cat">{cat}</div>
+            {filteredHotkeys
+              .filter((h) => h.category === cat)
             .map((h) => {
               const isRec = recording === h.action;
               const isDefault =
@@ -361,9 +398,13 @@ export default function SettingsModal({
                   </div>
                 </div>
               );
-            })}
-        </div>
+              })}
+          </div>
+        )
       ))}
+      {normalizedShortcutQuery && filteredHotkeys.length === 0 && (
+        <div className="st-shortcut-empty">No shortcuts match &quot;{shortcutQuery}&quot;.</div>
+      )}
     </div>
   );
 
