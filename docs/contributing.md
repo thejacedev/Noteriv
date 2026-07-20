@@ -49,7 +49,7 @@ Build useful CSS snippets and share them via the [NoterivSnippets](https://githu
 
 ### Improve Documentation
 
-Documentation improvements are valuable contributions. Fix typos, add missing details, improve examples, or write new guides. The documentation source files are in the `docs/` directory of the repository.
+Documentation improvements are valuable contributions. Fix typos, add missing details, improve examples, or write new guides. The documentation source files are in the `docs/` directory of this repository, which is the canonical source for [docs.noteriv.com](https://docs.noteriv.com). The marketing website's `/docs` route redirects there; do not add documentation content to the website project.
 
 ## Development Setup
 
