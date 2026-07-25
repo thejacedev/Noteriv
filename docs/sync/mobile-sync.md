@@ -5,11 +5,11 @@ order: 5
 
 # Mobile Sync
 
-The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub repositories. Since mobile platforms do not have a `git` binary available, the mobile app communicates directly with the GitHub REST API to push and pull files. The experience is designed to feel seamless -- you set up a repository once, and your notes sync automatically in the background.
+The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub, GitLab, Gitea, and Forgejo repositories. Since mobile platforms do not have a `git` binary available, the app communicates directly with each provider's REST API to push and pull files. The experience is designed to feel seamless: configure a repository once, then sync it in the background.
 
 ## How It Differs from Desktop Git Sync
 
-On the desktop, Noteriv calls the system `git` binary to run standard git commands (fetch, pull, commit, push). On mobile, there is no git binary, so the app uses the **GitHub Contents API** and **Git Trees API** to achieve the same result through HTTP requests.
+On the desktop, Noteriv calls the system `git` binary to run standard git commands (fetch, pull, commit, push). On mobile, there is no git binary, so the app uses the provider's repository file and tree APIs to achieve the same result through HTTP requests.
 
 | Operation | Desktop | Mobile |
 |---|---|---|
@@ -27,12 +27,12 @@ The trade-off is that mobile sync is slower for large vaults (each file requires
 
 1. Open the Noteriv mobile app.
 2. Go to Settings (gear icon).
-3. Tap "GitHub Sync" under the vault settings.
-4. Enter your GitHub repository URL. Both HTTPS formats are supported:
+3. Tap "Git Sync" under the vault settings.
+4. For GitHub, use the repository picker. For GitLab or Gitea/Forgejo, select the provider and enter the HTTPS clone URL, including the hostname for self-hosted instances.
    - `https://github.com/username/repo`
    - `https://github.com/username/repo.git`
    SSH URLs (`git@github.com:username/repo.git`) are also parsed correctly.
-5. Enter your GitHub personal access token with `repo` scope.
+5. Enter a personal access token with repository read and write access. GitHub requires the `repo` scope; GitLab and Gitea/Forgejo use the permissions configured when the token is created.
 6. Tap "Save".
 
 The app parses the URL to extract the repository owner and name, which are used to construct API endpoint URLs.
@@ -154,7 +154,7 @@ All other files participate in sync.
 
 ## Limitations
 
-- **GitHub only**: Mobile sync works exclusively with GitHub. GitLab, Bitbucket, and other git hosts are not supported.
+- **Supported providers**: Mobile sync supports GitHub, GitLab, Gitea, and Forgejo. GitLab and Gitea/Forgejo can use self-hosted instances when their HTTPS clone URL is entered in Settings. Bitbucket and arbitrary Git servers are not supported.
 - **No merge/rebase**: If the same file is modified both locally and remotely, the last writer wins. There are no conflict markers or merge logic on mobile.
 - **Individual commits per file**: Each pushed file creates its own commit, resulting in verbose commit history.
 - **Markdown files only for pull**: The pull operation filters to `.md` and `.markdown` files. Other file types (images, PDFs, canvases) are not pulled unless using Fresh Clone.

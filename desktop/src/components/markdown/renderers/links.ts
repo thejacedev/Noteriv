@@ -6,7 +6,9 @@ export const linkRenderer: InlineRenderer = {
 
   find(text: string, offset: number): InlineReplacement[] {
     const results: InlineReplacement[] = [];
-    const regex = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g;
+    // A URL can include a parenthesized segment, such as `/article-(mcp)`.
+    // Match one balanced level instead of stopping at the first closing paren.
+    const regex = /(?<!!)\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+?)\)/g;
     let match;
 
     while ((match = regex.exec(text)) !== null) {

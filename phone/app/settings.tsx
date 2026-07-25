@@ -18,8 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BUILT_IN_THEMES, AccentColors, ThemeDefinition } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { useTheme } from '@/context/ThemeContext';
-import { KEYS, getItem, setItem } from '@/lib/storage';
-import * as GitSync from '@/lib/github-sync';
+import { KEYS, setItem } from '@/lib/storage';
+import * as GitSync from '@/lib/provider-sync';
+import { GitProvider } from '@/types';
 import { loadSnippets } from '@/lib/css-snippets';
 import { getInstalledPlugins, getEnabledPluginIds } from '@/lib/plugins';
 import {
@@ -45,13 +46,15 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
 
-  // GitHub sync state
+  // Git sync state
   const [ghToken, setGhToken] = useState<string | null>(null);
   const [tokenInput, setTokenInput] = useState('');
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [remoteInput, setRemoteInput] = useState('');
+  const [providerInput, setProviderInput] = useState<GitProvider>('gitlab');
 
   // Repo picker state (inside token modal)
   const [validatingToken, setValidatingToken] = useState(false);
@@ -72,12 +75,14 @@ export default function SettingsScreen() {
   const [loadingCommunityThemes, setLoadingCommunityThemes] = useState(false);
   const [installingThemeId, setInstallingThemeId] = useState<string | null>(null);
 
-  // Load GitHub token for current vault
+  // Load the provider-neutral token, falling back to the legacy GitHub token.
   useEffect(() => {
     if (vault) {
-      getItem<string>(KEYS.GITHUB_TOKEN(vault.id)).then((token) => {
+      GitSync.getVaultToken(vault.id).then((token) => {
         setGhToken(token);
       });
+      setRemoteInput(vault.gitRemote ?? '');
+      setProviderInput(vault.gitProvider ?? GitSync.detectProvider(vault.gitRemote ?? '') ?? 'gitlab');
     }
   }, [vault]);
 
@@ -127,7 +132,7 @@ export default function SettingsScreen() {
 
     // Save the repo URL on the vault
     const { updateVault } = await import('@/lib/vault');
-    await updateVault(vault.id, { gitRemote: selectedRepoUrl });
+    await updateVault(vault.id, { gitRemote: selectedRepoUrl, gitProvider: 'github' });
     await refreshVaults();
 
     // Reset modal state
@@ -142,7 +147,7 @@ export default function SettingsScreen() {
     setSyncStatus('Syncing...');
     setSyncing(true);
     try {
-      const result = await GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, vault.gitBranch || undefined);
+      const result = await GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, vault.gitBranch || undefined, 'github');
       setLastSyncTime(new Date().toLocaleTimeString());
       setSyncStatus(`Pulled: ${result.pulled}, Pushed: ${result.pushed}`);
     } catch (err) {
@@ -161,6 +166,7 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.removeItem(KEYS.GITHUB_TOKEN(vault.id));
+          await AsyncStorage.removeItem(KEYS.GIT_TOKEN(vault.id));
           setGhToken(null);
         },
       },
@@ -176,7 +182,8 @@ export default function SettingsScreen() {
         vault.path,
         ghToken,
         vault.gitRemote,
-        vault.gitBranch || undefined
+        vault.gitBranch || undefined,
+        vault.gitProvider
       );
       refreshFiles();
       const now = new Date().toLocaleTimeString();
@@ -197,6 +204,30 @@ export default function SettingsScreen() {
     }
   }, [vault, ghToken, refreshFiles]);
 
+  const handleSaveCustomRemote = useCallback(async () => {
+    if (!vault || !remoteInput.trim() || !tokenInput.trim()) return;
+    const provider = GitSync.detectProvider(remoteInput.trim(), providerInput);
+    if (!provider || provider === 'github') return;
+    const token = tokenInput.trim();
+    await setItem(KEYS.GIT_TOKEN(vault.id), token);
+    const { updateVault } = await import('@/lib/vault');
+    await updateVault(vault.id, { gitRemote: remoteInput.trim(), gitProvider: provider });
+    setGhToken(token);
+    setTokenInput('');
+    await refreshVaults();
+    setSyncing(true);
+    try {
+      const result = await GitSync.sync(vault.path, token, remoteInput.trim(), vault.gitBranch || undefined, provider);
+      refreshFiles();
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setSyncStatus(`Pulled: ${result.pulled}, Pushed: ${result.pushed}${result.errors.length ? `, Errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      setSyncStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [vault, remoteInput, tokenInput, providerInput, refreshFiles, refreshVaults]);
+
   const handleFreshClone = useCallback(async () => {
     if (!vault || !ghToken || !vault.gitRemote) return;
     Alert.alert(
@@ -215,7 +246,8 @@ export default function SettingsScreen() {
                 vault.path,
                 ghToken,
                 vault.gitRemote!,
-                vault.gitBranch || undefined
+                vault.gitBranch || undefined,
+                vault.gitProvider
               );
               refreshFiles();
               setLastSyncTime(new Date().toLocaleTimeString());
@@ -460,6 +492,9 @@ export default function SettingsScreen() {
     '1.0.0';
 
   const gitConnected = !!ghToken && !!vault?.gitRemote;
+  const provider = vault?.gitRemote
+    ? GitSync.detectProvider(vault.gitRemote, vault.gitProvider)
+    : null;
 
   return (
     <ScrollView
@@ -685,8 +720,8 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* GitHub */}
-      {renderSectionHeader('GitHub', 'logo-github')}
+      {/* Git sync */}
+      {renderSectionHeader('Git Sync', 'git-branch-outline')}
       <View style={[s.section, { backgroundColor: colors.bgTertiary }]}>
         {gitConnected ? (
           <>
@@ -748,20 +783,22 @@ export default function SettingsScreen() {
                   {syncing ? 'Syncing...' : 'Sync Now'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  s.syncButton,
-                  { backgroundColor: colors.red },
-                  syncing && { opacity: 0.6 },
-                ]}
-                onPress={handleFreshClone}
-                disabled={syncing}
-              >
-                <Ionicons name="cloud-download-outline" size={18} color={colors.bgPrimary} />
-                <Text style={[s.syncButtonText, { color: colors.bgPrimary }]}>
-                  Fresh Clone
-                </Text>
-              </TouchableOpacity>
+              {provider === 'github' && (
+                <TouchableOpacity
+                  style={[
+                    s.syncButton,
+                    { backgroundColor: colors.red },
+                    syncing && { opacity: 0.6 },
+                  ]}
+                  onPress={handleFreshClone}
+                  disabled={syncing}
+                >
+                  <Ionicons name="cloud-download-outline" size={18} color={colors.bgPrimary} />
+                  <Text style={[s.syncButtonText, { color: colors.bgPrimary }]}>
+                    Fresh Clone
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
@@ -774,7 +811,7 @@ export default function SettingsScreen() {
               onPress={handleDisconnectGitHub}
             >
               <Text style={{ color: colors.red, fontSize: 15, fontWeight: '500' }}>
-                Disconnect GitHub
+                Disconnect Remote
               </Text>
               <Ionicons name="close-circle-outline" size={20} color={colors.red} />
             </TouchableOpacity>
@@ -782,7 +819,7 @@ export default function SettingsScreen() {
         ) : (
           <View style={s.gitDisconnected}>
             <Text style={[s.gitDisconnectedText, { color: colors.textMuted }]}>
-              Connect your GitHub account to sync notes across devices.
+                Connect GitHub, GitLab, Gitea, or Forgejo to sync notes across devices.
             </Text>
             <TouchableOpacity
               style={[s.connectButton, { backgroundColor: colors.accent }]}
@@ -793,6 +830,21 @@ export default function SettingsScreen() {
                 Connect GitHub
               </Text>
             </TouchableOpacity>
+            <View style={s.customRemoteForm}>
+              <Text style={[s.modalHint, { color: colors.textMuted }]}>For GitLab or Gitea/Forgejo, enter the clone URL and a token with repository read/write access.</Text>
+              <View style={s.providerRow}>
+                {(['gitlab', 'gitea'] as GitProvider[]).map((item) => (
+                  <TouchableOpacity key={item} style={[s.providerOption, { backgroundColor: colors.bgSecondary }, providerInput === item && { backgroundColor: colors.accent }]} onPress={() => setProviderInput(item)}>
+                    <Text style={{ color: providerInput === item ? colors.bgPrimary : colors.textSecondary, fontWeight: '600' }}>{item === 'gitlab' ? 'GitLab' : 'Gitea / Forgejo'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="https://git.example.com/group/repo.git" placeholderTextColor={colors.textMuted} value={remoteInput} onChangeText={setRemoteInput} autoCapitalize="none" autoCorrect={false} />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Personal access token" placeholderTextColor={colors.textMuted} value={tokenInput} onChangeText={setTokenInput} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+              <TouchableOpacity style={[s.connectButton, { backgroundColor: colors.accent }, (!remoteInput.trim() || !tokenInput.trim() || syncing) && { opacity: 0.5 }]} onPress={handleSaveCustomRemote} disabled={!remoteInput.trim() || !tokenInput.trim() || syncing}>
+                <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{syncing ? 'Saving...' : 'Save & Sync Remote'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -866,7 +918,7 @@ export default function SettingsScreen() {
                   Connect GitHub
                 </Text>
                 <Text style={[s.modalHint, { color: colors.textMuted }]}>
-                  Enter a Personal Access Token with the "repo" scope.
+                  Enter a Personal Access Token with the repo scope.
                 </Text>
                 <TextInput
                   style={[
@@ -1210,6 +1262,21 @@ const s = StyleSheet.create({
   connectButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  customRemoteForm: {
+    marginTop: 18,
+    width: '100%',
+    gap: 10,
+  },
+  providerRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  providerOption: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
   },
 
   // Ecosystem

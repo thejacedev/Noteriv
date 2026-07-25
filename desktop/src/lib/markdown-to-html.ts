@@ -150,13 +150,13 @@ function inlineFormat(text: string): string {
 
   // Images: ![alt](url)
   result = result.replace(
-    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    /!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))+?)\)/g,
     '<img src="$2" alt="$1">'
   );
 
   // Links: [text](url)
   result = result.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
+    /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+?)\)/g,
     '<a href="$2">$1</a>'
   );
 

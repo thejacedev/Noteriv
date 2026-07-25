@@ -3,8 +3,7 @@ import { AppSettings, Vault, WorkspaceState, FileEntry } from '@/types';
 import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import * as VaultOps from '@/lib/vault';
 import * as FS from '@/lib/file-system';
-import * as GitSync from '@/lib/github-sync';
-import { getItem, KEYS } from '@/lib/storage';
+import * as GitSync from '@/lib/provider-sync';
 
 interface AppContextType {
   // Vault
@@ -119,17 +118,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [workspace, vault]);
 
-  // Auto-pull from GitHub when vault opens
+  // Auto-pull from the configured forge when vault opens.
   useEffect(() => {
     if (!vault?.gitRemote || hasPulledOnOpen.current) return;
     hasPulledOnOpen.current = true;
 
     (async () => {
       try {
-        const token = await getItem<string>(KEYS.GITHUB_TOKEN(vault.id));
+        const token = await GitSync.getVaultToken(vault.id);
         if (!token) return;
-        console.log('[Noteriv] Auto-pulling from GitHub...');
-        const result = await GitSync.pull(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined);
+        console.log('[Noteriv] Auto-pulling from remote...');
+        const result = await GitSync.pull(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
         console.log(`[Noteriv] Pull complete: ${result.pulled} files, ${result.errors.length} errors`);
         if (result.pulled > 0) {
           // Refresh file list after pull
@@ -155,14 +154,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     autoSyncTimer.current = setInterval(async () => {
       try {
-        const token = await getItem<string>(KEYS.GITHUB_TOKEN(vault.id));
+        const token = await GitSync.getVaultToken(vault.id);
         if (!token) return;
         // Save current file before sync
         if (isDirty && currentFile) {
           FS.writeFile(currentFile, content);
           setIsDirty(false);
         }
-        const result = await GitSync.sync(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined);
+        const result = await GitSync.sync(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
         if (result.pulled > 0 && currentDir) {
           const entries = FS.readDir(currentDir);
           setFiles(entries);

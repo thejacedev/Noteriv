@@ -3,10 +3,14 @@ export interface Vault {
   name: string;
   path: string;
   gitRemote: string | null;
+  // Needed for arbitrary self-hosted hosts where the URL alone cannot identify the forge.
+  gitProvider?: GitProvider;
   gitBranch: string;
   autoSync: boolean;
   lastOpened: number;
 }
+
+export type GitProvider = 'github' | 'gitlab' | 'gitea';
 
 export interface AppSettings {
   autoSaveInterval: number;

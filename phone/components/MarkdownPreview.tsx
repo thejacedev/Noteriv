@@ -42,6 +42,19 @@ type InlineNode =
   | { type: 'math'; code: string }
   | { type: 'footnote_ref'; id: string };
 
+function findLinkDestinationEnd(raw: string, start: number): number {
+  let depth = 1;
+  for (let index = start; index < raw.length; index++) {
+    if (raw[index] === '\\') {
+      index++;
+      continue;
+    }
+    if (raw[index] === '(') depth++;
+    if (raw[index] === ')' && --depth === 0) return index;
+  }
+  return -1;
+}
+
 function parseInline(raw: string): InlineNode[] {
   const nodes: InlineNode[] = [];
   let i = 0;
@@ -92,7 +105,7 @@ function parseInline(raw: string): InlineNode[] {
     if (raw[i] === '!' && raw[i + 1] === '[') {
       const altEnd = raw.indexOf(']', i + 2);
       if (altEnd !== -1 && raw[altEnd + 1] === '(') {
-        const urlEnd = raw.indexOf(')', altEnd + 2);
+        const urlEnd = findLinkDestinationEnd(raw, altEnd + 2);
         if (urlEnd !== -1) {
           const fullAlt = raw.substring(i + 2, altEnd);
           const url = raw.substring(altEnd + 2, urlEnd);
@@ -116,7 +129,7 @@ function parseInline(raw: string): InlineNode[] {
     if (raw[i] === '[') {
       const textEnd = raw.indexOf(']', i + 1);
       if (textEnd !== -1 && raw[textEnd + 1] === '(') {
-        const urlEnd = raw.indexOf(')', textEnd + 2);
+        const urlEnd = findLinkDestinationEnd(raw, textEnd + 2);
         if (urlEnd !== -1) {
           nodes.push({
             type: 'link',

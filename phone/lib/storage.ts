@@ -7,6 +7,7 @@ const KEYS = {
   SETUP_COMPLETE: 'noteriv:setupComplete',
   WORKSPACE: (vaultId: string) => `noteriv:workspace:${vaultId}`,
   GITHUB_TOKEN: (vaultId: string) => `noteriv:ghToken:${vaultId}`,
+  GIT_TOKEN: (vaultId: string) => `noteriv:gitToken:${vaultId}`,
 };
 
 export async function getItem<T>(key: string): Promise<T | null> {
