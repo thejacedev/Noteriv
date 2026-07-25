@@ -117,6 +117,33 @@
   font-weight: 600;
 }
 
+.graph-edge-legend {
+  position: absolute;
+  bottom: 58px;
+  left: 16px;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.graph-edge-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.graph-edge-legend .graph-legend-arrow {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* Zoom controls */
 .graph-zoom-controls {
   position: absolute;

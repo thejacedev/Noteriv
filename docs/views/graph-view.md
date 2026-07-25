@@ -23,9 +23,9 @@ When you open the graph, Noteriv scans every `.md` and `.markdown` file in the a
 
 1. Creates a **node** using the file name (without the `.md` extension) as the label.
 2. Extracts all `[[wiki-link]]` references from the file content using the pattern `[[target]]` or `[[target|alias]]`.
-3. Creates an **edge** between the source file and each linked target, provided the target file exists in the vault.
+3. Creates a directed **edge** from the source file to each linked target, provided the target file exists in the vault.
 
-Links are resolved case-insensitively. If your file contains `[[Meeting Notes]]` and a file named `meeting notes.md` exists, they are connected. Duplicate edges between the same pair of files are collapsed into a single edge.
+Links are resolved case-insensitively. If your file contains `[[Meeting Notes]]` and a file named `meeting notes.md` exists, they are connected. A one-way link has an arrowhead at its target. When both notes link to each other, the relationship is drawn with arrowheads at both ends. Repeated links in the same direction are collapsed into one relationship.
 
 ## Node Sizing
 
@@ -98,7 +98,7 @@ The bottom-left corner of the graph overlay displays two counters:
 
 ## Mobile
 
-On the mobile app, the graph view is implemented as a full-screen WebView rendering an HTML5 canvas. The same force simulation runs in JavaScript inside the WebView. Tapping a node sends a message back to the React Native layer, which navigates to the corresponding note in the editor.
+On the mobile app, the graph view is implemented as a full-screen WebView rendering an HTML5 canvas. The same directed and reciprocal edge styles are used there. Tapping a node sends a message back to the React Native layer, which navigates to the corresponding note in the editor.
 
 Due to the performance constraints of mobile devices, the mobile graph filters out orphan nodes (those with zero connections) to reduce the number of rendered elements.
 

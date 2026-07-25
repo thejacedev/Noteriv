@@ -24,6 +24,7 @@ interface GraphNode {
 interface GraphEdge {
   source: string;
   target: string;
+  reciprocal: boolean;
 }
 
 export default function GraphScreen() {
@@ -39,7 +40,7 @@ export default function GraphScreen() {
     (async () => {
       const files = await listAllMarkdownFiles(vault.path);
       const nodes: GraphNode[] = [];
-      const edges: GraphEdge[] = [];
+      const directedEdges: { source: string; target: string }[] = [];
       const nameMap = new Map<string, string>(); // lowercase name -> id
 
       for (const f of files) {
@@ -59,10 +60,23 @@ export default function GraphScreen() {
           const target = m[1].trim().toLowerCase();
           const targetId = nameMap.get(target);
           if (targetId && targetId !== f.fileName && !seen.has(targetId)) {
-            edges.push({ source: f.fileName, target: targetId });
+            directedEdges.push({ source: f.fileName, target: targetId });
             seen.add(targetId);
           }
         }
+      }
+
+      const directedKeys = new Set(directedEdges.map((edge) => `${edge.source}\0${edge.target}`));
+      const relationshipKeys = new Set<string>();
+      const edges: GraphEdge[] = [];
+      for (const edge of directedEdges) {
+        const key = [edge.source, edge.target].sort().join('\0');
+        if (relationshipKeys.has(key)) continue;
+        relationshipKeys.add(key);
+        edges.push({
+          ...edge,
+          reciprocal: directedKeys.has(`${edge.target}\0${edge.source}`),
+        });
       }
 
       // Filter to only nodes that have connections
@@ -130,10 +144,13 @@ function buildGraphHTML(
   * { margin: 0; padding: 0; }
   body { background: ${colors.bgPrimary}; overflow: hidden; touch-action: none; }
   canvas { display: block; }
+  .legend { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 12px; padding: 5px 9px; border: 1px solid ${colors.border}; border-radius: 6px; background: ${colors.bgSecondary}; color: ${colors.textMuted}; font: 11px -apple-system, sans-serif; }
+  .legend b { color: ${colors.accent}; font-size: 14px; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div class="legend"><span><b>→</b> one-way</span><span><b>↔</b> reciprocal</span></div>
 <script>
 const W = ${width}, H = ${height - 100};
 const canvas = document.getElementById('c');
@@ -201,19 +218,41 @@ function simulate() {
   }
 }
 
+function drawArrow(x, y, angle) {
+  const size = 6;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size);
+  ctx.lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size);
+  ctx.closePath();
+  ctx.fillStyle = '${colors.textMuted}';
+  ctx.fill();
+}
+
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
   // Edges
-  ctx.strokeStyle = '${colors.textMuted}44';
-  ctx.lineWidth = 1;
   for (const e of edges) {
     const a = nodeMap[e.source], b = nodeMap[e.target];
     if (!a || !b) continue;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / distance, uy = dy / distance;
+    const sourceRadius = Math.min(3 + (conns[a.id] || 1) * 1.5, 12);
+    const targetRadius = Math.min(3 + (conns[b.id] || 1) * 1.5, 12);
+    const startX = a.x + ux * (sourceRadius + 2), startY = a.y + uy * (sourceRadius + 2);
+    const endX = b.x - ux * (targetRadius + 3), endY = b.y - uy * (targetRadius + 3);
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.strokeStyle = e.reciprocal ? '${colors.textMuted}88' : '${colors.textMuted}66';
+    ctx.lineWidth = e.reciprocal ? 1.25 : 1;
     ctx.stroke();
+
+    const angle = Math.atan2(dy, dx);
+    drawArrow(endX, endY, angle);
+    if (e.reciprocal) drawArrow(startX, startY, angle + Math.PI);
   }
 
   // Nodes

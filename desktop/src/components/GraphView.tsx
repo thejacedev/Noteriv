@@ -25,6 +25,7 @@ interface GraphNode {
 interface GraphEdge {
   source: string;       // node id (file path)
   target: string;       // node id (file path)
+  reciprocal: boolean;
 }
 
 interface TooltipInfo {
@@ -59,6 +60,27 @@ function nodeRadius(connections: number, maxConnections: number): number {
   if (maxConnections <= 0) return MIN_NODE_RADIUS;
   const t = Math.min(connections / Math.max(maxConnections, 1), 1);
   return MIN_NODE_RADIUS + t * (MAX_NODE_RADIUS - MIN_NODE_RADIUS);
+}
+
+function drawArrowHead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  size: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(
+    x - Math.cos(angle - Math.PI / 6) * size,
+    y - Math.sin(angle - Math.PI / 6) * size
+  );
+  ctx.lineTo(
+    x - Math.cos(angle + Math.PI / 6) * size,
+    y - Math.sin(angle + Math.PI / 6) * size
+  );
+  ctx.closePath();
+  ctx.fill();
 }
 
 // ── Component ──
@@ -137,9 +159,9 @@ export default function GraphView({
           labelToPath.set(label, f.filePath);
         }
 
-        // Parse links and build edges
-        const edgeSet = new Set<string>();
-        const edgeList: GraphEdge[] = [];
+        // Preserve link direction first, then collapse reciprocal pairs into
+        // one relationship that can be rendered with arrows at both ends.
+        const directedLinks = new Map<string, { source: string; target: string }>();
 
         for (const { file, content } of contents) {
           let match: RegExpExecArray | null;
@@ -148,14 +170,22 @@ export default function GraphView({
             const linkTarget = match[1].trim().toLowerCase();
             const targetPath = labelToPath.get(linkTarget);
             if (targetPath && targetPath !== file.filePath) {
-              // Use sorted key to deduplicate bidirectional edges
-              const key = [file.filePath, targetPath].sort().join("|||");
-              if (!edgeSet.has(key)) {
-                edgeSet.add(key);
-                edgeList.push({ source: file.filePath, target: targetPath });
-              }
+              const key = `${file.filePath}\0${targetPath}`;
+              directedLinks.set(key, { source: file.filePath, target: targetPath });
             }
           }
+        }
+
+        const relationshipSet = new Set<string>();
+        const edgeList: GraphEdge[] = [];
+        for (const link of directedLinks.values()) {
+          const relationshipKey = [link.source, link.target].sort().join("\0");
+          if (relationshipSet.has(relationshipKey)) continue;
+          relationshipSet.add(relationshipKey);
+          edgeList.push({
+            ...link,
+            reciprocal: directedLinks.has(`${link.target}\0${link.source}`),
+          });
         }
 
         // Count connections per node
@@ -389,15 +419,35 @@ export default function GraphView({
         const isHighlighted = hovered && highlightSet.has(a.id) && highlightSet.has(b.id);
         const isDimmedBySearch = search && (!searchMatched.has(a.id) && !searchMatched.has(b.id));
 
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 1) continue;
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const startX = a.x + ux * (nodeRadius(a.connections, mc) + 2);
+        const startY = a.y + uy * (nodeRadius(a.connections, mc) + 2);
+        const endX = b.x - ux * (nodeRadius(b.connections, mc) + 3);
+        const endY = b.y - uy * (nodeRadius(b.connections, mc) + 3);
+        const edgeColor = isHighlighted ? colors.accent : colors.border;
+        const edgeAlpha = isDimmedBySearch ? 0.08 : isHighlighted ? 0.85 : e.reciprocal ? 0.42 : 0.3;
+
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         ctx.strokeStyle = isHighlighted
           ? colors.accent
           : colors.border;
-        ctx.globalAlpha = isDimmedBySearch ? 0.08 : isHighlighted ? 0.8 : 0.25;
-        ctx.lineWidth = isHighlighted ? 1.5 : 1;
+        ctx.globalAlpha = edgeAlpha;
+        ctx.lineWidth = isHighlighted ? 1.5 : e.reciprocal ? 1.25 : 1;
         ctx.stroke();
+
+        const angle = Math.atan2(dy, dx);
+        ctx.fillStyle = edgeColor;
+        drawArrowHead(ctx, endX, endY, angle, isHighlighted ? 7 : 6);
+        if (e.reciprocal) {
+          drawArrowHead(ctx, startX, startY, angle + Math.PI, isHighlighted ? 7 : 6);
+        }
         ctx.globalAlpha = 1;
       }
 
@@ -742,6 +792,11 @@ export default function GraphView({
             <span className="graph-stat-value">{stats.edgeCount}</span>
             <span>connections</span>
           </div>
+        </div>
+
+        <div className="graph-edge-legend" aria-label="Link direction legend">
+          <span><span className="graph-legend-arrow">→</span> one-way</span>
+          <span><span className="graph-legend-arrow">↔</span> reciprocal</span>
         </div>
 
         {/* Zoom controls */}
