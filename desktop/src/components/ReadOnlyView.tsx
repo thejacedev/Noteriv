@@ -12,6 +12,7 @@ import {
   mdHighlightStyle,
   editorTheme,
   renderAllLines,
+  mathExtension,
 } from "./markdown";
 
 interface ReadOnlyViewProps {
@@ -36,6 +37,7 @@ export default function ReadOnlyView({ content, onChange, className = "" }: Read
       editorTheme,
       markdownRenderTheme,
       liveMarkdownPlugin,
+      mathExtension(),
 
       renderAllLines.of(true),
       EditorView.lineWrapping,

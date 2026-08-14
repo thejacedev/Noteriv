@@ -47,6 +47,7 @@ pub const SHIM_JS: &str = r#"
       windowMaximize: function () { return invoke("window_maximize"); },
       windowClose: function () { return invoke("window_close"); },
       windowIsMaximized: function () { return invoke("window_is_maximized"); },
+      windowSetTitle: function (title) { return invoke("window_set_title", { title: title }); },
       getPlatform: function () { return invoke("window_platform"); },
 
       // ---- workspace

@@ -120,6 +120,7 @@ export default function Home() {
   const [fileViewModes, setFileViewModes] = useState<Record<string, ViewMode>>({});
   const [editorContextMenu, setEditorContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(250);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [fileOrder, setFileOrder] = useState<Record<string, string[]>>({});
@@ -190,11 +191,18 @@ export default function Home() {
   const gitPushRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workspaceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsRef = useRef(settings);
+  const sidebarCollapsedRef = useRef(sidebarCollapsed);
+  const manualSidebarCollapsedRef = useRef(sidebarCollapsed);
+  const responsiveSidebarRef = useRef(false);
   const fontSizeSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    sidebarCollapsedRef.current = sidebarCollapsed;
+  }, [sidebarCollapsed]);
 
   useEffect(() => () => {
     if (fontSizeSaveRef.current) clearTimeout(fontSizeSaveRef.current);
@@ -208,6 +216,51 @@ export default function Home() {
   const pdfFile = currentTab?.kind === "pdf" ? currentTab.filePath : null;
   const content = currentTab?.content || "";
   const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
+
+  useEffect(() => {
+    const title = activeTab ? `${activeTab} - Noteriv` : activeVault ? `${activeVault.path} - Noteriv` : "Noteriv";
+    document.title = title;
+    window.electronAPI?.windowSetTitle(title);
+  }, [activeTab, activeVault]);
+
+  const handleToggleSidebar = useCallback(() => {
+    responsiveSidebarRef.current = false;
+    const collapsed = !sidebarCollapsedRef.current;
+    manualSidebarCollapsedRef.current = collapsed;
+    sidebarCollapsedRef.current = collapsed;
+    setSidebarCollapsed(collapsed);
+  }, []);
+
+  useEffect(() => {
+    if (appState !== "app") return;
+
+    const updateResponsiveSidebar = () => {
+      if (!settings.autoCollapseSidebar) {
+        if (responsiveSidebarRef.current) {
+          responsiveSidebarRef.current = false;
+          sidebarCollapsedRef.current = manualSidebarCollapsedRef.current;
+          setSidebarCollapsed(manualSidebarCollapsedRef.current);
+        }
+        return;
+      }
+
+      if (window.innerWidth < settings.sidebarCollapseWidth) {
+        if (!sidebarCollapsedRef.current) {
+          responsiveSidebarRef.current = true;
+          sidebarCollapsedRef.current = true;
+          setSidebarCollapsed(true);
+        }
+      } else if (responsiveSidebarRef.current) {
+        responsiveSidebarRef.current = false;
+        sidebarCollapsedRef.current = manualSidebarCollapsedRef.current;
+        setSidebarCollapsed(manualSidebarCollapsedRef.current);
+      }
+    };
+
+    updateResponsiveSidebar();
+    window.addEventListener("resize", updateResponsiveSidebar);
+    return () => window.removeEventListener("resize", updateResponsiveSidebar);
+  }, [appState, settings.autoCollapseSidebar, settings.sidebarCollapseWidth]);
 
   // Apply per-file view mode when switching tabs
   useEffect(() => {
@@ -241,14 +294,15 @@ export default function Home() {
       openTabs: tabs.map((t) => t.filePath),
       activeTab,
       expandedFolders,
-      sidebarCollapsed,
+      sidebarCollapsed: manualSidebarCollapsedRef.current,
+      sidebarWidth,
       viewMode,
       fileOrder,
       fileViewModes,
       pinnedTabs: Array.from(pinnedTabs),
     };
     await window.electronAPI.saveWorkspace(activeVault.path, state);
-  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, fileViewModes, pinnedTabs]);
+  }, [activeVault, tabs, activeTab, expandedFolders, sidebarCollapsed, sidebarWidth, viewMode, fileOrder, fileViewModes, pinnedTabs]);
 
   // Debounced workspace save
   const debounceSaveWorkspace = useCallback(() => {
@@ -259,7 +313,7 @@ export default function Home() {
   // Save workspace when state changes
   useEffect(() => {
     if (appState === "app") debounceSaveWorkspace();
-  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, viewMode, fileOrder, fileViewModes, pinnedTabs, debounceSaveWorkspace]);
+  }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, sidebarWidth, viewMode, fileOrder, fileViewModes, pinnedTabs, debounceSaveWorkspace]);
 
   const loadWorkspace = useCallback(async (vault: Vault) => {
     if (!window.electronAPI) return;
@@ -267,7 +321,12 @@ export default function Home() {
     if (!ws) return;
 
     // Restore UI state
-    setSidebarCollapsed(ws.sidebarCollapsed ?? false);
+    const restoredSidebarCollapsed = ws.sidebarCollapsed ?? false;
+    manualSidebarCollapsedRef.current = restoredSidebarCollapsed;
+    sidebarCollapsedRef.current = restoredSidebarCollapsed;
+    responsiveSidebarRef.current = false;
+    setSidebarCollapsed(restoredSidebarCollapsed);
+    setSidebarWidth(Math.max(180, Math.min(520, ws.sidebarWidth ?? 250)));
     setViewMode(ws.viewMode ?? "live");
     setExpandedFolders(ws.expandedFolders ?? []);
     setFileOrder(ws.fileOrder ?? {});
@@ -609,6 +668,22 @@ export default function Home() {
   // Vault operations
   // ============================================================
 
+  const saveDirtyTabs = useCallback(async (): Promise<boolean> => {
+    if (!window.electronAPI) return false;
+    const dirtyTabs = tabs.filter((tab) => !tab.kind && tab.content !== tab.savedContent);
+    for (const tab of dirtyTabs) {
+      const saved = await window.electronAPI.writeFile(tab.filePath, tab.content);
+      if (!saved) return false;
+    }
+    if (dirtyTabs.length > 0) {
+      const savedPaths = new Set(dirtyTabs.map((tab) => tab.filePath));
+      setTabs((current) => current.map((tab) =>
+        savedPaths.has(tab.filePath) ? { ...tab, savedContent: tab.content } : tab
+      ));
+    }
+    return true;
+  }, [tabs]);
+
   const handleSetupComplete = useCallback(async (vault: Vault) => {
     setActiveVault(vault);
     if (window.electronAPI) setVaults(await window.electronAPI.getVaults());
@@ -620,6 +695,7 @@ export default function Home() {
 
   const handleSwitchVault = useCallback(async (id: string) => {
     if (!window.electronAPI) return;
+    if (!await saveDirtyTabs()) return;
     // Save current workspace first
     await saveWorkspace();
     const vault = await window.electronAPI.setActiveVault(id);
@@ -629,7 +705,42 @@ export default function Home() {
       setActiveTab(null);
       await loadWorkspace(vault);
     }
-  }, [saveWorkspace, loadWorkspace]);
+  }, [saveDirtyTabs, saveWorkspace, loadWorkspace]);
+
+  const handleOpenFolderAsVault = useCallback(async () => {
+    if (!window.electronAPI) return;
+    const folder = await window.electronAPI.openFolder();
+    if (!folder) return;
+
+    const normalize = (value: string) => value.replace(/[\\/]+$/, "").toLowerCase();
+    const existing = vaults.find((vault) => normalize(vault.path) === normalize(folder));
+    if (existing) {
+      await handleSwitchVault(existing.id);
+      return;
+    }
+
+    if (!await saveDirtyTabs()) return;
+    await saveWorkspace();
+    const name = folder.split(/[\\/]/).filter(Boolean).pop() || "Vault";
+    const created = await window.electronAPI.createVault({ name, vaultPath: folder });
+    const active = await window.electronAPI.setActiveVault(created.id) || created;
+    setVaults(await window.electronAPI.getVaults());
+    setActiveVault(active);
+    setTabs([]);
+    setActiveTab(null);
+    setExpandedFolders([]);
+    setFileOrder({});
+    setFileViewModes({});
+    setPinnedTabs(new Set());
+    setViewMode("live");
+    setSidebarWidth(250);
+    manualSidebarCollapsedRef.current = false;
+    sidebarCollapsedRef.current = false;
+    setSidebarCollapsed(false);
+    setSidebarRefresh((value) => value + 1);
+    setAppState("app");
+    await loadWorkspace(active);
+  }, [vaults, handleSwitchVault, saveDirtyTabs, saveWorkspace, loadWorkspace]);
 
   const handleDeleteVault = useCallback(async (id: string) => {
     if (!window.electronAPI) return;
@@ -1262,7 +1373,7 @@ export default function Home() {
       commandPalette: () => {},
       findInFile: () => {},
       findInVault: () => setShowVaultSearch(true),
-      toggleSidebar: () => setSidebarCollapsed((c) => !c),
+      toggleSidebar: handleToggleSidebar,
       toggleViewMode: () => setViewMode((m) => m === "live" ? "view" : m === "view" ? "source" : "live"),
       toggleFullscreen: handleToggleFullscreen,
       zenMode: handleZenMode,
@@ -1324,7 +1435,7 @@ export default function Home() {
       closeSplit: handleCloseSplit,
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit]);
 
   // ============================================================
   // Recent commands handler
@@ -1452,7 +1563,7 @@ export default function Home() {
         findInFile: () => {}, // Handled by CodeMirror
         findInVault: () => setShowVaultSearch(true),
         // View
-        toggleSidebar: () => setSidebarCollapsed((c) => !c),
+        toggleSidebar: handleToggleSidebar,
         toggleViewMode: () => setViewMode((m) => m === "live" ? "view" : m === "view" ? "source" : "live"),
         toggleFullscreen: handleToggleFullscreen,
         zenMode: handleZenMode,
@@ -1532,7 +1643,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize]);
 
   // Electron menu events
   useEffect(() => {
@@ -1546,6 +1657,12 @@ export default function Home() {
     ];
     return () => cleanups.forEach((fn) => fn());
   }, [appState, handleSave, handleSaveAs, handleNewFile, handleOpenFile]);
+
+  // Folder opening must also work before the first vault has been configured.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI) return;
+    return window.electronAPI.onMenuOpenFolder(handleOpenFolderAsVault);
+  }, [handleOpenFolderAsVault]);
 
   // Web clipper: refresh sidebar when a note is clipped
   useEffect(() => {
@@ -1590,7 +1707,7 @@ export default function Home() {
           onTabSelect={setActiveTab}
           onTabClose={closeTab}
           onTabReorder={reorderTabs}
-          onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
+          onToggleSidebar={handleToggleSidebar}
           onViewModeChange={setViewMode}
           onNewFile={handleNewFile}
           onSave={handleSave}
@@ -1621,6 +1738,8 @@ export default function Home() {
               return Array.from(next);
             });
             setSidebarCollapsed(false);
+            manualSidebarCollapsedRef.current = false;
+            sidebarCollapsedRef.current = false;
           }}
           onCopyPath={(filePath) => {
             navigator.clipboard.writeText(filePath);
@@ -1718,6 +1837,9 @@ export default function Home() {
             onNewFile={handleNewFile}
             onNewFolder={handleNewFolder}
             collapsed={sidebarCollapsed}
+            width={sidebarWidth}
+            onWidthChange={setSidebarWidth}
+            onCollapse={handleToggleSidebar}
             expandedFolders={expandedFolders}
             onExpandedFoldersChange={setExpandedFolders}
             fileOrder={fileOrder}

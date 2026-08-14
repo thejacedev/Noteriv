@@ -62,6 +62,7 @@ pub fn run() {
             commands_window::window_maximize,
             commands_window::window_close,
             commands_window::window_is_maximized,
+            commands_window::window_set_title,
             commands_window::window_platform,
             // workspace
             commands_workspace::workspace_load,
@@ -140,6 +141,11 @@ pub fn run() {
             // Inject the window.electronAPI shim so unmodified renderer code works.
             let main_win = app.get_webview_window("main").expect("main window");
             let _ = main_win.eval(shim::SHIM_JS);
+
+            // Windows users expect the native title bar and menu bar. Other
+            // platforms retain the existing custom window chrome.
+            #[cfg(target_os = "windows")]
+            let _ = main_win.set_decorations(true);
 
             // Build menu (keyboard accelerators -> emit menu:* events)
             menu::install(&main_win)?;

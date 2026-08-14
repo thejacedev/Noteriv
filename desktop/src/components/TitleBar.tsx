@@ -73,6 +73,7 @@ export default function TitleBar({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; filePath: string } | null>(null);
+  const [pathContextMenu, setPathContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -115,6 +116,8 @@ export default function TitleBar({
   };
 
   const isMac = platform === "darwin";
+  const isWindows = platform === "win32";
+  const displayedPath = activeTab || activeVault?.path || "Noteriv";
 
   // Sort tabs: pinned first, then unpinned (preserving relative order within each group)
   const sortedTabs = [...tabs].sort((a, b) => {
@@ -213,8 +216,17 @@ export default function TitleBar({
           />
         </div>
 
-        {/* Center: drag area */}
-        <div style={{ flex: 1 }} />
+        {/* Center: current location and drag area */}
+        <div
+          className="titlebar-path"
+          title={displayedPath}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (displayedPath !== "Noteriv") setPathContextMenu({ x: e.clientX, y: e.clientY });
+          }}
+        >
+          {displayedPath}
+        </div>
 
         {/* Right: view toggle + window controls */}
         <div className="titlebar-section" style={{ paddingRight: 8 }}>
@@ -249,7 +261,7 @@ export default function TitleBar({
           </button>
 
           {/* Windows/Linux window controls */}
-          {!isMac && (
+          {!isMac && !isWindows && (
             <div className="win-controls">
               <button onClick={handleMinimize} className="win-btn" title="Minimize">
                 <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" strokeWidth="1.2" /></svg>
@@ -287,6 +299,7 @@ export default function TitleBar({
               onDragEnd={handleDragEnd}
               onClick={() => onTabSelect(tab.filePath)}
               onContextMenu={(e) => handleTabContextMenu(e, tab.filePath)}
+              title={tab.filePath}
               className={`tab${isActive ? " tab-active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-dragover" : ""}${isPinned ? " tab-pinned" : ""}`}
             >
               {isPinned && (
@@ -322,6 +335,14 @@ export default function TitleBar({
           y={tabContextMenu.y}
           items={getTabContextMenuItems()}
           onClose={() => setTabContextMenu(null)}
+        />
+      )}
+      {pathContextMenu && (
+        <ContextMenu
+          x={pathContextMenu.x}
+          y={pathContextMenu.y}
+          items={[{ label: "Copy Path", onClick: () => onCopyPath?.(displayedPath) }]}
+          onClose={() => setPathContextMenu(null)}
         />
       )}
     </div>

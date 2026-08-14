@@ -64,6 +64,7 @@ export default function DocumentTitle({ filePath, onRename }: DocumentTitleProps
       <span
         onClick={() => setEditing(true)}
         className="doc-title-text"
+        title={filePath}
       >
         {displayName}
       </span>

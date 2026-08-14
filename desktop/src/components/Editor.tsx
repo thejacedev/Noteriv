@@ -14,6 +14,7 @@ import {
   markdownRenderTheme,
   mdHighlightStyle,
   editorTheme,
+  mathExtension,
 } from "./markdown";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 import { setEditorViewForImages } from "./markdown/renderers/images";
@@ -55,6 +56,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
         editorTheme,
         markdownRenderTheme,
         liveMarkdownPlugin,
+        mathExtension(),
         search({ top: true }),
         keymap.of([
           ...searchKeymap,

@@ -59,6 +59,7 @@ interface WorkspaceState {
   activeTab: string | null;
   expandedFolders: string[]; // folder paths that are expanded
   sidebarCollapsed: boolean;
+  sidebarWidth?: number;
   viewMode: "live" | "source" | "view";
   fileOrder?: Record<string, string[]>; // dir path -> ordered file/folder names
   fileViewModes?: Record<string, "live" | "source" | "view">; // per-file default view modes
@@ -71,6 +72,7 @@ interface ElectronAPI {
   windowMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;
   windowIsMaximized: () => Promise<boolean>;
+  windowSetTitle: (title: string) => Promise<void>;
   getPlatform: () => Promise<string>;
 
   // Workspace state

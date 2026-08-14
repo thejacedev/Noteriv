@@ -297,6 +297,19 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.titlebar-path {
+  flex: 1;
+  min-width: 40px;
+  padding: 0 16px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 38px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .titlebar-btn {
   display: flex;
   align-items: center;
@@ -796,14 +809,13 @@ body {
 /* ─── Sidebar ─── */
 
 .sidebar-root {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   user-select: none;
-  width: 250px;
-  min-width: 250px;
 }
 
 .sidebar-header {
@@ -816,11 +828,48 @@ body {
 }
 
 .sidebar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  outline: none;
+}
+
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 150ms ease-out;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after {
+  background: var(--accent);
 }
 
 .sidebar-btn {

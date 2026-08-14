@@ -19,6 +19,9 @@ interface SidebarProps {
   onNewFile: () => void;
   onNewFolder: () => void;
   collapsed: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  onCollapse: () => void;
   expandedFolders: string[];
   onExpandedFoldersChange: (folders: string[]) => void;
   fileOrder: Record<string, string[]>;
@@ -212,6 +215,7 @@ function FolderItem({
           className={`${rowClass}${isSelected ? " sb-selected" : ""}`}
           style={{ paddingLeft: `${indent}px` }}
           data-filepath={entry.isDirectory ? undefined : entry.path}
+          title={entry.path}
         >
           {/* Indent guides */}
           {Array.from({ length: depth }, (_, i) => (
@@ -314,6 +318,9 @@ export default function Sidebar({
   onNewFile,
   onNewFolder,
   collapsed,
+  width,
+  onWidthChange,
+  onCollapse,
   expandedFolders,
   onExpandedFoldersChange,
   fileOrder,
@@ -703,6 +710,11 @@ export default function Sidebar({
         });
       }
     }
+    items.push({ label: "", separator: true, onClick: () => {} });
+    items.push({
+      label: entry.isDirectory ? "Copy Folder Path" : "Copy File Path",
+      onClick: () => navigator.clipboard.writeText(entry.path),
+    });
     return items;
   }, [contextMenu, vault, handleNewFileIn, handleNewFolderIn, startRename, handleDelete, selectedFiles, handleMergeNotes, handleDeleteSelected]);
 
@@ -710,20 +722,51 @@ export default function Sidebar({
 
   const sorted = sortEntries(entries, vault ? fileOrder[vault.path] : undefined);
 
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    const handleMove = (event: PointerEvent) => {
+      onWidthChange(Math.max(180, Math.min(520, startWidth + event.clientX - startX)));
+    };
+    const cleanup = () => {
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", cleanup);
+      document.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("blur", cleanup);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", cleanup);
+    document.addEventListener("pointercancel", cleanup);
+    window.addEventListener("blur", cleanup);
+  };
+
   return (
     <div
       className="sidebar-root"
+      style={{ width, minWidth: width }}
     >
       {vault ? (
         <>
           {/* Header */}
           <div className="sidebar-header">
-            <span className="sidebar-title">{vault.name}</span>
-            <button onClick={onNewFile} className="sidebar-btn" title="New file">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </button>
+            <span className="sidebar-title" title={vault.path}>{vault.name}</span>
+            <div className="sidebar-actions">
+              <button onClick={onNewFile} className="sidebar-btn" title="New file">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button onClick={onCollapse} className="sidebar-btn" title="Close sidebar (Ctrl+B)">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M10.5 3.5L6 8l4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* File tree */}
@@ -794,6 +837,19 @@ export default function Sidebar({
           onClose={() => setContextMenu(null)}
         />
       )}
+      <div
+        className="sidebar-resize-handle"
+        role="separator"
+        aria-label="Resize file navigator"
+        aria-orientation="vertical"
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onDoubleClick={() => onWidthChange(250)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") onWidthChange(Math.max(180, width - 10));
+          if (e.key === "ArrowRight") onWidthChange(Math.min(520, width + 10));
+        }}
+      />
     </div>
   );
 }

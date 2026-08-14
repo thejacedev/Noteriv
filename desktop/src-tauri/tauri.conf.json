@@ -17,7 +17,7 @@
         "title": "Noteriv",
         "width": 1200,
         "height": 800,
-        "minWidth": 800,
+        "minWidth": 640,
         "minHeight": 500,
         "decorations": false,
         "transparent": false,

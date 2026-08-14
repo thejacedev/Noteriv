@@ -34,7 +34,16 @@ pub async fn window_close(app: tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn window_is_maximized(app: tauri::AppHandle) -> bool {
-    main_win(&app).and_then(|w| w.is_maximized().ok()).unwrap_or(false)
+    main_win(&app)
+        .and_then(|w| w.is_maximized().ok())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn window_set_title(app: tauri::AppHandle, title: String) {
+    if let Some(w) = main_win(&app) {
+        let _ = w.set_title(&title);
+    }
 }
 
 #[tauri::command]

@@ -1,6 +1,6 @@
 import { Decoration } from "@codemirror/view";
-import { RenderedMarkdownWidget } from "../widget";
-import type { BlockRenderer, BlockContext, InlineRenderer, InlineReplacement } from "../types";
+import katex from "katex";
+import type { BlockContext, InlineRenderer, InlineReplacement } from "../types";
 
 // Block math: $$ ... $$
 export class MathBlockTracker {
@@ -57,8 +57,11 @@ export const inlineMathRenderer: InlineRenderer = {
       results.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,
-        html: `<span class="md-math-inline">${match[1]}</span>`,
-        className: "md-math",
+        html: katex.renderToString(match[1], {
+          throwOnError: false,
+          displayMode: false,
+        }),
+        className: "math-inline-widget",
       });
     }
 

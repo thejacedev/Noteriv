@@ -15,6 +15,8 @@ export interface AppSettings {
   webdavSync: { url: string; username: string; password: string; remotePath: string };
   theme: string; // theme ID
   autoUpdate: boolean; // check for and install updates automatically
+  autoCollapseSidebar: boolean;
+  sidebarCollapseWidth: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +36,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   webdavSync: { url: "", username: "", password: "", remotePath: "/Noteriv" },
   theme: "catppuccin-mocha",
   autoUpdate: true,
+  autoCollapseSidebar: true,
+  sidebarCollapseWidth: 800,
 };
 
 export const ACCENT_COLORS = [

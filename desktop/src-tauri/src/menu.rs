@@ -1,5 +1,5 @@
-// Hidden menu — kept only so keyboard accelerators (Cmd/Ctrl+S, etc.) emit
-// the same menu:* events the renderer already listens for.
+// Native application menu. It is visible on Windows and retained for keyboard
+// accelerators on platforms that use Noteriv's custom window chrome.
 
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager, WebviewWindow};
@@ -13,6 +13,9 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
     let open_file = MenuItemBuilder::with_id("menu:open-file", "Open File")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
+    let open_folder = MenuItemBuilder::with_id("menu:open-folder", "Open Folder as Vault")
+        .accelerator("CmdOrCtrl+Shift+O")
+        .build(app)?;
     let save = MenuItemBuilder::with_id("menu:save", "Save")
         .accelerator("CmdOrCtrl+S")
         .build(app)?;
@@ -25,6 +28,7 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
     let mut file_builder = SubmenuBuilder::new(app, "File")
         .item(&new_file)
         .item(&open_file)
+        .item(&open_folder)
         .separator()
         .item(&save)
         .item(&save_as);
@@ -46,17 +50,6 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
 
     let view_menu = SubmenuBuilder::new(app, "View")
         .item(
-            &MenuItemBuilder::with_id("menu:reload", "Reload")
-                .accelerator("CmdOrCtrl+R")
-                .build(app)?,
-        )
-        .item(
-            &MenuItemBuilder::with_id("menu:devtools", "Toggle DevTools")
-                .accelerator("CmdOrCtrl+Shift+I")
-                .build(app)?,
-        )
-        .separator()
-        .item(
             &MenuItemBuilder::with_id("menu:zoom-in", "Zoom In")
                 .accelerator("CmdOrCtrl+Plus")
                 .build(app)?,
@@ -75,6 +68,28 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
         .item(
             &MenuItemBuilder::with_id("menu:fullscreen", "Toggle Full Screen")
                 .accelerator("F11")
+                .build(app)?,
+        )
+        .build()?;
+
+    #[cfg(not(target_os = "macos"))]
+    let settings_menu = SubmenuBuilder::new(app, "Settings")
+        .item(
+            &MenuItemBuilder::with_id("menu:settings", "Preferences…")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?,
+        )
+        .build()?;
+
+    let developer_menu = SubmenuBuilder::new(app, "Developer")
+        .item(
+            &MenuItemBuilder::with_id("menu:devtools", "Toggle Developer Tools")
+                .accelerator("CmdOrCtrl+Shift+I")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu:reload", "Reload Window")
+                .accelerator("CmdOrCtrl+R")
                 .build(app)?,
         )
         .build()?;
@@ -112,14 +127,28 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
     let menu: Menu<_> = {
         let builder = MenuBuilder::new(app);
         #[cfg(target_os = "macos")]
-        let builder = builder.items(&[&app_menu, &file_menu, &edit_menu, &view_menu]);
+        let builder = builder.items(&[
+            &app_menu,
+            &file_menu,
+            &edit_menu,
+            &view_menu,
+            &developer_menu,
+        ]);
         #[cfg(not(target_os = "macos"))]
-        let builder = builder.items(&[&file_menu, &edit_menu, &view_menu]);
+        let builder = builder.items(&[
+            &file_menu,
+            &edit_menu,
+            &view_menu,
+            &settings_menu,
+            &developer_menu,
+        ]);
         builder.build()?
     };
 
     app.set_menu(menu)?;
-    // Hide the menu bar (we render our own titlebar; menu exists only for accelerators).
+    #[cfg(target_os = "windows")]
+    let _ = window.show_menu();
+    #[cfg(not(target_os = "windows"))]
     let _ = window.hide_menu();
 
     let app_handle = app.clone();
@@ -135,13 +164,10 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
                         let _ = win.eval("location.reload()");
                     }
                     "devtools" => {
-                        #[cfg(debug_assertions)]
-                        {
-                            if win.is_devtools_open() {
-                                win.close_devtools();
-                            } else {
-                                win.open_devtools();
-                            }
+                        if win.is_devtools_open() {
+                            win.close_devtools();
+                        } else {
+                            win.open_devtools();
                         }
                     }
                     "fullscreen" => {

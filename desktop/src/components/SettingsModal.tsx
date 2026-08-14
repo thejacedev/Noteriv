@@ -184,6 +184,23 @@ export default function SettingsModal({
       <Row label="Spell check" desc="Underline misspelled words in the editor.">
         <Toggle checked={settings.spellCheck} onChange={(v) => update({ spellCheck: v })} />
       </Row>
+      <Row label="Responsive sidebar" desc="Collapse the file navigator when the window becomes narrow.">
+        <Toggle checked={settings.autoCollapseSidebar} onChange={(v) => update({ autoCollapseSidebar: v })} />
+      </Row>
+      {settings.autoCollapseSidebar && (
+        <Row label="Collapse below" desc="Window width at which the file navigator closes automatically.">
+          <select
+            className="st-select"
+            value={settings.sidebarCollapseWidth}
+            onChange={(e) => update({ sidebarCollapseWidth: Number(e.target.value) })}
+          >
+            <option value={700}>700 px</option>
+            <option value={800}>800 px</option>
+            <option value={900}>900 px</option>
+            <option value={1000}>1000 px</option>
+          </select>
+        </Row>
+      )}
 
       <div className="st-divider" />
       <div className="st-group-label">Updates</div>
