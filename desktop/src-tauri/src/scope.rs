@@ -72,6 +72,17 @@ impl PathScope {
             .unwrap_or(false)
     }
 
+    /// True when a directory entry reached by a recursive walk may be visited.
+    ///
+    /// The walking commands check the scope once, for the root they are given,
+    /// and then read whatever they find below it. A symlink inside that root can
+    /// point anywhere — a vault synchronizes from a Git remote, and Git carries
+    /// symlinks — so a linked entry has to clear the scope on its own. Ordinary
+    /// entries are already covered by the root's check.
+    pub fn may_visit(&self, file_type: &std::fs::FileType, path: &Path) -> bool {
+        !file_type.is_symlink() || self.is_allowed(path)
+    }
+
     /// True when the path lies inside a registered vault or has been granted by
     /// a dialog. The application's own data directory is always refused so the
     /// credential store cannot be read back through the file commands, even if
@@ -269,6 +280,34 @@ mod tests {
         let resolved = resolve(&root.join("does-not-exist-yet.md"));
         assert!(resolved.starts_with(&root));
         assert!(resolved.ends_with("does-not-exist-yet.md"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_walk_follows_a_symlink_only_when_its_target_is_in_scope() {
+        let root = tmp("walk");
+        let picked = root.join("picked");
+        let _ = fs::create_dir_all(&picked);
+        let outside = root.join("outside.md");
+        let _ = fs::write(&outside, "secret");
+        let inside = picked.join("real.md");
+        let _ = fs::write(&inside, "note");
+
+        let escaping = picked.join("escaping.md");
+        let contained = picked.join("contained.md");
+        let _ = fs::remove_file(&escaping);
+        let _ = fs::remove_file(&contained);
+        let _ = std::os::unix::fs::symlink(&outside, &escaping);
+        let _ = std::os::unix::fs::symlink(&inside, &contained);
+
+        let scope = PathScope::default();
+        scope.grant(&picked.to_string_lossy());
+
+        let kind = |p: &PathBuf| fs::symlink_metadata(p).unwrap().file_type();
+        assert!(scope.may_visit(&kind(&inside), &inside));
+        assert!(scope.may_visit(&kind(&contained), &contained));
+        // Reading this one would hand out a file the walk was never scoped for.
+        assert!(!scope.may_visit(&kind(&escaping), &escaping));
     }
 
     #[cfg(unix)]

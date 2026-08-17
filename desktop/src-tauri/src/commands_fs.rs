@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 use tauri::Manager;
 
+use crate::scope::PathScope;
 use crate::AppState;
 
 /// True when the webview may touch this path. See `crate::scope`.
@@ -223,7 +224,7 @@ pub async fn fs_search_in_files(app: tauri::AppHandle, args: SearchInput) -> Vec
     }
     let lower = args.query.to_lowercase();
 
-    fn walk(dir: &Path, lower: &str, results: &mut Vec<SearchHit>) {
+    fn walk(dir: &Path, lower: &str, results: &mut Vec<SearchHit>, scope: &PathScope) {
         if results.len() >= 200 {
             return;
         }
@@ -238,9 +239,16 @@ pub async fn fs_search_in_files(app: tauri::AppHandle, args: SearchInput) -> Vec
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                log::warn!("[fs] skipped a link out of the permitted scope: {path:?}");
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, lower, results);
+                walk(&path, lower, results, scope);
                 if results.len() >= 200 {
                     return;
                 }
@@ -264,7 +272,12 @@ pub async fn fs_search_in_files(app: tauri::AppHandle, args: SearchInput) -> Vec
         }
     }
 
-    walk(Path::new(&args.dir), &lower, &mut results);
+    walk(
+        Path::new(&args.dir),
+        &lower,
+        &mut results,
+        &app.state::<AppState>().scope,
+    );
     results
 }
 
@@ -294,7 +307,7 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
         return out;
     }
 
-    fn walk(dir: &Path, base: &str, out: &mut Vec<ListedFile>) {
+    fn walk(dir: &Path, base: &str, out: &mut Vec<ListedFile>, scope: &PathScope) {
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -306,9 +319,15 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, base, out);
+                walk(&path, base, out, scope);
             } else if name_s.ends_with(".md") || name_s.ends_with(".markdown") {
                 let full = path.to_string_lossy().into_owned();
                 let trimmed_name = name_s
@@ -324,7 +343,12 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
         }
     }
 
-    walk(Path::new(&dir), &dir, &mut out);
+    walk(
+        Path::new(&dir),
+        &dir,
+        &mut out,
+        &app.state::<AppState>().scope,
+    );
     out
 }
 
@@ -358,7 +382,7 @@ pub async fn fs_get_file_stats(app: tauri::AppHandle, dir: String) -> Vec<StatsF
             .unwrap_or(0.0)
     }
 
-    fn walk(dir: &Path, base: &str, out: &mut Vec<StatsFile>) {
+    fn walk(dir: &Path, base: &str, out: &mut Vec<StatsFile>, scope: &PathScope) {
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -370,9 +394,15 @@ pub async fn fs_get_file_stats(app: tauri::AppHandle, dir: String) -> Vec<StatsF
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, base, out);
+                walk(&path, base, out, scope);
             } else if name_s.ends_with(".md") || name_s.ends_with(".markdown") {
                 if let Ok(meta) = entry.metadata() {
                     let full = path.to_string_lossy().into_owned();
@@ -394,6 +424,11 @@ pub async fn fs_get_file_stats(app: tauri::AppHandle, dir: String) -> Vec<StatsF
         }
     }
 
-    walk(Path::new(&dir), &dir, &mut out);
+    walk(
+        Path::new(&dir),
+        &dir,
+        &mut out,
+        &app.state::<AppState>().scope,
+    );
     out
 }
