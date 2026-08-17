@@ -43,7 +43,13 @@ async function ensureMermaid(): Promise<typeof import("mermaid").default> {
           nodeTextColor: "#cdd6f4",
         },
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        securityLevel: "loose",
+        // Diagram source is note content, and the rendered SVG goes to
+        // `innerHTML` below. Under `loose`, mermaid honours a diagram's `click`
+        // directive, so `click A "javascript:..."` in a note becomes a live
+        // `<a xlink:href="javascript:...">` in that SVG and runs in the
+        // application window when the node is clicked. `strict` — mermaid's own
+        // default — drops the href instead.
+        securityLevel: "strict",
       });
       mermaidInitialized = true;
     })();
@@ -114,6 +120,12 @@ class MermaidWidget extends WidgetType {
     const inner = document.createElement("div");
     inner.className = "mermaid-widget-inner";
     container.appendChild(inner);
+
+    // The SVG below is mermaid's own output, sanitized by mermaid under the
+    // `strict` level set in `ensureMermaid`. It deliberately does not also go
+    // through `lib/sanitize-html`: that configuration drops `<foreignObject>`,
+    // which is where mermaid puts every node label, so the diagrams would
+    // render as empty boxes.
 
     // Check cache first for synchronous render
     const cached = svgCache.get(this.source);

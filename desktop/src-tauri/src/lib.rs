@@ -11,6 +11,7 @@ mod commands_window;
 mod commands_workspace;
 mod menu;
 mod paths;
+mod scope;
 mod shim;
 mod store;
 mod updater_cmds;
@@ -29,6 +30,8 @@ pub fn portable_root_public() -> Option<PathBuf> {
 pub struct AppState {
     pub clipper: Mutex<clipper::ClipperState>,
     pub watcher: Mutex<watcher::WatcherState>,
+    /// Paths the webview is permitted to reach. See `scope`.
+    pub scope: scope::PathScope,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,6 +44,7 @@ pub fn run() {
     let app_state = AppState {
         clipper: Mutex::new(clipper::ClipperState::default()),
         watcher: Mutex::new(watcher::WatcherState::default()),
+        scope: scope::PathScope::default(),
     };
 
     let mut builder = tauri::Builder::default()

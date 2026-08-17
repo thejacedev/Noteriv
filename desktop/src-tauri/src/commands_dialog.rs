@@ -1,7 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, FilePath};
+
+use crate::AppState;
+
+/// Record every path the user picked so the file and opener commands will
+/// accept it. Selecting a path in a native dialog is the user's grant.
+fn grant(app: &tauri::AppHandle, paths: &[String]) {
+    let state = app.state::<AppState>();
+    for p in paths {
+        state.scope.grant(p);
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct OpenedFile {
@@ -27,6 +39,7 @@ pub async fn dialog_open_file(app: tauri::AppHandle) -> Option<OpenedFile> {
         .blocking_pick_file();
     let fp = picked?;
     let path_str = fp_to_string(fp)?;
+    grant(&app, std::slice::from_ref(&path_str));
     let content = fs::read_to_string(&path_str).ok()?;
     Some(OpenedFile { file_path: path_str, content })
 }
@@ -34,7 +47,9 @@ pub async fn dialog_open_file(app: tauri::AppHandle) -> Option<OpenedFile> {
 #[tauri::command]
 pub async fn dialog_open_folder(app: tauri::AppHandle) -> Option<String> {
     let picked = app.dialog().file().blocking_pick_folder();
-    fp_to_string(picked?)
+    let path = fp_to_string(picked?)?;
+    grant(&app, std::slice::from_ref(&path));
+    Some(path)
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +128,7 @@ pub async fn dialog_show_open(
             .unwrap_or_default()
     };
 
+    grant(&app, &picked);
     OpenDialogResult {
         canceled: picked.is_empty(),
         file_paths: picked,
@@ -140,7 +156,9 @@ pub async fn dialog_save_file(app: tauri::AppHandle, args: SaveFileInput) -> Opt
             builder = builder.set_file_name(file.to_string_lossy().to_string());
         }
     }
-    builder.blocking_save_file().and_then(fp_to_string)
+    let path = builder.blocking_save_file().and_then(fp_to_string)?;
+    grant(&app, std::slice::from_ref(&path));
+    Some(path)
 }
 
 #[tauri::command]
@@ -158,5 +176,7 @@ pub async fn dialog_save_html(app: tauri::AppHandle, args: SaveFileInput) -> Opt
             builder = builder.set_file_name(file.to_string_lossy().to_string());
         }
     }
-    builder.blocking_save_file().and_then(fp_to_string)
+    let path = builder.blocking_save_file().and_then(fp_to_string)?;
+    grant(&app, std::slice::from_ref(&path));
+    Some(path)
 }

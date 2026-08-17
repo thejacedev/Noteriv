@@ -499,10 +499,16 @@ class CodeBlockWidget extends WidgetType {
             nodeTextColor: textPrimary,
           },
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-          securityLevel: "loose",
+          // See `markdown/mermaid.ts`: the diagram source is note content, and
+          // a `click` directive under `loose` puts a `javascript:` URL into the
+          // rendered SVG. `strict` is mermaid's default.
+          securityLevel: "strict",
         });
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         const { svg } = await mermaid.render(id, this.code);
+        // Mermaid's own output, sanitized by mermaid at the `strict` level set
+        // above; see `markdown/mermaid.ts` for why it is not also run through
+        // `lib/sanitize-html`.
         if (container.isConnected) {
           inner.innerHTML = svg;
         }
