@@ -38,6 +38,24 @@ const ALLOWED_URI_REGEXP =
   /^(?:(?:https?|mailto|tel|blob):|data:(?:image|audio|video)\/|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
 
 /**
+ * Characters a URL parser discards, and that therefore let an attacker break up
+ * a scheme: `java\nscript:` reaches the parser as `javascript:`. Mirrors the set
+ * DOMPurify strips before applying its own URI check.
+ */
+const URL_IGNORED_CHARS =
+  /[\u0000-\u0020\u00A0\u1680\u180E\u2000-\u200D\u2028\u2029\u205F\u3000]/g;
+
+/**
+ * True when a URL may be placed in an `href` or `src`.
+ *
+ * Callers that assemble markup themselves need the same answer `sanitizeHtml`
+ * applies to attributes, so both read from one policy.
+ */
+export function isSafeUrl(url: string): boolean {
+  return ALLOWED_URI_REGEXP.test(url.replace(URL_IGNORED_CHARS, ""));
+}
+
+/**
  * Sanitize a fragment of HTML derived from note content.
  *
  * DOMPurify strips every `on*` event handler attribute, which is what closes
@@ -50,6 +68,12 @@ const ALLOWED_URI_REGEXP =
  * content before assembling it.
  */
 export function sanitizeHtml(dirty: string): string {
+  // DOMPurify needs a DOM to parse into, and there is none while Next
+  // prerenders. Nothing rendered in that pass carries note content, so drop the
+  // markup rather than return a string that was never checked.
+  if (!DOMPurify.isSupported) {
+    return "";
+  }
   return DOMPurify.sanitize(dirty, {
     FORBID_TAGS: FORBIDDEN_TAGS,
     // Belt and braces: DOMPurify already drops these, but naming them keeps the

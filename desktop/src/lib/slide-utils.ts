@@ -2,7 +2,13 @@
  * Slide presentation utilities.
  * Parses markdown into slides separated by `---` (horizontal rules)
  * and converts slide markdown to presentable HTML.
+ *
+ * Slides are built from note content and rendered with
+ * `dangerouslySetInnerHTML`, so `slideToHTML` sanitizes what it returns — see
+ * `lib/sanitize-html`.
  */
+
+import { sanitizeHtml, isSafeUrl } from "@/lib/sanitize-html";
 
 export interface Slide {
   content: string;   // markdown content
@@ -248,7 +254,7 @@ export function slideToHTML(md: string): string {
     }
   }
 
-  return html.join("\n");
+  return sanitizeHtml(html.join("\n"));
 }
 
 /**
@@ -260,16 +266,24 @@ function inlineFormat(text: string): string {
   // Inline code
   result = result.replace(/`([^`]+)`/g, '<code class="slide-inline-code">$1</code>');
 
-  // Images
+  // Images. The URL comes from the note, so a `javascript:` target has to be
+  // refused here rather than assembled into an attribute; markup that is not a
+  // safe link stays on the slide as the literal text the author wrote.
   result = result.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
-    '<img src="$2" alt="$1" class="slide-image">'
+    (whole, alt: string, url: string) =>
+      isSafeUrl(url)
+        ? `<img src="${url}" alt="${alt}" class="slide-image">`
+        : whole
   );
 
   // Links
   result = result.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="slide-link">$1</a>'
+    (whole, label: string, url: string) =>
+      isSafeUrl(url)
+        ? `<a href="${url}" class="slide-link">${label}</a>`
+        : whole
   );
 
   // Bold + italic
