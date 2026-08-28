@@ -712,6 +712,10 @@ export default function Sidebar({
     }
     items.push({ label: "", separator: true, onClick: () => {} });
     items.push({
+      label: entry.isDirectory ? "Open Folder Location" : "Open File Location",
+      onClick: () => window.electronAPI.openPath(entry.isDirectory ? entry.path : contextMenu.parentDir),
+    });
+    items.push({
       label: entry.isDirectory ? "Copy Folder Path" : "Copy File Path",
       onClick: () => navigator.clipboard.writeText(entry.path),
     });
