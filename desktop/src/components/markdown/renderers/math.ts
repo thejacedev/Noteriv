@@ -17,6 +17,17 @@ export class MathBlockTracker {
   process(ctx: BlockContext, isCursorLine: boolean): "fence" | "inside" | null {
     const trimmed = ctx.text.trim();
 
+    if (/^\$\$.+\$\$$/.test(trimmed)) {
+      if (!isCursorLine) {
+        ctx.builder.add(
+          ctx.line.from,
+          ctx.line.from,
+          Decoration.line({ class: "md-math-block-line" })
+        );
+      }
+      return "fence";
+    }
+
     if (trimmed === "$$") {
       if (!isCursorLine) {
         ctx.builder.add(

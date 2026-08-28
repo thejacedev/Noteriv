@@ -1,12 +1,10 @@
 import {
   Decoration,
   DecorationSet,
-  ViewPlugin,
-  ViewUpdate,
   EditorView,
   WidgetType,
 } from "@codemirror/view";
-import { EditorState, RangeSetBuilder } from "@codemirror/state";
+import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import katex from "katex";
 import { renderAllLines } from "./plugin";
 
@@ -91,6 +89,20 @@ function findBlockMathRegions(state: EditorState): BlockMathRegion[] {
     const line = doc.line(i);
     const trimmed = line.text.trim();
 
+    if (!inBlock) {
+      const singleLine = trimmed.match(/^\$\$(.*?)\$\$$/);
+      if (singleLine) {
+        regions.push({
+          startLine: i,
+          endLine: i,
+          content: singleLine[1].trim(),
+          from: line.from,
+          to: line.to,
+        });
+        continue;
+      }
+    }
+
     if (trimmed === "$$") {
       if (!inBlock) {
         inBlock = true;
@@ -118,10 +130,10 @@ function findBlockMathRegions(state: EditorState): BlockMathRegion[] {
   return regions;
 }
 
-function buildMathDecorations(view: EditorView): DecorationSet {
+function buildMathDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
-  const cursorLines = getCursorLines(view.state);
-  const blockRegions = findBlockMathRegions(view.state);
+  const cursorLines = getCursorLines(state);
+  const blockRegions = findBlockMathRegions(state);
 
   for (const region of blockRegions) {
     let cursorInRegion = false;
@@ -149,22 +161,20 @@ function buildMathDecorations(view: EditorView): DecorationSet {
 
 // ─── Extension ─────────────────────────────────────────────────────────
 
-const mathPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) {
-      this.decorations = buildMathDecorations(view);
-    }
-    update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildMathDecorations(update.view);
-      }
-    }
+const mathField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildMathDecorations(state);
   },
-  { decorations: (v) => v.decorations }
-);
+  update(decorations, transaction) {
+    if (transaction.docChanged || transaction.selection) {
+      return buildMathDecorations(transaction.state);
+    }
+    return decorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 /** CodeMirror extension for LaTeX math rendering. */
 export function mathExtension() {
-  return [mathPlugin];
+  return [mathField];
 }
