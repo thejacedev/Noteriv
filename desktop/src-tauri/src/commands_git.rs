@@ -326,6 +326,7 @@ pub struct GitSyncInput {
 
 #[tauri::command]
 pub async fn git_sync(args: GitSyncInput) -> Result<bool, String> {
+    let _guard = crate::commands_fs::lock_file_mutations();
     let p = Path::new(&args.dir);
     let creds = credentials_for_vault(args.vault_id.as_deref());
     let token_ref = creds.as_ref().map(|c| c.token.as_str());
@@ -412,6 +413,7 @@ pub struct GitDirVaultInput {
 
 #[tauri::command]
 pub async fn git_pull(args: GitDirVaultInput) -> Result<bool, String> {
+    let _guard = crate::commands_fs::lock_file_mutations();
     let p = Path::new(&args.dir);
     let creds = credentials_for_vault(args.vault_id.as_deref());
     let branch = current_branch(p);

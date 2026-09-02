@@ -78,8 +78,10 @@ pub fn run() {
             commands_shell::shell_open_path,
             // fs
             commands_fs::fs_read_file,
+            commands_fs::fs_read_text_file,
             commands_fs::fs_read_binary_file,
             commands_fs::fs_write_file,
+            commands_fs::fs_write_file_guarded,
             commands_fs::fs_read_dir,
             commands_fs::fs_create_file,
             commands_fs::fs_delete_file,
@@ -90,7 +92,9 @@ pub fn run() {
             commands_fs::fs_write_binary_file,
             commands_fs::fs_search_in_files,
             commands_fs::fs_list_all_files,
+            commands_fs::fs_list_knowledge_files,
             commands_fs::fs_get_file_stats,
+            commands_fs::fs_apply_knowledge_change,
             // vault + settings
             commands_vault::vault_get_config,
             commands_vault::vault_is_setup_complete,

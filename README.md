@@ -319,7 +319,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20.19+
 - [npm](https://www.npmjs.com/)
 - [Git](https://git-scm.com/) (for GitHub sync features)
 

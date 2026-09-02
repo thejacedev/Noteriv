@@ -73,6 +73,9 @@ import { saveSnapshot } from "@/lib/file-recovery";
 import { PluginManager, type PluginInstance } from "@/lib/plugin-api";
 import { BUILT_IN_THEMES, applyTheme, loadCustomThemes } from "@/lib/theme-utils";
 import { loadSnippets, refreshSnippets, type CSSSnippet } from "@/lib/css-snippets";
+import { hashContent } from "@/lib/knowledge/knowledge-service";
+import { relativePathFromVault } from "@/lib/knowledge/path-safety";
+import type { KnowledgeSourcePreset } from "@/components/KnowledgeIngest";
 import type { EditorView } from "@codemirror/view";
 
 const Editor = dynamic(() => import("@/components/Editor"), { ssr: false });
@@ -86,6 +89,7 @@ const BoardView = dynamic(() => import("@/components/BoardView"), { ssr: false }
 const DrawingEditor = dynamic(() => import("@/components/DrawingEditor"), { ssr: false });
 const PDFViewer = dynamic(() => import("@/components/PDFViewer"), { ssr: false });
 const VaultInsights = dynamic(() => import("@/components/VaultInsights"), { ssr: false });
+const KnowledgeIngest = dynamic(() => import("@/components/KnowledgeIngest"), { ssr: false });
 
 type ViewMode = "live" | "source" | "view";
 type AppState = "loading" | "setup" | "app";
@@ -97,6 +101,17 @@ interface TabState {
   // Non-markdown tabs render a dedicated view instead of the text editor.
   // Absent = a normal markdown note.
   kind?: "canvas" | "drawing" | "pdf" | "image";
+  externalConflict?: boolean;
+}
+
+function pathIdentity(filePath: string, platform: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  return platform === "win32" ? normalized.toLocaleLowerCase() : normalized;
+}
+
+async function writeTabGuarded(tab: TabState, content: string) {
+  const baseHash = await hashContent(tab.savedContent);
+  return window.electronAPI.writeFileGuarded(tab.filePath, content, baseHash);
 }
 
 export default function Home() {
@@ -109,7 +124,12 @@ export default function Home() {
 
   // Tabs
   const [tabs, setTabs] = useState<TabState[]>([]);
+  const tabsRef = useRef<TabState[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   // Split editor
   const [splitTab, setSplitTab] = useState<string | null>(null);
@@ -118,7 +138,13 @@ export default function Home() {
   // UI
   const [viewMode, setViewMode] = useState<ViewMode>("live");
   const [fileViewModes, setFileViewModes] = useState<Record<string, ViewMode>>({});
-  const [editorContextMenu, setEditorContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [editorContextMenu, setEditorContextMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+    noteSource: KnowledgeSourcePreset | null;
+    selectionSource: KnowledgeSourcePreset | null;
+  } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(250);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
@@ -163,6 +189,8 @@ export default function Home() {
   const [showTimeScrubber, setShowTimeScrubber] = useState(false);
   const [showLintPanel, setShowLintPanel] = useState(false);
   const [showVaultInsights, setShowVaultInsights] = useState(false);
+  const [showKnowledgeIngest, setShowKnowledgeIngest] = useState(false);
+  const [knowledgeSource, setKnowledgeSource] = useState<KnowledgeSourcePreset | null>(null);
   const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
@@ -172,6 +200,7 @@ export default function Home() {
 
   // Editor view ref (for formatting commands)
   const editorViewRef = useRef<EditorView | null>(null);
+  const splitEditorViewRef = useRef<EditorView | null>(null);
   const contentRef = useRef<string>("");
   const activeTabRef = useRef<string | null>(null);
 
@@ -527,48 +556,60 @@ export default function Home() {
   // ============================================================
 
   useEffect(() => {
-    if (appState !== "app" || settings.autoSaveInterval <= 0) return;
+    if (appState !== "app" || showKnowledgeIngest || settings.autoSaveInterval <= 0) return;
     autoSaveRef.current = setInterval(async () => {
       if (!window.electronAPI) return;
       for (const tab of tabs) {
-        if (tab.content !== tab.savedContent) {
-          const success = await window.electronAPI.writeFile(tab.filePath, tab.content);
-          if (success) {
+        if (tab.content !== tab.savedContent && !tab.externalConflict) {
+          const result = await writeTabGuarded(tab, tab.content);
+          if (result.status === "written") {
             setTabs((prev) =>
               prev.map((t) =>
-                t.filePath === tab.filePath ? { ...t, savedContent: t.content } : t
+                t.filePath === tab.filePath
+                  ? { ...t, savedContent: tab.content, externalConflict: false }
+                  : t
               )
             );
+          } else if (result.status === "conflict") {
+            setTabs((prev) => prev.map((t) =>
+              t.filePath === tab.filePath ? { ...t, externalConflict: true } : t
+            ));
           }
         }
       }
     }, settings.autoSaveInterval * 1000);
     return () => { if (autoSaveRef.current) clearInterval(autoSaveRef.current); };
-  }, [appState, tabs, settings.autoSaveInterval]);
+  }, [appState, showKnowledgeIngest, tabs, settings.autoSaveInterval]);
 
   // ============================================================
   // Board auto-save (every 5s for .board.md files)
   // ============================================================
 
   useEffect(() => {
-    if (appState !== "app") return;
+    if (appState !== "app" || showKnowledgeIngest) return;
     const interval = setInterval(async () => {
       if (!window.electronAPI) return;
       for (const tab of tabs) {
-        if (tab.content !== tab.savedContent && (isBoardFile(tab.filePath) || isBoardContent(tab.content))) {
-          const success = await window.electronAPI.writeFile(tab.filePath, tab.content);
-          if (success) {
+        if (tab.content !== tab.savedContent && !tab.externalConflict && (isBoardFile(tab.filePath) || isBoardContent(tab.content))) {
+          const result = await writeTabGuarded(tab, tab.content);
+          if (result.status === "written") {
             setTabs((prev) =>
               prev.map((t) =>
-                t.filePath === tab.filePath ? { ...t, savedContent: t.content } : t
+                t.filePath === tab.filePath
+                  ? { ...t, savedContent: tab.content, externalConflict: false }
+                  : t
               )
             );
+          } else if (result.status === "conflict") {
+            setTabs((prev) => prev.map((t) =>
+              t.filePath === tab.filePath ? { ...t, externalConflict: true } : t
+            ));
           }
         }
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [appState, tabs]);
+  }, [appState, showKnowledgeIngest, tabs]);
 
   // ============================================================
   // Vault file watcher — react to external changes (e.g. MCP server)
@@ -579,17 +620,20 @@ export default function Home() {
     const unsub = window.electronAPI.onVaultChanged((changedPath: string) => {
       setSidebarRefresh((n) => n + 1);
       setTabs((prev) => {
-        const tab = prev.find((t) => t.filePath === changedPath);
+        const changedIdentity = pathIdentity(changedPath, platform);
+        const tab = prev.find((t) => pathIdentity(t.filePath, platform) === changedIdentity);
         if (!tab) return prev;
         (async () => {
-          // External filesystem changes are authoritative. Never replay an
-          // in-memory edit over them, or a stale tab can undo another writer.
           const newContent = await window.electronAPI.readFile(changedPath);
           if (newContent !== null) {
             setTabs((tabs) =>
-              tabs.map((t) =>
-                t.filePath === changedPath ? { ...t, content: newContent, savedContent: newContent } : t
-              )
+              tabs.map((t) => {
+                if (pathIdentity(t.filePath, platform) !== changedIdentity) return t;
+                // Preserve a local edit that arrived after an external write began.
+                return t.content === t.savedContent
+                  ? { ...t, content: newContent, savedContent: newContent, externalConflict: false }
+                  : { ...t, externalConflict: true };
+              })
             );
           }
         })();
@@ -597,14 +641,14 @@ export default function Home() {
       });
     });
     return unsub;
-  }, [appState]);
+  }, [appState, platform]);
 
   // ============================================================
   // Git sync
   // ============================================================
 
   const performSync = useCallback(async (message?: string) => {
-    if (!window.electronAPI || !activeVault) return;
+    if (!window.electronAPI || !activeVault || showKnowledgeIngest) return;
     setSyncStatus("syncing");
     try {
       await saveWorkspace();
@@ -640,7 +684,7 @@ export default function Home() {
       setSyncStatus("error");
       setTimeout(() => setSyncStatus("idle"), 3000);
     }
-  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync]);
+  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync, showKnowledgeIngest]);
 
   const handleGitSync = performSync;
 
@@ -649,7 +693,7 @@ export default function Home() {
   // ============================================================
 
   useEffect(() => {
-    if (appState !== "app" || !activeVault?.gitRemote) return;
+    if (appState !== "app" || showKnowledgeIngest || !activeVault?.gitRemote) return;
     const interval = setInterval(async () => {
       if (!window.electronAPI) return;
       try {
@@ -662,7 +706,7 @@ export default function Home() {
       } catch {}
     }, 5_000);
     return () => clearInterval(interval);
-  }, [appState, activeVault, performSync]);
+  }, [appState, activeVault, performSync, showKnowledgeIngest]);
 
   // ============================================================
   // Vault operations
@@ -671,14 +715,29 @@ export default function Home() {
   const saveDirtyTabs = useCallback(async (): Promise<boolean> => {
     if (!window.electronAPI) return false;
     const dirtyTabs = tabs.filter((tab) => !tab.kind && tab.content !== tab.savedContent);
+    const savedContents = new Map<string, string>();
     for (const tab of dirtyTabs) {
-      const saved = await window.electronAPI.writeFile(tab.filePath, tab.content);
-      if (!saved) return false;
+      if (tab.externalConflict) {
+        const overwrite = window.confirm(`The note changed on disk after it was opened:\n\n${tab.filePath}\n\nOverwrite the external version with your unsaved editor content?`);
+        if (!overwrite || !await window.electronAPI.writeFile(tab.filePath, tab.content)) return false;
+      } else {
+        const result = await writeTabGuarded(tab, tab.content);
+        if (result.status !== "written") {
+          if (result.status === "conflict") {
+            setTabs((current) => current.map((item) =>
+              item.filePath === tab.filePath ? { ...item, externalConflict: true } : item
+            ));
+          }
+          return false;
+        }
+      }
+      savedContents.set(tab.filePath, tab.content);
     }
     if (dirtyTabs.length > 0) {
-      const savedPaths = new Set(dirtyTabs.map((tab) => tab.filePath));
       setTabs((current) => current.map((tab) =>
-        savedPaths.has(tab.filePath) ? { ...tab, savedContent: tab.content } : tab
+        savedContents.has(tab.filePath)
+          ? { ...tab, savedContent: savedContents.get(tab.filePath)!, externalConflict: false }
+          : tab
       ));
     }
     return true;
@@ -693,9 +752,9 @@ export default function Home() {
     setAppState("app");
   }, []);
 
-  const handleSwitchVault = useCallback(async (id: string) => {
-    if (!window.electronAPI) return;
-    if (!await saveDirtyTabs()) return;
+  const handleSwitchVault = useCallback(async (id: string): Promise<boolean> => {
+    if (!window.electronAPI) return false;
+    if (!await saveDirtyTabs()) return false;
     // Save current workspace first
     await saveWorkspace();
     const vault = await window.electronAPI.setActiveVault(id);
@@ -704,7 +763,9 @@ export default function Home() {
       setTabs([]);
       setActiveTab(null);
       await loadWorkspace(vault);
+      return true;
     }
+    return false;
   }, [saveDirtyTabs, saveWorkspace, loadWorkspace]);
 
   const handleOpenFolderAsVault = useCallback(async () => {
@@ -953,18 +1014,133 @@ export default function Home() {
   }, [activeTab, splitTab]);
 
   const handleCloseSplit = useCallback(() => {
+    splitEditorViewRef.current = null;
     setSplitTab(null);
   }, []);
 
-  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+  const openKnowledgeIngest = useCallback((source: KnowledgeSourcePreset | null = null) => {
+    setKnowledgeSource(source);
+    setShowKnowledgeIngest(true);
+  }, []);
+
+  const handleAnalyzeSidebarNote = useCallback(async (filePath: string) => {
+    if (!activeVault || !window.electronAPI) return;
+    const normalizedPath = pathIdentity(filePath, platform);
+    const openTab = tabs.find((tab) => (
+      !tab.kind && pathIdentity(tab.filePath, platform) === normalizedPath
+    ));
+    const noteContent = openTab?.content ?? await window.electronAPI.readFile(filePath);
+    if (noteContent === null) return;
+    openKnowledgeIngest({
+      type: "note",
+      title: filePath.split(/[\\/]/).pop()?.replace(/\.(md|markdown)$/i, "") || "Untitled note",
+      content: noteContent,
+      sourceVaultId: activeVault.id,
+      sourcePath: relativePathFromVault(activeVault.path, filePath) || undefined,
+    });
+  }, [activeVault, openKnowledgeIngest, platform, tabs]);
+
+  const isKnowledgeTargetDirty = useCallback((absolutePath: string) => {
+    const normalizedTarget = pathIdentity(absolutePath, platform);
+    return tabsRef.current.some((tab) => (
+      tab.content !== tab.savedContent
+      && pathIdentity(tab.filePath, platform) === normalizedTarget
+    ));
+  }, [platform]);
+
+  const handleKnowledgeApplied = useCallback(async (changedFiles: string[], destinationVaultId: string) => {
+    if (!window.electronAPI || changedFiles.length === 0) return;
+    if (destinationVaultId !== activeVault?.id) {
+      const switched = await handleSwitchVault(destinationVaultId);
+      if (!switched) {
+        throw new Error("The change was applied, but Noteriv could not switch to the destination vault because an open note could not be saved.");
+      }
+      setShowKnowledgeIngest(false);
+      setKnowledgeSource(null);
+      setSidebarRefresh((key) => key + 1);
+      await openFile(changedFiles[0]);
+      return;
+    }
+    const dirtyTarget = changedFiles.find(isKnowledgeTargetDirty);
+    if (dirtyTarget) {
+      setSidebarRefresh((key) => key + 1);
+      throw new Error("The change was applied on disk, but the destination editor changed during Apply. Its unsaved buffer was preserved; review it before saving.");
+    }
+    const refreshed = await Promise.all(changedFiles.map(async (filePath) => ({
+      filePath,
+      content: await window.electronAPI.readFile(filePath),
+    })));
+    setTabs((previous) => previous.map((tab) => {
+      const tabIdentity = pathIdentity(tab.filePath, platform);
+      const match = refreshed.find((item) => (
+        pathIdentity(item.filePath, platform) === tabIdentity && item.content !== null
+      ));
+      return match && tab.content === tab.savedContent
+        ? { ...tab, content: match.content!, savedContent: match.content! }
+        : tab;
+    }));
+    setSidebarRefresh((key) => key + 1);
+    setShowKnowledgeIngest(false);
+    setKnowledgeSource(null);
+    const existingTab = tabsRef.current.find((tab) => (
+      pathIdentity(tab.filePath, platform) === pathIdentity(changedFiles[0], platform)
+    ));
+    await openFile(existingTab?.filePath || changedFiles[0]);
+  }, [activeVault?.id, handleSwitchVault, isKnowledgeTargetDirty, openFile, platform]);
+
+  const handleEditorContextMenu = (e: React.MouseEvent) => {
     // Only show on right-click in the editor area, not on interactive elements
     const target = e.target as HTMLElement;
     if (target.closest(".md-checkbox") || target.closest(".md-table-checkbox") || target.closest("button") || target.closest("a")) return;
     e.preventDefault();
-    setEditorContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
+    const panel = target.closest(".split-pane-panel");
+    const panels = panel?.parentElement
+      ? Array.from(panel.parentElement.children).filter((child) => child.classList.contains("split-pane-panel"))
+      : [];
+    const source = panels[1] === panel ? "split" : "main";
+    const sourceTab = source === "split" ? splitTabState : currentTab;
+    const sourceUsesEditor = Boolean(
+      sourceTab
+      && !sourceTab.kind
+      && viewMode !== "view"
+      && !isBoardFile(sourceTab.filePath)
+      && !isBoardContent(sourceTab.content)
+    );
+    const sourceView = sourceUsesEditor
+      ? source === "split" ? splitEditorViewRef.current : editorViewRef.current
+      : null;
+    const noteTitle = sourceTab?.filePath.split(/[\\/]/).pop()?.replace(/\.(md|markdown)$/i, "") || "Untitled note";
+    const sourcePath = sourceTab && activeVault
+      ? relativePathFromVault(activeVault.path, sourceTab.filePath) || undefined
+      : undefined;
+    const noteSource = sourceTab && !sourceTab.kind ? {
+      type: "note" as const,
+      title: noteTitle,
+      content: sourceTab.content,
+      sourceVaultId: activeVault?.id,
+      sourcePath,
+    } : null;
+    const selection = sourceView?.state.selection.main;
+    const selectedText = selection && sourceView
+      ? sourceView.state.doc.sliceString(selection.from, selection.to)
+      : "";
+    const selectionSource = selectedText.trim() && sourceTab && !sourceTab.kind ? {
+      type: "selection" as const,
+      title: `${noteTitle} selection`,
+      content: selectedText,
+      sourceVaultId: activeVault?.id,
+      sourcePath,
+    } : null;
+    setEditorContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      hasSelection: Boolean(selectionSource),
+      noteSource,
+      selectionSource,
+    });
+  };
 
-  const getEditorContextMenuItems = useCallback((): ContextMenuItem[] => {
+  const getEditorContextMenuItems = (): ContextMenuItem[] => {
     if (!activeTab) return [];
     const currentFileMode = fileViewModes[activeTab];
     const items: ContextMenuItem[] = [
@@ -1006,6 +1182,19 @@ export default function Home() {
       },
       { label: "", separator: true, onClick: () => {} },
       {
+        label: "Analyze for Knowledge Base",
+        onClick: () => {
+          if (editorContextMenu?.noteSource) openKnowledgeIngest(editorContextMenu.noteSource);
+        },
+      },
+      ...(editorContextMenu?.hasSelection ? [{
+        label: "Add Selection to Knowledge Base",
+        onClick: () => {
+          if (editorContextMenu.selectionSource) openKnowledgeIngest(editorContextMenu.selectionSource);
+        },
+      }] : []),
+      { label: "", separator: true, onClick: () => {} },
+      {
         label: focusMode ? "Exit Focus Mode" : "Focus Mode",
         onClick: () => setFocusMode((f) => !f),
       },
@@ -1015,7 +1204,7 @@ export default function Home() {
       },
     ];
     return items;
-  }, [activeTab, fileViewModes, focusMode, zenMode, handleSplitRight]);
+  };
 
   const handleSave = useCallback(async () => {
     if (!window.electronAPI || !currentTab) return;
@@ -1029,21 +1218,41 @@ export default function Home() {
       }
     }
 
-    // Save snapshot for file recovery
+    const overwriteConflict = currentTab.externalConflict
+      ? window.confirm(`This note changed on disk after it was opened:\n\n${currentTab.filePath}\n\nOverwrite the external version with your editor content?`)
+      : false;
+    if (currentTab.externalConflict && !overwriteConflict) return;
+
+    // Save the current disk version for recovery before replacing it.
     if (activeVault) {
-      try { saveSnapshot(activeVault.path, currentTab.filePath, contentToSave); } catch {}
+      try {
+        const snapshotContent = currentTab.externalConflict
+          ? await window.electronAPI.readFile(currentTab.filePath)
+          : currentTab.savedContent;
+        if (snapshotContent !== null) {
+          await saveSnapshot(activeVault.path, currentTab.filePath, snapshotContent);
+        }
+      } catch {}
     }
-    const success = await window.electronAPI.writeFile(currentTab.filePath, contentToSave);
-    if (success) {
+    const result = overwriteConflict
+      ? { status: await window.electronAPI.writeFile(currentTab.filePath, contentToSave) ? "written" : "error" }
+      : await writeTabGuarded(currentTab, contentToSave);
+    if (result.status === "written") {
       setTabs((prev) =>
         prev.map((t) =>
-          t.filePath === currentTab.filePath ? { ...t, savedContent: t.content } : t
+          t.filePath === currentTab.filePath
+            ? { ...t, savedContent: contentToSave, externalConflict: false }
+            : t
         )
       );
       // Sync on save if enabled
       if (settings.syncOnSave && activeVault?.gitRemote) {
         performSync();
       }
+    } else if (result.status === "conflict") {
+      setTabs((prev) => prev.map((t) =>
+        t.filePath === currentTab.filePath ? { ...t, externalConflict: true } : t
+      ));
     }
   }, [currentTab, settings.syncOnSave, activeVault, performSync]);
 
@@ -1433,9 +1642,10 @@ export default function Home() {
       toggleLint: () => setShowLintPanel((l) => !l),
       splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
       closeSplit: handleCloseSplit,
+      knowledgeIngest: () => openKnowledgeIngest(),
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit, openKnowledgeIngest]);
 
   // ============================================================
   // Recent commands handler
@@ -1518,7 +1728,7 @@ export default function Home() {
   useEffect(() => {
     if (appState !== "app") return;
     // Don't capture hotkeys when a modal is open (settings handles its own)
-    if (showSettings) return;
+    if (showSettings || showKnowledgeIngest) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const view = editorViewRef.current;
@@ -1627,6 +1837,7 @@ export default function Home() {
         toggleLint: () => setShowLintPanel((l) => !l),
         splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
         closeSplit: handleCloseSplit,
+        knowledgeIngest: () => openKnowledgeIngest(),
       };
 
       for (const binding of hotkeys) {
@@ -1643,11 +1854,11 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, showKnowledgeIngest, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize, openKnowledgeIngest]);
 
   // Electron menu events
   useEffect(() => {
-    if (typeof window === "undefined" || !window.electronAPI || appState !== "app") return;
+    if (typeof window === "undefined" || !window.electronAPI || appState !== "app" || showKnowledgeIngest) return;
     const cleanups = [
       window.electronAPI.onMenuSave(handleSave),
       window.electronAPI.onMenuSaveAs(handleSaveAs),
@@ -1656,7 +1867,7 @@ export default function Home() {
       window.electronAPI.onMenuSettings(() => setShowSettings(true)),
     ];
     return () => cleanups.forEach((fn) => fn());
-  }, [appState, handleSave, handleSaveAs, handleNewFile, handleOpenFile]);
+  }, [appState, handleSave, handleSaveAs, handleNewFile, handleOpenFile, showKnowledgeIngest]);
 
   // Folder opening must also work before the first vault has been configured.
   useEffect(() => {
@@ -1846,6 +2057,7 @@ export default function Home() {
             onFileOrderChange={setFileOrder}
             refreshTrigger={sidebarRefresh}
             onTrashFile={handleTrashFileFromSidebar}
+            onAnalyzeNote={handleAnalyzeSidebarNote}
           />
         )}
 
@@ -1901,9 +2113,9 @@ export default function Home() {
                       ) : viewMode === "view" ? (
                         <ReadOnlyView content={splitContent} onChange={handleSplitContentChange} />
                       ) : viewMode === "source" ? (
-                        <SourceEditor content={splitContent} onChange={handleSplitContentChange} vaultPath={activeVault?.path} />
+                        <SourceEditor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} />
                       ) : (
-                        <Editor content={splitContent} onChange={handleSplitContentChange} vaultPath={activeVault?.path} focusMode={false} />
+                        <Editor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} focusMode={false} />
                       )}
                     </div>
                   </div>
@@ -2009,8 +2221,11 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             {currentTab && (
-              <span className={isDirty ? "text-[var(--yellow)]" : "text-[var(--green)]"}>
-                {isDirty ? "unsaved" : "saved"}
+              <span
+                className={currentTab.externalConflict ? "text-[var(--red)]" : isDirty ? "text-[var(--yellow)]" : "text-[var(--green)]"}
+                title={currentTab.externalConflict ? "The file changed on disk. Autosave is paused; saving requires confirmation." : undefined}
+              >
+                {currentTab.externalConflict ? "external change" : isDirty ? "unsaved" : "saved"}
               </span>
             )}
             {(activeVault?.gitRemote || settings.extraSyncProvider !== "none") && (
@@ -2318,6 +2533,17 @@ export default function Home() {
           vaultPath={activeVault.path}
           onFileSelect={(f) => { openFile(f); setShowVaultInsights(false); }}
           onClose={() => setShowVaultInsights(false)}
+        />
+      )}
+
+      {showKnowledgeIngest && activeVault && (
+        <KnowledgeIngest
+          vaults={vaults}
+          activeVaultId={activeVault.id}
+          initialSource={knowledgeSource}
+          onClose={() => { setShowKnowledgeIngest(false); setKnowledgeSource(null); }}
+          onApplied={handleKnowledgeApplied}
+          isFileDirty={isKnowledgeTargetDirty}
         />
       )}
     </div>

@@ -28,6 +28,7 @@ interface SidebarProps {
   onFileOrderChange: (order: Record<string, string[]>) => void;
   refreshTrigger?: number;
   onTrashFile?: (filePath: string) => void;
+  onAnalyzeNote?: (filePath: string) => void;
 }
 
 interface ContextMenuData {
@@ -327,6 +328,7 @@ export default function Sidebar({
   onFileOrderChange,
   refreshTrigger,
   onTrashFile,
+  onAnalyzeNote,
 }: SidebarProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -710,6 +712,13 @@ export default function Sidebar({
         });
       }
     }
+    if (!entry.isDirectory && /\.(md|markdown)$/i.test(entry.name) && onAnalyzeNote) {
+      items.push({ label: "", separator: true, onClick: () => {} });
+      items.push({
+        label: "Analyze for Knowledge Base",
+        onClick: () => onAnalyzeNote(entry.path),
+      });
+    }
     items.push({ label: "", separator: true, onClick: () => {} });
     items.push({
       label: entry.isDirectory ? "Open Folder Location" : "Open File Location",
@@ -720,7 +729,7 @@ export default function Sidebar({
       onClick: () => navigator.clipboard.writeText(entry.path),
     });
     return items;
-  }, [contextMenu, vault, handleNewFileIn, handleNewFolderIn, startRename, handleDelete, selectedFiles, handleMergeNotes, handleDeleteSelected]);
+  }, [contextMenu, vault, handleNewFileIn, handleNewFolderIn, startRename, handleDelete, selectedFiles, handleMergeNotes, handleDeleteSelected, onAnalyzeNote]);
 
   if (collapsed) return null;
 

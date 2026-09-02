@@ -31,7 +31,7 @@ desktop/
 
 ## Dev setup
 
-Requires Node 18+ and a Rust toolchain (1.77+).
+Requires Node 20.19+ and a Rust toolchain (1.77+).
 
 System libraries (Linux):
 

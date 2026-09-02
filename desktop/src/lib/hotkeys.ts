@@ -81,7 +81,9 @@ export type HotkeyAction =
   | "toggleLint"
   | "splitEditor"
   | "closeSplit"
-  | "vaultInsights";
+  | "vaultInsights"
+  // Knowledge
+  | "knowledgeIngest";
 
 export interface HotkeyBinding {
   action: HotkeyAction;
@@ -188,6 +190,8 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
   { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
+  // Knowledge
+  { action: "knowledgeIngest", label: "Knowledge: Ingest Source", keys: "", category: "Knowledge" },
 ];
 
 /**

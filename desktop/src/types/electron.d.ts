@@ -92,8 +92,13 @@ interface ElectronAPI {
 
   // File system
   readFile: (filePath: string) => Promise<string | null>;
+  readTextFile: (filePath: string) => Promise<string>;
   readBinaryFile: (filePath: string) => Promise<string | null>;
   writeFile: (filePath: string, content: string) => Promise<boolean>;
+  writeFileGuarded: (filePath: string, content: string, baseHash: string) => Promise<{
+    status: "written" | "conflict" | "error";
+    message?: string;
+  }>;
   readDir: (dirPath: string) => Promise<FileEntry[]>;
   createFile: (filePath: string) => Promise<boolean>;
   deleteFile: (filePath: string) => Promise<boolean>;
@@ -102,6 +107,23 @@ interface ElectronAPI {
   createDir: (dirPath: string) => Promise<boolean>;
   copyFile: (src: string, dest: string) => Promise<boolean>;
   writeBinaryFile: (filePath: string, base64: string) => Promise<boolean>;
+  applyKnowledgeChange: (change: {
+    vaultId: string;
+    vaultPath: string;
+    targetPath: string;
+    kind: "create" | "update";
+    baseHash: string | null;
+    content: string;
+  }) => Promise<{
+    status: "written" | "conflict" | "error";
+    absolutePath: string;
+    message?: string;
+  }>;
+  listKnowledgeFiles: (dirPath: string) => Promise<Array<{
+    filePath: string;
+    fileName: string;
+    relativePath: string;
+  }>>;
 
   // Vault management
   getConfig: () => Promise<AppConfig>;

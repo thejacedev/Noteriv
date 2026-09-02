@@ -55,7 +55,7 @@ Documentation improvements are valuable contributions. Fix typos, add missing de
 
 ### Prerequisites
 
-- **Node.js 18+** with npm
+- **Node.js 20.19+** with npm
 - **Git**
 - A code editor (VS Code, Cursor, or any editor you prefer)
 

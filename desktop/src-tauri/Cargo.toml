@@ -39,7 +39,9 @@ tiny_http = "0.12"
 # (No OS keyring — see src/auth.rs for rationale. Disk-only matches Electron.)
 
 # Encoding helpers
+atomicwrites = "0.4"
 base64 = "0.22"
+sha2 = "0.10"
 urlencoding = "2"
 url = "2"
 

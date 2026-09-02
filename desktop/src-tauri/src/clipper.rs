@@ -200,6 +200,7 @@ fn handle_request(mut req: tiny_http::Request, app: &tauri::AppHandle) {
                 save_dir = save_dir.join(f);
             }
         }
+        let mutation_guard = crate::commands_fs::lock_file_mutations();
         if let Err(e) = fs::create_dir_all(&save_dir) {
             let _ = req.respond(json_response(
                 500,
@@ -231,6 +232,7 @@ fn handle_request(mut req: tiny_http::Request, app: &tauri::AppHandle) {
             ));
             return;
         }
+        drop(mutation_guard);
 
         let saved = file_path.to_string_lossy().into_owned();
         let _ = req.respond(json_response(

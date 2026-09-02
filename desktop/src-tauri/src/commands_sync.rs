@@ -120,6 +120,7 @@ fn default_direction() -> String {
 }
 
 fn folder_sync(vault_path: &str, cfg: FolderConfig) -> Result<SyncResult, String> {
+    let _guard = crate::commands_fs::lock_file_mutations();
     if cfg.target_path.is_empty() {
         return Err("Invalid target path".into());
     }
@@ -547,6 +548,16 @@ async fn webdav_sync(vault_path: &str, cfg: WebDavConfig) -> Result<SyncResult, 
                 .unwrap_or_else(|| cfg.url.clone());
             let remote_url = format!("{}{}", server_root.trim_end_matches('/'), rf.href);
             let body = webdav_get(&client, &remote_url).await?;
+            let _guard = crate::commands_fs::lock_file_mutations();
+            let still_needs_pull = fs::metadata(&dest)
+                .ok()
+                .and_then(|metadata| metadata.modified().ok())
+                .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| rf.mtime_ms > duration.as_millis())
+                .unwrap_or(true);
+            if !still_needs_pull {
+                continue;
+            }
             fs::write(&dest, body).map_err(|e| e.to_string())?;
             pulled += 1;
         }

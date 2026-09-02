@@ -63,8 +63,10 @@ pub const SHIM_JS: &str = r#"
 
       // ---- file system
       readFile: function (filePath) { return invoke("fs_read_file", { filePath: filePath }); },
+      readTextFile: function (filePath) { return invoke("fs_read_text_file", { filePath: filePath }); },
       readBinaryFile: function (filePath) { return invoke("fs_read_binary_file", { filePath: filePath }); },
       writeFile: function (filePath, content) { return invoke("fs_write_file", { args: { filePath: filePath, content: content } }); },
+      writeFileGuarded: function (filePath, content, baseHash) { return invoke("fs_write_file_guarded", { args: { filePath: filePath, content: content, baseHash: baseHash } }); },
       readDir: function (dirPath) { return invoke("fs_read_dir", { dirPath: dirPath }); },
       createFile: function (filePath) { return invoke("fs_create_file", { filePath: filePath }); },
       deleteFile: function (filePath) { return invoke("fs_delete_file", { filePath: filePath }); },
@@ -73,6 +75,8 @@ pub const SHIM_JS: &str = r#"
       createDir: function (dirPath) { return invoke("fs_create_dir", { dirPath: dirPath }); },
       copyFile: function (src, dest) { return invoke("fs_copy_file", { args: { src: src, dest: dest } }); },
       writeBinaryFile: function (filePath, b64) { return invoke("fs_write_binary_file", { args: { filePath: filePath, base64: b64 } }); },
+      applyKnowledgeChange: function (change) { return invoke("fs_apply_knowledge_change", { args: change }); },
+      listKnowledgeFiles: function (dirPath) { return invoke("fs_list_knowledge_files", { dir: dirPath }); },
 
       // ---- vault
       getConfig: function () { return invoke("vault_get_config"); },

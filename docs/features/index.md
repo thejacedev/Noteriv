@@ -69,6 +69,10 @@ Select multiple files in the sidebar with `Ctrl+Click` and `Shift+Click`. Right-
 
 ## Study and Review
 
+### [Intelligent Knowledge Base](./intelligent-knowledge-base.md)
+
+Ingest text, Markdown, notes, or an editor selection into a local, review-first knowledge workflow. Noteriv finds related notes, proposes wiki-links and flashcards, shows diffs, and verifies that an existing note has not changed before applying an approved update.
+
 ### [Flashcards](./flashcards.md)
 
 Spaced repetition built into the editor. Define `Q:/A:` pairs or `{{cloze}}` deletions inside your notes and review them with the SM-2 scheduling algorithm. Progress is saved locally in the vault.
