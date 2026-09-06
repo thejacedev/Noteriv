@@ -1,5 +1,6 @@
 import { Decoration, WidgetType, EditorView } from "@codemirror/view";
 import { RenderedMarkdownWidget } from "../widget";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import type { BlockRenderer, BlockContext } from "../types";
 
 const tableRowRegex = /^\|(.+)\|\s*$/;
@@ -19,6 +20,14 @@ function renderCell(cell: string): string {
   });
 }
 
+/**
+ * A row of a rendered table.
+ *
+ * Cell text is note content, so this widget carries the same injection risk as
+ * {@link RenderedMarkdownWidget} and sanitizes at the same point: where the
+ * markup reaches the document. It cannot reuse that widget because the cells
+ * need click handlers bound to the checkboxes inside them.
+ */
 class TableRowWidget extends WidgetType {
   constructor(
     readonly cellsHtml: string,
@@ -30,9 +39,15 @@ class TableRowWidget extends WidgetType {
   toDOM(view: EditorView) {
     const span = document.createElement("span");
     span.className = "md-table-row-inner";
-    span.innerHTML = this.cellsHtml;
+    span.innerHTML = sanitizeHtml(this.cellsHtml);
 
+    // Checkboxes are matched to document positions by their order in the row,
+    // so bind only when the row rendered exactly the ones we counted in the
+    // source line. Sanitizing can drop a cell that carried one, and cell text
+    // can carry markup that looks like one; either way the mapping is no longer
+    // trustworthy and a click would edit the wrong position.
     const cbEls = span.querySelectorAll<HTMLElement>(".md-table-checkbox");
+    if (cbEls.length !== this.checkboxes.length) return span;
     cbEls.forEach((el, i) => {
       const cb = this.checkboxes[i];
       if (!cb) return;

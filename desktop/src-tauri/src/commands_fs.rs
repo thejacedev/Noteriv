@@ -2,6 +2,23 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use tauri::Manager;
+
+use crate::scope::PathScope;
+use crate::AppState;
+
+/// True when the webview may touch this path. See `crate::scope`.
+///
+/// Every command below is reachable by any script running in the webview, so
+/// each one has to ask. A refusal is logged and returned as the command's
+/// ordinary failure value rather than an error, matching the existing contract.
+fn allowed(app: &tauri::AppHandle, path: &str) -> bool {
+    let ok = app.state::<AppState>().scope.is_allowed(Path::new(path));
+    if !ok {
+        log::warn!("[fs] refused access outside the permitted scope: {path}");
+    }
+    ok
+}
 
 #[derive(Debug, Serialize)]
 pub struct DirEntry {
@@ -12,12 +29,18 @@ pub struct DirEntry {
 }
 
 #[tauri::command]
-pub async fn fs_read_file(file_path: String) -> Option<String> {
+pub async fn fs_read_file(app: tauri::AppHandle, file_path: String) -> Option<String> {
+    if !allowed(&app, &file_path) {
+        return None;
+    }
     fs::read_to_string(&file_path).ok()
 }
 
 #[tauri::command]
-pub async fn fs_read_binary_file(file_path: String) -> Option<String> {
+pub async fn fs_read_binary_file(app: tauri::AppHandle, file_path: String) -> Option<String> {
+    if !allowed(&app, &file_path) {
+        return None;
+    }
     let bytes = fs::read(&file_path).ok()?;
     Some(B64.encode(bytes))
 }
@@ -30,7 +53,10 @@ pub struct WriteFileInput {
 }
 
 #[tauri::command]
-pub async fn fs_write_file(args: WriteFileInput) -> bool {
+pub async fn fs_write_file(app: tauri::AppHandle, args: WriteFileInput) -> bool {
+    if !allowed(&app, &args.file_path) {
+        return false;
+    }
     let path = Path::new(&args.file_path);
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -39,7 +65,10 @@ pub async fn fs_write_file(args: WriteFileInput) -> bool {
 }
 
 #[tauri::command]
-pub async fn fs_read_dir(dir_path: String) -> Vec<DirEntry> {
+pub async fn fs_read_dir(app: tauri::AppHandle, dir_path: String) -> Vec<DirEntry> {
+    if !allowed(&app, &dir_path) {
+        return Vec::new();
+    }
     let entries = match fs::read_dir(&dir_path) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
@@ -72,7 +101,10 @@ pub async fn fs_read_dir(dir_path: String) -> Vec<DirEntry> {
 }
 
 #[tauri::command]
-pub async fn fs_create_file(file_path: String) -> bool {
+pub async fn fs_create_file(app: tauri::AppHandle, file_path: String) -> bool {
+    if !allowed(&app, &file_path) {
+        return false;
+    }
     let path = Path::new(&file_path);
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -81,12 +113,18 @@ pub async fn fs_create_file(file_path: String) -> bool {
 }
 
 #[tauri::command]
-pub async fn fs_delete_file(file_path: String) -> bool {
+pub async fn fs_delete_file(app: tauri::AppHandle, file_path: String) -> bool {
+    if !allowed(&app, &file_path) {
+        return false;
+    }
     fs::remove_file(&file_path).is_ok()
 }
 
 #[tauri::command]
-pub async fn fs_delete_dir(dir_path: String) -> bool {
+pub async fn fs_delete_dir(app: tauri::AppHandle, dir_path: String) -> bool {
+    if !allowed(&app, &dir_path) {
+        return false;
+    }
     fs::remove_dir_all(&dir_path).is_ok()
 }
 
@@ -99,12 +137,18 @@ pub struct RenameInput {
 }
 
 #[tauri::command]
-pub async fn fs_rename(args: RenameInput) -> bool {
+pub async fn fs_rename(app: tauri::AppHandle, args: RenameInput) -> bool {
+    if !allowed(&app, &args.old_path) || !allowed(&app, &args.new_path) {
+        return false;
+    }
     fs::rename(&args.old_path, &args.new_path).is_ok()
 }
 
 #[tauri::command]
-pub async fn fs_create_dir(dir_path: String) -> bool {
+pub async fn fs_create_dir(app: tauri::AppHandle, dir_path: String) -> bool {
+    if !allowed(&app, &dir_path) {
+        return false;
+    }
     fs::create_dir_all(&dir_path).is_ok()
 }
 
@@ -115,7 +159,10 @@ pub struct CopyInput {
 }
 
 #[tauri::command]
-pub async fn fs_copy_file(args: CopyInput) -> bool {
+pub async fn fs_copy_file(app: tauri::AppHandle, args: CopyInput) -> bool {
+    if !allowed(&app, &args.src) || !allowed(&app, &args.dest) {
+        return false;
+    }
     let dest = Path::new(&args.dest);
     if let Some(parent) = dest.parent() {
         let _ = fs::create_dir_all(parent);
@@ -131,7 +178,10 @@ pub struct WriteBinaryInput {
 }
 
 #[tauri::command]
-pub async fn fs_write_binary_file(args: WriteBinaryInput) -> bool {
+pub async fn fs_write_binary_file(app: tauri::AppHandle, args: WriteBinaryInput) -> bool {
+    if !allowed(&app, &args.file_path) {
+        return false;
+    }
     let bytes = match B64.decode(args.base64.as_bytes()) {
         Ok(b) => b,
         Err(_) => return false,
@@ -164,14 +214,17 @@ pub struct SearchInput {
 }
 
 #[tauri::command]
-pub async fn fs_search_in_files(args: SearchInput) -> Vec<SearchHit> {
+pub async fn fs_search_in_files(app: tauri::AppHandle, args: SearchInput) -> Vec<SearchHit> {
+    if !allowed(&app, &args.dir) {
+        return Vec::new();
+    }
     let mut results = Vec::new();
     if args.query.is_empty() || args.dir.is_empty() {
         return results;
     }
     let lower = args.query.to_lowercase();
 
-    fn walk(dir: &Path, lower: &str, results: &mut Vec<SearchHit>) {
+    fn walk(dir: &Path, lower: &str, results: &mut Vec<SearchHit>, scope: &PathScope) {
         if results.len() >= 200 {
             return;
         }
@@ -186,9 +239,16 @@ pub async fn fs_search_in_files(args: SearchInput) -> Vec<SearchHit> {
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                log::warn!("[fs] skipped a link out of the permitted scope: {path:?}");
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, lower, results);
+                walk(&path, lower, results, scope);
                 if results.len() >= 200 {
                     return;
                 }
@@ -212,7 +272,12 @@ pub async fn fs_search_in_files(args: SearchInput) -> Vec<SearchHit> {
         }
     }
 
-    walk(Path::new(&args.dir), &lower, &mut results);
+    walk(
+        Path::new(&args.dir),
+        &lower,
+        &mut results,
+        &app.state::<AppState>().scope,
+    );
     results
 }
 
@@ -233,13 +298,16 @@ fn rel_path(base: &str, full: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn fs_list_all_files(dir: String) -> Vec<ListedFile> {
+pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<ListedFile> {
+    if !allowed(&app, &dir) {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if dir.is_empty() {
         return out;
     }
 
-    fn walk(dir: &Path, base: &str, out: &mut Vec<ListedFile>) {
+    fn walk(dir: &Path, base: &str, out: &mut Vec<ListedFile>, scope: &PathScope) {
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -251,9 +319,15 @@ pub async fn fs_list_all_files(dir: String) -> Vec<ListedFile> {
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, base, out);
+                walk(&path, base, out, scope);
             } else if name_s.ends_with(".md") || name_s.ends_with(".markdown") {
                 let full = path.to_string_lossy().into_owned();
                 let trimmed_name = name_s
@@ -269,7 +343,12 @@ pub async fn fs_list_all_files(dir: String) -> Vec<ListedFile> {
         }
     }
 
-    walk(Path::new(&dir), &dir, &mut out);
+    walk(
+        Path::new(&dir),
+        &dir,
+        &mut out,
+        &app.state::<AppState>().scope,
+    );
     out
 }
 
@@ -288,7 +367,10 @@ pub struct StatsFile {
 }
 
 #[tauri::command]
-pub async fn fs_get_file_stats(dir: String) -> Vec<StatsFile> {
+pub async fn fs_get_file_stats(app: tauri::AppHandle, dir: String) -> Vec<StatsFile> {
+    if !allowed(&app, &dir) {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if dir.is_empty() {
         return out;
@@ -300,7 +382,7 @@ pub async fn fs_get_file_stats(dir: String) -> Vec<StatsFile> {
             .unwrap_or(0.0)
     }
 
-    fn walk(dir: &Path, base: &str, out: &mut Vec<StatsFile>) {
+    fn walk(dir: &Path, base: &str, out: &mut Vec<StatsFile>, scope: &PathScope) {
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -312,9 +394,15 @@ pub async fn fs_get_file_stats(dir: String) -> Vec<StatsFile> {
                 continue;
             }
             let path = entry.path();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !scope.may_visit(&file_type, &path) {
+                continue;
+            }
+            let is_dir = file_type.is_dir();
             if is_dir {
-                walk(&path, base, out);
+                walk(&path, base, out, scope);
             } else if name_s.ends_with(".md") || name_s.ends_with(".markdown") {
                 if let Ok(meta) = entry.metadata() {
                     let full = path.to_string_lossy().into_owned();
@@ -336,6 +424,11 @@ pub async fn fs_get_file_stats(dir: String) -> Vec<StatsFile> {
         }
     }
 
-    walk(Path::new(&dir), &dir, &mut out);
+    walk(
+        Path::new(&dir),
+        &dir,
+        &mut out,
+        &app.state::<AppState>().scope,
+    );
     out
 }
