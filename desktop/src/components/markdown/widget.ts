@@ -1,6 +1,13 @@
 import { WidgetType } from "@codemirror/view";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 
-/** A CodeMirror widget that renders arbitrary HTML inline. */
+/**
+ * A CodeMirror widget that renders HTML inline.
+ *
+ * Most callers pass markup this module generated itself, but the raw HTML block
+ * renderer passes note content straight through, so everything is sanitized
+ * here at the single point where it reaches the document.
+ */
 export class RenderedMarkdownWidget extends WidgetType {
   constructor(readonly html: string, readonly className: string) {
     super();
@@ -8,7 +15,7 @@ export class RenderedMarkdownWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = this.className;
-    span.innerHTML = this.html;
+    span.innerHTML = sanitizeHtml(this.html);
     return span;
   }
   ignoreEvent(e: Event) {
