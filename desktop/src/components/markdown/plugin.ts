@@ -5,7 +5,7 @@ import {
   ViewUpdate,
   EditorView,
 } from "@codemirror/view";
-import { EditorState, RangeSetBuilder, Facet } from "@codemirror/state";
+import { EditorState, RangeSetBuilder, Facet, StateEffect } from "@codemirror/state";
 import { RenderedMarkdownWidget } from "./widget";
 import { getBlockRenderers, getInlineRenderers } from "./registry";
 import { CodeBlockTracker } from "./renderers/code-blocks";
@@ -13,7 +13,11 @@ import { MathBlockTracker } from "./renderers/math";
 import { HtmlBlockTracker } from "./renderers/html";
 import { processTocLine } from "./renderers/toc";
 import { extractHeadings } from "@/lib/toc-utils";
+import { onCodeBlockProcessorsChange } from "@/lib/markdown-code-block-registry";
 import type { BlockContext, InlineReplacement } from "./types";
+
+/** Dispatched when a plugin registers or removes a code-block processor. */
+const codeBlockProcessorsChanged = StateEffect.define<null>();
 
 /** When true, all lines render as non-cursor (pure view mode). */
 export const renderAllLines = Facet.define<boolean, boolean>({
@@ -209,12 +213,31 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
     private htmlTracker: HtmlBlockTracker;
     private cachedHeadings: { level: number; text: string; line: number }[] | null = null;
     private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    private unsubscribeProcessors: () => void;
+    private processorRebuildQueued = false;
+    private destroyed = false;
 
     constructor(view: EditorView) {
       this.codeTracker = new CodeBlockTracker();
       this.htmlTracker = new HtmlBlockTracker();
       this.runPreScans(view);
       this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
+      // Re-render open code blocks when a plugin is enabled or disabled.
+      // Deferred because a registration can happen mid-update (e.g. from a
+      // processor), and coalesced since a plugin may register several languages.
+      this.unsubscribeProcessors = onCodeBlockProcessorsChange(() => {
+        if (this.processorRebuildQueued) return;
+        this.processorRebuildQueued = true;
+        queueMicrotask(() => {
+          this.processorRebuildQueued = false;
+          if (!this.destroyed) view.dispatch({ effects: codeBlockProcessorsChanged.of(null) });
+        });
+      });
+    }
+
+    destroy() {
+      this.destroyed = true;
+      this.unsubscribeProcessors();
     }
 
     private runPreScans(view: EditorView) {
@@ -237,7 +260,11 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         // Document changed — re-scan block structure and rebuild
         this.runPreScans(update.view);
         this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
-      } else if (update.selectionSet || update.viewportChanged) {
+      } else if (
+        update.selectionSet ||
+        update.viewportChanged ||
+        update.transactions.some((tr) => tr.effects.some((e) => e.is(codeBlockProcessorsChanged)))
+      ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
         this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
       }

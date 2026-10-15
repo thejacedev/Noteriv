@@ -30,6 +30,22 @@ interface RegistryEntry {
 const RESERVED_LANGUAGES = new Set(["dataview", "mermaid"]);
 
 const registry = new Map<string, RegistryEntry>();
+const listeners = new Set<() => void>();
+
+function notifyChange(): void {
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Subscribe to processor registrations and removals, so open editors can
+ * re-render blocks whose renderer changed. Returns an unsubscribe function.
+ */
+export function onCodeBlockProcessorsChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export function registerCodeBlockProcessor(
   pluginId: string,
@@ -49,6 +65,7 @@ export function registerCodeBlockProcessor(
     );
   }
   registry.set(key, { pluginId, processor });
+  notifyChange();
 }
 
 export function unregisterCodeBlockProcessor(pluginId: string, language: string): void {
@@ -56,14 +73,20 @@ export function unregisterCodeBlockProcessor(pluginId: string, language: string)
   const existing = registry.get(key);
   if (existing && existing.pluginId === pluginId) {
     registry.delete(key);
+    notifyChange();
   }
 }
 
 /** Called from PluginManager.unloadPlugin — removes every processor owned by this plugin. */
 export function unregisterAllCodeBlockProcessorsForPlugin(pluginId: string): void {
+  let removed = false;
   for (const [key, entry] of registry) {
-    if (entry.pluginId === pluginId) registry.delete(key);
+    if (entry.pluginId === pluginId) {
+      registry.delete(key);
+      removed = true;
+    }
   }
+  if (removed) notifyChange();
 }
 
 export function getCodeBlockProcessor(language: string): RegistryEntry | undefined {

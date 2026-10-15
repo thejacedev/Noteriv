@@ -380,9 +380,18 @@ class DataviewWidget extends WidgetType {
 
 class CodeBlockWidget extends WidgetType {
   private cleanupFns: Array<() => void> = [];
+  private readonly langKey: string;
+  private readonly processor: CodeBlockProcessor | undefined;
 
   constructor(readonly lang: string, readonly code: string) {
     super();
+    // Plugin-registered code block processors (e.g. ```chessboard). Only the
+    // first whitespace-delimited token of the fence language is used for the
+    // lookup, so `lang` can carry trailing args without breaking the match.
+    // Resolved here rather than in toDOM() so eq() can tell when a plugin was
+    // enabled or disabled while the block was on screen.
+    this.langKey = lang.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    this.processor = this.langKey ? getCodeBlockProcessor(this.langKey)?.processor : undefined;
   }
 
   toDOM() {
@@ -396,13 +405,8 @@ class CodeBlockWidget extends WidgetType {
       return this.renderMermaid();
     }
 
-    // Plugin-registered code block processors (e.g. ```chessboard). Only the
-    // first whitespace-delimited token of the fence language is used for the
-    // lookup, so `this.lang` can carry trailing args without breaking the match.
-    const langKey = this.lang.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-    const entry = langKey ? getCodeBlockProcessor(langKey) : undefined;
-    if (entry) {
-      return this.renderWithProcessor(entry.processor, langKey);
+    if (this.processor) {
+      return this.renderWithProcessor(this.processor, this.langKey);
     }
 
     const container = document.createElement("div");
@@ -572,7 +576,7 @@ class CodeBlockWidget extends WidgetType {
   ignoreEvent() { return true; }
 
   eq(other: CodeBlockWidget) {
-    return this.lang === other.lang && this.code === other.code;
+    return this.lang === other.lang && this.code === other.code && this.processor === other.processor;
   }
 }
 
