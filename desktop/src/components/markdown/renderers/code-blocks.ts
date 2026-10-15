@@ -1,6 +1,11 @@
 import { Decoration, WidgetType } from "@codemirror/view";
 import { Text } from "@codemirror/state";
 import type { BlockContext } from "../types";
+import {
+  getCodeBlockProcessor,
+  type CodeBlockProcessor,
+  type CodeBlockProcessorContext,
+} from "@/lib/markdown-code-block-registry";
 
 // Simple token-based syntax highlighting
 // Each language defines regex patterns with associated CSS classes
@@ -374,6 +379,8 @@ class DataviewWidget extends WidgetType {
 }
 
 class CodeBlockWidget extends WidgetType {
+  private cleanupFns: Array<() => void> = [];
+
   constructor(readonly lang: string, readonly code: string) {
     super();
   }
@@ -387,6 +394,15 @@ class CodeBlockWidget extends WidgetType {
     // Mermaid blocks get rendered as diagrams
     if (this.lang === "mermaid") {
       return this.renderMermaid();
+    }
+
+    // Plugin-registered code block processors (e.g. ```chessboard). Only the
+    // first whitespace-delimited token of the fence language is used for the
+    // lookup, so `this.lang` can carry trailing args without breaking the match.
+    const langKey = this.lang.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    const entry = langKey ? getCodeBlockProcessor(langKey) : undefined;
+    if (entry) {
+      return this.renderWithProcessor(entry.processor, langKey);
     }
 
     const container = document.createElement("div");
@@ -520,6 +536,37 @@ class CodeBlockWidget extends WidgetType {
     })();
 
     return container;
+  }
+
+  private renderWithProcessor(processor: CodeBlockProcessor, langKey: string): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "md-codeblock-plugin";
+    container.dataset.lang = langKey;
+
+    try {
+      const ctx: CodeBlockProcessorContext = {
+        source: this.code,
+        language: langKey,
+        sourcePath: null,
+      };
+      const cleanup = processor(this.code, container, ctx);
+      if (typeof cleanup === "function") this.cleanupFns.push(cleanup);
+    } catch (err: any) {
+      container.innerHTML = `<div class="md-codeblock-plugin-error">Plugin render error: ${escapeHtml(err?.message ?? String(err))}</div>`;
+    }
+
+    return container;
+  }
+
+  destroy(_dom: HTMLElement) {
+    for (const fn of this.cleanupFns) {
+      try {
+        fn();
+      } catch {
+        // Don't let plugin cleanup crash the editor
+      }
+    }
+    this.cleanupFns = [];
   }
 
   ignoreEvent() { return true; }

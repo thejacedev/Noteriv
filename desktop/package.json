@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev:next": "next dev --port 3456 --webpack",
-    "dev:tauri": "wait-on http-get://localhost:3456 && WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "dev:tauri": "wait-on http-get://localhost:3456 && node scripts/dev-tauri.js",
     "dev": "concurrently --kill-others \"npm run dev:next\" \"npm run dev:tauri\"",
     "build:next": "next build",
     "build": "npm run build:next && tauri build",

@@ -20,6 +20,7 @@ Plugins can:
 - Read and write files in the vault
 - Listen for events (file open, file save, editor change, etc.)
 - Insert text into the editor
+- Register custom renderers for fenced code blocks (e.g. diagrams, charts, chess boards)
 - Show notification messages
 
 ## Installing Plugins

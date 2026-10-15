@@ -3,6 +3,15 @@
 // Each plugin has a manifest.json and a main.js entry file.
 // Plugin config (enabled/disabled) stored in {vaultPath}/.noteriv/plugin-config.json
 
+import {
+  registerCodeBlockProcessor,
+  unregisterCodeBlockProcessor,
+  unregisterAllCodeBlockProcessorsForPlugin,
+  type CodeBlockProcessor,
+  type CodeBlockProcessorContext,
+} from "./markdown-code-block-registry";
+export type { CodeBlockProcessor, CodeBlockProcessorContext };
+
 // ─── Types ───
 
 export interface PluginManifest {
@@ -55,6 +64,10 @@ export interface PluginAPI {
     getSelection: () => string;
     replaceSelection: (text: string) => void;
     getCursorPosition: () => { line: number; ch: number };
+  };
+  markdown: {
+    registerCodeBlockProcessor: (language: string, processor: CodeBlockProcessor) => void;
+    unregisterCodeBlockProcessor: (language: string) => void;
   };
   app: {
     version: string;
@@ -118,7 +131,7 @@ interface PluginConfig {
   enabled: string[];
 }
 
-const APP_VERSION = "1.2.2";
+const APP_VERSION = "1.3.0";
 const PLUGINS_DIR = ".noteriv/plugins";
 const CONFIG_FILE = ".noteriv/plugin-config.json";
 
@@ -339,6 +352,9 @@ export class PluginManager {
       if (tabId.startsWith(prefix)) this.settingsTabs.delete(tabId);
     }
 
+    // Remove markdown code-block processors registered by this plugin
+    unregisterAllCodeBlockProcessorsForPlugin(id);
+
     // Remove event handlers registered by this plugin (tracked under prefixed keys)
     for (const [eventKey, handlers] of this.eventHandlers) {
       if (eventKey.startsWith(prefix)) {
@@ -549,6 +565,15 @@ export class PluginManager {
         getCursorPosition: (): { line: number; ch: number } => {
           const state = manager.getEditorState();
           return state?.getCursorPosition() ?? { line: 0, ch: 0 };
+        },
+      },
+
+      markdown: {
+        registerCodeBlockProcessor: (language: string, processor: CodeBlockProcessor) => {
+          registerCodeBlockProcessor(pluginId, language, processor);
+        },
+        unregisterCodeBlockProcessor: (language: string) => {
+          unregisterCodeBlockProcessor(pluginId, language);
         },
       },
 

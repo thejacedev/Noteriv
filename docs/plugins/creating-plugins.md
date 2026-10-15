@@ -69,7 +69,7 @@ Both functions can be synchronous or return a Promise (async).
 
 ## Plugin API Reference
 
-The API object passed to `onLoad` has five namespaces: `vault`, `ui`, `events`, `editor`, and `app`.
+The API object passed to `onLoad` has six namespaces: `vault`, `ui`, `events`, `editor`, `markdown`, and `app`.
 
 ### api.vault
 
@@ -197,6 +197,31 @@ api.ui.addCommand({
   }
 });
 ```
+
+### api.markdown
+
+Register a custom renderer for a fenced code-block language, so a block like ` ```my-lang ` renders as something other than plain code — a diagram, a chart, a chess board, etc.
+
+| Method | Signature | Description |
+|---|---|---|
+| `registerCodeBlockProcessor` | `(language: string, processor: (source: string, el: HTMLElement, ctx) => void \| (() => void)) => void` | Render fenced code blocks of `language` by mutating `el`. Return a cleanup function if the processor sets up listeners or timers. |
+| `unregisterCodeBlockProcessor` | `(language: string) => void` | Remove a processor your plugin registered. Also done automatically when the plugin is disabled. |
+
+The `ctx` argument passed to the processor has `{ source, language, sourcePath }` — `source` duplicates the first argument (kept for symmetry with Obsidian's API), `language` is the fence language as registered (lowercased), and `sourcePath` is the vault-relative path of the note being rendered when known (may be `null`).
+
+Notes:
+- `dataview` and `mermaid` are reserved — Noteriv renders these natively and a plugin cannot override them.
+- The processor can be called more than once for the same block (e.g. when it scrolls back into view or the block's content changes), so clean up and re-create any state each call rather than assuming it runs once.
+- This only affects the editor's live-preview and reading-mode rendering. It does **not** run during export or publish (`markdown-to-html.ts` has its own, separate pipeline) — a code block rendered by your processor will export as plain `<pre><code>`.
+
+**Example -- render block content uppercased**:
+```javascript
+api.markdown.registerCodeBlockProcessor("shout", (source, el) => {
+  el.textContent = source.toUpperCase();
+});
+```
+
+See the Chessboard plugin example (`desktop/examples/plugins/chessboard/` in this repository) for a complete example that parses FEN and draws an SVG chess diagram.
 
 ### api.app
 

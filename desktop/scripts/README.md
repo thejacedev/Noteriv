@@ -1,5 +1,14 @@
 # Build scripts
 
+## Dev server
+
+`dev-tauri.js` is a cross-platform wrapper around `tauri dev`, used by the
+`npm run dev` / `npm run dev:tauri` scripts. It only sets the
+`WEBKIT_DISABLE_DMABUF_RENDERER` / `WEBKIT_DISABLE_COMPOSITING_MODE` WebKitGTK
+workaround env vars on Linux — Windows (WebView2) and macOS (WKWebView) don't
+need them, and cmd.exe/PowerShell can't parse the `VAR=1 cmd` shell syntax
+those vars used to be set with directly in `package.json`.
+
 ## Windows portable build
 
 `build-windows-portable.ps1` packages a portable zip. Two flavors:

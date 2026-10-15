@@ -176,6 +176,23 @@ export const markdownRenderTheme = EditorView.baseTheme({
     lineHeight: "1.35",
   },
 
+  // Plugin-registered code block processors (e.g. ```chessboard)
+  "& .md-codeblock-plugin": {
+    borderRadius: "8px",
+    overflow: "hidden",
+    margin: "2px 0",
+    width: "100%",
+  },
+  "& .md-codeblock-plugin-error": {
+    padding: "10px 16px",
+    borderRadius: "8px",
+    border: "1px solid color-mix(in srgb, var(--red) 40%, transparent)",
+    background: "color-mix(in srgb, var(--red) 8%, transparent)",
+    color: "var(--red)",
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: "12px",
+  },
+
   // Syntax highlighting tokens
   "& .tok-keyword": { color: "var(--mauve)" },
   "& .tok-string": { color: "var(--green)" },

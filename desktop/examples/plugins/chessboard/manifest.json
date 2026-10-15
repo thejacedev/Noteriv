@@ -1,0 +1,9 @@
+{
+  "id": "chessboard",
+  "name": "Chessboard",
+  "version": "0.1.0",
+  "description": "Render static chess diagrams from FEN in ```chessboard code blocks.",
+  "author": "duongsinhchess",
+  "minAppVersion": "1.3.0",
+  "main": "main.js"
+}
