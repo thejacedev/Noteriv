@@ -223,6 +223,20 @@ api.markdown.registerCodeBlockProcessor("shout", (source, el) => {
 
 See the Chessboard plugin example (`desktop/examples/plugins/chessboard/` in this repository) for a complete example that parses FEN and draws an SVG chess diagram.
 
+#### Mobile support
+
+The Noteriv mobile app can run `registerCodeBlockProcessor` plugins too, but needs one extra manifest field since it can't execute every installed plugin's code just to discover which languages it handles the way desktop does at startup:
+
+```json
+{
+  "codeBlockLanguages": ["my-lang"]
+}
+```
+
+Add this array to your `manifest.json` listing every language your plugin registers a processor for. Without it, the mobile app has no way to know your plugin should run for a given fence language, even if it's installed and enabled.
+
+Mobile also runs your `main.js` in a different sandbox than desktop: each code block gets its own disposable WebView (there's no `document`/DOM-safe eval inside the React Native app itself), your `onLoad` is called fresh for every block that needs it, and only a reduced API surface is available inside that WebView — `api.markdown`, a no-op `api.ui.showNotice`, and a static, read-only `api.app`. `api.vault`, `api.events`, and `api.editor` are **not** available on mobile.
+
 ### api.app
 
 Read-only application state.

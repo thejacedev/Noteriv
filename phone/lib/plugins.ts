@@ -9,6 +9,8 @@ export interface PluginManifest {
   description: string;
   author: string;
   main: string;
+  /** Fenced code-block languages this plugin renders (e.g. ["chessboard"]). */
+  codeBlockLanguages?: string[];
 }
 
 export interface PluginInstance {

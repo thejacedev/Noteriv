@@ -37,7 +37,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#101030"
         }
-      ]
+      ],
+      "./plugins/withAndroidDebugBundle.js"
     ],
     "experiments": {
       "typedRoutes": true,

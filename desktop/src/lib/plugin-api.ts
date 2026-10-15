@@ -22,6 +22,12 @@ export interface PluginManifest {
   author: string;
   minAppVersion?: string;
   main: string;         // entry JS file relative to plugin dir
+  // Fenced code-block languages this plugin renders (e.g. ["chessboard"]).
+  // Not read by desktop (which registers languages dynamically at runtime via
+  // api.markdown.registerCodeBlockProcessor), but the Noteriv mobile app reads
+  // it statically to know which plugin to load for a given fence language
+  // without having to execute every installed plugin's code up front.
+  codeBlockLanguages?: string[];
 }
 
 export interface PluginInstance {
