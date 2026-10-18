@@ -547,21 +547,28 @@ export default function SettingsModal({
     setRemoteError("");
     setRemoteSaved(false);
     try {
+      const trimmed = remoteUrl.trim().replace(/\/+$/, "");
       const status = await window.electronAPI.gitStatus(vault.path);
-      if (!status.isRepo) {
-        await window.electronAPI.gitInit(vault.path);
-      }
-      const trimmed = remoteUrl.trim();
       if (trimmed) {
+        if (!status.isRepo) {
+          await window.electronAPI.gitInit(vault.path);
+        }
         await window.electronAPI.gitSetRemote(vault.path, trimmed);
+      } else if (status.isRepo) {
+        // An empty URL removes the remote from the repository as well, so
+        // nothing keeps syncing against it.
+        await window.electronAPI.gitSetRemote(vault.path, "");
       }
       const updated = await window.electronAPI.updateVault(vault.id, {
         gitRemote: trimmed || null,
       });
       if (updated) onVaultUpdate(updated);
+      setRemoteUrl(trimmed);
       setRemoteSaved(true);
     } catch (err: unknown) {
-      setRemoteError(err instanceof Error ? err.message : "Failed to save remote");
+      setRemoteError(
+        typeof err === "string" ? err : err instanceof Error ? err.message : "Failed to save remote"
+      );
     } finally {
       setSavingRemote(false);
     }

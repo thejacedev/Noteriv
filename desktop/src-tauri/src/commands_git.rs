@@ -165,6 +165,56 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration) -> GitRunResult {
     }
 }
 
+/// Mask the user-info part of every URL in `text`. Git echoes remote URLs in
+/// its errors ("unable to access 'https://user:token@host/...'"), and the sync
+/// commands pass an authenticated URL, so raw stderr must not reach the UI.
+fn redact_credentials(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("://") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        let end = tail
+            .find(|c: char| c == '/' || c.is_whitespace() || c == '\'' || c == '"')
+            .unwrap_or(tail.len());
+        match tail[..end].rfind('@') {
+            Some(at) => {
+                out.push_str("***@");
+                rest = &tail[at + 1..];
+            }
+            None => rest = tail,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A failed git invocation's message, safe to show to the user.
+fn git_error(r: &GitRunResult) -> String {
+    if r.stderr.is_empty() {
+        "git command failed".into()
+    } else {
+        redact_credentials(&r.stderr)
+    }
+}
+
+/// True when a pull failed only because the branch doesn't exist on the
+/// remote yet — the normal state of a freshly created, empty repository.
+fn remote_branch_missing(r: &GitRunResult) -> bool {
+    r.stderr.contains("couldn't find remote ref")
+}
+
+/// Older versions pushed with `-u <authenticated URL>`, which saved that URL
+/// (token included) as the branch's upstream in .git/config. Point the branch
+/// back at the `origin` remote so the token no longer sits there in plain text.
+fn repair_upstream(p: &Path, branch: &str) {
+    let key = format!("branch.{branch}.remote");
+    let r = run_git(&["config", "--get", &key], p, None);
+    if r.success && r.stdout.contains("://") {
+        let _ = run_git(&["config", &key, "origin"], p, None);
+    }
+}
+
 fn ok_or_err(r: GitRunResult) -> Result<String, String> {
     if r.success {
         Ok(r.stdout)
@@ -254,13 +304,20 @@ pub struct SetRemoteInput {
 #[tauri::command]
 pub async fn git_set_remote(args: SetRemoteInput) -> Result<bool, String> {
     let p = Path::new(&args.dir);
+    let url = args.url.trim().trim_end_matches('/');
     let existing = run_git(&["remote", "get-url", "origin"], p, None);
-    if existing.success {
-        if existing.stdout != args.url {
-            ok_or_err(run_git(&["remote", "set-url", "origin", &args.url], p, None))?;
+    if url.is_empty() {
+        // Clearing the remote in settings has to remove it from the repo too,
+        // or `git status` keeps reporting one and sync keeps trying to use it.
+        if existing.success {
+            ok_or_err(run_git(&["remote", "remove", "origin"], p, None))?;
+        }
+    } else if existing.success {
+        if existing.stdout != url {
+            ok_or_err(run_git(&["remote", "set-url", "origin", url], p, None))?;
         }
     } else {
-        ok_or_err(run_git(&["remote", "add", "origin", &args.url], p, None))?;
+        ok_or_err(run_git(&["remote", "add", "origin", url], p, None))?;
     }
     Ok(true)
 }
@@ -336,6 +393,7 @@ pub async fn git_sync(args: GitSyncInput) -> Result<bool, String> {
     });
 
     let branch = current_branch(p);
+    repair_upstream(p, &branch);
     let remote_r = run_git(&["remote", "get-url", "origin"], p, None);
     let remote = if remote_r.success {
         Some(remote_r.stdout.clone())
@@ -360,7 +418,6 @@ pub async fn git_sync(args: GitSyncInput) -> Result<bool, String> {
         if needs_stash {
             let _ = run_git(&["stash", "push", "-m", "noteriv-sync-stash"], p, None);
         }
-        let _ = run_git(&["fetch", &pull_url], p, token_ref);
         let pull = run_git(&["pull", "--rebase", &pull_url, &branch], p, token_ref);
         // A conflicting rebase stops mid-way and leaves HEAD detached. Don't
         // commit on top of it: abort, restore the stash, and surface the
@@ -372,11 +429,17 @@ pub async fn git_sync(args: GitSyncInput) -> Result<bool, String> {
             }
             return Err(format!(
                 "Sync paused: remote changes conflict with local edits and need manual resolution. {}",
-                pull.stderr
+                git_error(&pull)
             ));
         }
         if needs_stash {
             let _ = run_git(&["stash", "pop"], p, None);
+        }
+        // Authentication, network and "repository not found" failures used to
+        // be dropped here, so a misconfigured remote looked like a successful
+        // sync. An empty remote has no branch to pull yet; that one is fine.
+        if !pull.success && !remote_branch_missing(&pull) {
+            return Err(format!("Sync failed while pulling: {}", git_error(&pull)));
         }
     }
 
@@ -399,7 +462,12 @@ pub async fn git_sync(args: GitSyncInput) -> Result<bool, String> {
             Some(c) => c.auth_url(r),
             None => "origin".into(),
         };
-        let _ = run_git(&["push", "-u", &push_url, &branch], p, token_ref);
+        // No `-u`: with an authenticated URL it would store the token in
+        // .git/config as the branch's upstream.
+        let push = run_git(&["push", &push_url, &branch], p, token_ref);
+        if !push.success {
+            return Err(format!("Sync failed while pushing: {}", git_error(&push)));
+        }
     }
     Ok(true)
 }
@@ -417,6 +485,7 @@ pub async fn git_pull(args: GitDirVaultInput) -> Result<bool, String> {
     let p = Path::new(&args.dir);
     let creds = credentials_for_vault(args.vault_id.as_deref());
     let branch = current_branch(p);
+    repair_upstream(p, &branch);
     let has_changes = run_git(&["status", "--porcelain"], p, None);
     let needs_stash = has_changes.success && !has_changes.stdout.is_empty();
     if needs_stash {
@@ -432,8 +501,8 @@ pub async fn git_pull(args: GitDirVaultInput) -> Result<bool, String> {
     if needs_stash {
         let _ = run_git(&["stash", "pop"], p, None);
     }
-    if !result.success {
-        return Err(result.stderr);
+    if !result.success && !remote_branch_missing(&result) {
+        return Err(git_error(&result));
     }
     Ok(true)
 }
@@ -450,7 +519,7 @@ pub async fn git_fetch(args: GitDirVaultInput) -> Result<bool, String> {
         run_git(&["fetch", "origin"], p, None)
     };
     if !res.success {
-        return Err(res.stderr);
+        return Err(git_error(&res));
     }
     Ok(true)
 }
@@ -606,5 +675,114 @@ pub async fn git_show_file(args: GitShowFileInput) -> Option<String> {
         Some(r.stdout)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(format!("noteriv-git-{name}-{suffix}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn git(dir: &Path, args: &[&str]) -> GitRunResult {
+        run_git(args, dir, None)
+    }
+
+    /// A vault repo on `main` with one committed note and a local identity.
+    fn vault(name: &str) -> PathBuf {
+        let dir = scratch(name);
+        assert!(git(&dir, &["init", "-b", "main"]).success);
+        git(&dir, &["config", "user.email", "test@example.com"]);
+        git(&dir, &["config", "user.name", "Test"]);
+        fs::write(dir.join("note.md"), "hello").unwrap();
+        git(&dir, &["add", "-A"]);
+        assert!(git(&dir, &["commit", "-m", "init"]).success);
+        dir
+    }
+
+    fn sync(dir: &Path) -> Result<bool, String> {
+        tauri::async_runtime::block_on(git_sync(GitSyncInput {
+            dir: dir.to_string_lossy().into_owned(),
+            message: Some("test sync".into()),
+            vault_id: None,
+        }))
+    }
+
+    #[test]
+    fn redacts_credentials_in_urls() {
+        assert_eq!(
+            redact_credentials("fatal: unable to access 'https://oauth2:glpat-SECRET@gitlab.com/a/b.git/': 403"),
+            "fatal: unable to access 'https://***@gitlab.com/a/b.git/': 403"
+        );
+        assert_eq!(
+            redact_credentials("https://user:p@ss@host/x and https://other@h2/y"),
+            "https://***@host/x and https://***@h2/y"
+        );
+        assert_eq!(
+            redact_credentials("fatal: repository 'https://gitlab.com/a/b.git/' not found"),
+            "fatal: repository 'https://gitlab.com/a/b.git/' not found"
+        );
+        assert_eq!(redact_credentials("no urls here"), "no urls here");
+    }
+
+    #[test]
+    fn sync_reports_an_unreachable_remote() {
+        let dir = vault("unreachable");
+        let missing = dir.join("does-not-exist.git");
+        git(&dir, &["remote", "add", "origin", &missing.to_string_lossy()]);
+        let err = sync(&dir).expect_err("a missing remote must fail the sync");
+        assert!(err.starts_with("Sync failed while pulling"), "{err}");
+    }
+
+    #[test]
+    fn sync_pushes_to_an_empty_remote() {
+        let dir = vault("empty-remote");
+        let remote = scratch("empty-remote-bare");
+        assert!(git(&remote, &["init", "--bare", "-b", "main"]).success);
+        git(&dir, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        assert_eq!(sync(&dir), Ok(true));
+        let pushed = git(&remote, &["log", "--oneline", "main"]);
+        assert!(pushed.success && pushed.stdout.contains("init"), "{}", pushed.stdout);
+    }
+
+    #[test]
+    fn sync_repairs_an_upstream_that_stored_a_token() {
+        let dir = vault("upstream");
+        let remote = scratch("upstream-bare");
+        assert!(git(&remote, &["init", "--bare", "-b", "main"]).success);
+        git(&dir, &["remote", "add", "origin", &remote.to_string_lossy()]);
+        git(&dir, &["config", "branch.main.remote", "https://oauth2:SECRET@gitlab.example.com/a/b.git"]);
+        assert_eq!(sync(&dir), Ok(true));
+        assert_eq!(git(&dir, &["config", "--get", "branch.main.remote"]).stdout, "origin");
+    }
+
+    #[test]
+    fn clearing_the_remote_removes_it() {
+        let dir = vault("clear-remote");
+        let set = |url: &str| {
+            tauri::async_runtime::block_on(git_set_remote(SetRemoteInput {
+                dir: dir.to_string_lossy().into_owned(),
+                url: url.into(),
+            }))
+        };
+        assert_eq!(set("https://gitlab.example.com/a/b.git/"), Ok(true));
+        assert_eq!(
+            git(&dir, &["remote", "get-url", "origin"]).stdout,
+            "https://gitlab.example.com/a/b.git"
+        );
+        assert_eq!(set("  "), Ok(true));
+        assert!(!git(&dir, &["remote", "get-url", "origin"]).success);
     }
 }

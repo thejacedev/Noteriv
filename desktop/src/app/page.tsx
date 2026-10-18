@@ -207,7 +207,9 @@ export default function Home() {
   // Sync status
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [gitChanges, setGitChanges] = useState(0);
+  const syncInFlightRef = useRef(false);
 
   // Hotkeys
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>(DEFAULT_HOTKEYS.map((d) => ({ ...d })));
@@ -217,7 +219,6 @@ export default function Home() {
 
   // Timers
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const gitPushRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workspaceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsRef = useRef(settings);
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
@@ -436,7 +437,12 @@ export default function Home() {
         if (vault.gitRemote && merged.pullOnOpen) {
           try {
             await window.electronAPI.gitPull(vault.path, vault.id);
-          } catch {}
+          } catch (err) {
+            const msg = typeof err === "string" ? err : err instanceof Error ? err.message : "Pull failed";
+            console.warn("[sync] pull on open:", msg);
+            setSyncError(msg);
+            setSyncStatus("error");
+          }
         }
 
         await loadWorkspace(vault);
@@ -649,6 +655,9 @@ export default function Home() {
 
   const performSync = useCallback(async (message?: string) => {
     if (!window.electronAPI || !activeVault || showKnowledgeIngest) return;
+    // A slow or unreachable remote can take a minute to fail; don't stack syncs.
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
     setSyncStatus("syncing");
     try {
       await saveWorkspace();
@@ -675,38 +684,66 @@ export default function Home() {
 
       setLastSyncTime(new Date());
       setSyncStatus("idle");
+      setSyncError(null);
       // Refresh change count
       if (activeVault.gitRemote) {
         const status = await window.electronAPI.gitStatus(activeVault.path);
         setGitChanges(status.changes);
       }
-    } catch {
+    } catch (err) {
+      // Keep the failure visible until a sync succeeds; the status bar
+      // tooltip carries git's message so a bad URL or token can be diagnosed.
+      const msg = typeof err === "string" ? err : err instanceof Error ? err.message : "Sync failed";
+      console.warn("[sync]", msg);
+      setSyncError(msg);
       setSyncStatus("error");
-      setTimeout(() => setSyncStatus("idle"), 3000);
+    } finally {
+      syncInFlightRef.current = false;
     }
   }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync, showKnowledgeIngest]);
 
   const handleGitSync = performSync;
 
+  // performSync is recreated whenever the open tabs change, so the timers
+  // below call it through a ref; otherwise every keystroke would restart them.
+  const performSyncRef = useRef(performSync);
+  useEffect(() => { performSyncRef.current = performSync; });
+
   // ============================================================
-  // Auto-sync every 5s (pull + push if changes)
+  // Auto-sync on the interval set in Settings → Sync (minutes, 0 = off)
   // ============================================================
 
   useEffect(() => {
-    if (appState !== "app" || showKnowledgeIngest || !activeVault?.gitRemote) return;
+    const minutes = settings.gitSyncInterval;
+    if (appState !== "app" || showKnowledgeIngest || !activeVault?.gitRemote || minutes <= 0) return;
+    const vaultPath = activeVault.path;
     const interval = setInterval(async () => {
       if (!window.electronAPI) return;
       try {
-        const status = await window.electronAPI.gitStatus(activeVault.path);
+        const status = await window.electronAPI.gitStatus(vaultPath);
         setGitChanges(status.changes);
-        // Auto-sync: always pull, push if there are local changes
         if (status.isRepo && status.remote) {
-          performSync();
+          performSyncRef.current();
         }
       } catch {}
-    }, 5_000);
+    }, minutes * 60_000);
     return () => clearInterval(interval);
-  }, [appState, activeVault, performSync, showKnowledgeIngest]);
+  }, [appState, activeVault?.path, activeVault?.gitRemote, settings.gitSyncInterval, showKnowledgeIngest]);
+
+  // Keep the status bar's change count current between syncs. Local only:
+  // `git status` doesn't touch the network.
+  useEffect(() => {
+    if (appState !== "app" || !activeVault?.gitRemote) return;
+    const vaultPath = activeVault.path;
+    const interval = setInterval(async () => {
+      if (!window.electronAPI) return;
+      try {
+        const status = await window.electronAPI.gitStatus(vaultPath);
+        setGitChanges(status.changes);
+      } catch {}
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [appState, activeVault?.path, activeVault?.gitRemote]);
 
   // ============================================================
   // Vault operations
@@ -2232,7 +2269,7 @@ export default function Home() {
               <button
                 onClick={() => performSync()}
                 className={`statusbar-sync${syncStatus === "syncing" ? " syncing" : ""}${syncStatus === "error" ? " sync-error" : ""}`}
-                title={lastSyncTime ? `Last synced: ${lastSyncTime.toLocaleTimeString()}` : "Click to sync"}
+                title={syncStatus === "error" && syncError ? `Sync failed — click to retry.\n${syncError}` : lastSyncTime ? `Last synced: ${lastSyncTime.toLocaleTimeString()}` : "Click to sync"}
               >
                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className={syncStatus === "syncing" ? "spin" : ""}>
                   <path d="M2 8a6 6 0 0110.5-4M14 8a6 6 0 01-10.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
