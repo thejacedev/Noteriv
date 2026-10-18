@@ -2,6 +2,16 @@ import { GitProvider } from '@/types';
 import * as FS from '@/lib/file-system';
 import * as GitHub from '@/lib/github-sync';
 import { getItem, KEYS } from '@/lib/storage';
+import {
+  conflictCopyPath,
+  contentHash,
+  loadSyncBase,
+  pullAction,
+  saveSyncBase,
+  shouldDeleteLocal,
+  vaultFileUri,
+  vaultRelativePath,
+} from '@/lib/sync-state';
 
 export type SyncProvider = GitProvider;
 export type SyncResult = GitHub.SyncResult;
@@ -121,8 +131,13 @@ async function listFiles(remote: Remote, token: string, ref: string): Promise<Re
   return ((await response.json()).tree ?? []).filter((item: { type: string }) => item.type === 'blob').map((item: { path: string; sha: string }) => ({ path: item.path, sha: item.sha }));
 }
 
+/** GitLab's files API takes the path as one encoded segment; Gitea's contents API takes it as segments. */
+function encodeFilePath(remote: Remote, path: string): string {
+  return remote.provider === 'gitlab' ? encodeURIComponent(path) : path.split('/').map(encodeURIComponent).join('/');
+}
+
 async function readRemoteFile(remote: Remote, token: string, ref: string, path: string): Promise<{ content: string; sha?: string }> {
-  const encodedPath = encodeURIComponent(path);
+  const encodedPath = encodeFilePath(remote, path);
   if (remote.provider === 'gitlab') {
     const response = await api(remote, `/projects/${encodeURIComponent(remote.project)}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(ref)}`, token);
     if (!response.ok) throw new Error(`Failed to get file ${path}: ${response.status}`);
@@ -135,7 +150,7 @@ async function readRemoteFile(remote: Remote, token: string, ref: string, path: 
 }
 
 async function writeRemoteFile(remote: Remote, token: string, ref: string, path: string, content: string, sha?: string): Promise<void> {
-  const encodedPath = encodeURIComponent(path);
+  const encodedPath = encodeFilePath(remote, path);
   const message = 'Sync from Noteriv Mobile';
   if (remote.provider === 'gitlab') {
     const response = await api(remote, `/projects/${encodeURIComponent(remote.project)}/repository/files/${encodedPath}`, token, {
@@ -145,16 +160,15 @@ async function writeRemoteFile(remote: Remote, token: string, ref: string, path:
     if (!response.ok) throw new Error(`Failed to write file ${path}: ${response.status} ${await response.text()}`);
     return;
   }
+  // Gitea/Forgejo create with POST and update with PUT (which requires the sha).
   const response = await api(remote, `/repos/${remote.project}/contents/${encodedPath}`, token, {
-    method: 'PUT',
+    method: sha ? 'PUT' : 'POST',
     body: JSON.stringify({ branch: ref, content: encodeBase64(content), message, ...(sha ? { sha } : {}) }),
   });
   if (!response.ok) throw new Error(`Failed to write file ${path}: ${response.status} ${await response.text()}`);
 }
 
 const markdown = (path: string) => /\.(md|markdown)$/i.test(path) && !path.startsWith('.noteriv/');
-const fullPath = (vaultPath: string, path: string) => `${vaultPath.endsWith('/') ? vaultPath : `${vaultPath}/`}${path}`;
-const relative = (vaultPath: string, path: string) => path.slice((vaultPath.endsWith('/') ? vaultPath : `${vaultPath}/`).length).replace(/^\//, '');
 
 export async function pull(vaultPath: string, token: string, remoteUrl: string, branchName?: string, hint?: SyncProvider): Promise<SyncResult> {
   const remote = parseRemote(remoteUrl, hint);
@@ -163,21 +177,46 @@ export async function pull(vaultPath: string, token: string, remoteUrl: string, 
   const result: SyncResult = { pulled: 0, pushed: 0, errors: [] };
   try {
     const ref = branchName || await branch(remote, token);
+    const base = await loadSyncBase(vaultPath, remoteUrl, branchName);
     const files = (await listFiles(remote, token, ref)).filter((file) => markdown(file.path));
     const paths = new Set(files.map((file) => file.path));
+    // Apply remote deletions only to notes that haven't changed here since the last sync.
     for (const file of await FS.listAllMarkdownFiles(vaultPath)) {
-      const path = relative(vaultPath, file.filePath);
-      if (!path.startsWith('.trash/') && markdown(path) && !paths.has(path)) FS.deleteFile(file.filePath);
+      const path = vaultRelativePath(vaultPath, file.filePath);
+      if (path.startsWith('.trash/') || !markdown(path) || paths.has(path)) continue;
+      if (shouldDeleteLocal(await FS.readFile(file.filePath), base[path])) {
+        FS.deleteFile(file.filePath);
+        delete base[path];
+        result.pulled++;
+      }
     }
     for (const file of files) {
       try {
         const remoteFile = await readRemoteFile(remote, token, ref, file.path);
-        if (await FS.readFile(fullPath(vaultPath, file.path)) !== remoteFile.content) {
-          FS.writeFile(fullPath(vaultPath, file.path), remoteFile.content);
-          result.pulled++;
+        const localPath = vaultFileUri(vaultPath, file.path);
+        switch (pullAction(await FS.readFile(localPath), remoteFile.content, base[file.path])) {
+          case 'skip':
+            base[file.path] = contentHash(remoteFile.content);
+            break;
+          case 'take-remote':
+            FS.writeFile(localPath, remoteFile.content);
+            base[file.path] = contentHash(remoteFile.content);
+            result.pulled++;
+            break;
+          case 'keep-local':
+            break;
+          case 'conflict': {
+            const copy = vaultFileUri(vaultPath, conflictCopyPath(file.path));
+            if ((await FS.readFile(copy)) === null) {
+              FS.writeFile(copy, remoteFile.content);
+              result.pulled++;
+            }
+            break;
+          }
         }
       } catch (error) { result.errors.push(`Pull ${file.path}: ${error instanceof Error ? error.message : String(error)}`); }
     }
+    saveSyncBase(vaultPath, remoteUrl, branchName, base);
   } catch (error) { result.errors.push(`Pull failed: ${error instanceof Error ? error.message : String(error)}`); }
   return result;
 }
@@ -189,19 +228,25 @@ export async function push(vaultPath: string, token: string, remoteUrl: string, 
   const result: SyncResult = { pulled: 0, pushed: 0, errors: [] };
   try {
     const ref = branchName || await branch(remote, token);
+    const base = await loadSyncBase(vaultPath, remoteUrl, branchName);
     const files = new Map((await listFiles(remote, token, ref)).map((file) => [file.path, file]));
     for (const file of await FS.listAllMarkdownFiles(vaultPath)) {
-      const path = relative(vaultPath, file.filePath);
+      const path = vaultRelativePath(vaultPath, file.filePath);
       if (!markdown(path)) continue;
       try {
         const content = await FS.readFile(file.filePath);
         if (content === null) continue;
         const existing = files.get(path);
-        if (existing && (await readRemoteFile(remote, token, ref, path)).content === content) continue;
+        if (existing && (await readRemoteFile(remote, token, ref, path)).content === content) {
+          base[path] = contentHash(content);
+          continue;
+        }
         await writeRemoteFile(remote, token, ref, path, content, existing?.sha);
+        base[path] = contentHash(content);
         result.pushed++;
       } catch (error) { result.errors.push(`Push ${path}: ${error instanceof Error ? error.message : String(error)}`); }
     }
+    saveSyncBase(vaultPath, remoteUrl, branchName, base);
   } catch (error) { result.errors.push(`Push failed: ${error instanceof Error ? error.message : String(error)}`); }
   return result;
 }

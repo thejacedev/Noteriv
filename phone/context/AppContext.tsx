@@ -65,6 +65,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const autoSaveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSyncTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasPulledOnOpen = useRef(false);
+  // A sync downloads every note and can outlast the 5s tick; never run two at once.
+  const syncInFlight = useRef(false);
+  // The sync timers outlive renders, so they read the open folder through a ref.
+  const currentDirRef = useRef(currentDir);
+  currentDirRef.current = currentDir;
 
   // Initialize
   useEffect(() => {
@@ -124,21 +129,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     hasPulledOnOpen.current = true;
 
     (async () => {
+      if (syncInFlight.current) return;
+      syncInFlight.current = true;
       try {
         const token = await GitSync.getVaultToken(vault.id);
         if (!token) return;
         console.log('[Noteriv] Auto-pulling from remote...');
         const result = await GitSync.pull(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
         console.log(`[Noteriv] Pull complete: ${result.pulled} files, ${result.errors.length} errors`);
-        if (result.pulled > 0) {
-          // Refresh file list after pull
-          if (currentDir) {
-            const entries = FS.readDir(currentDir);
-            setFiles(entries);
-          }
+        if (result.pulled > 0 && currentDirRef.current) {
+          setFiles(FS.readDir(currentDirRef.current));
         }
       } catch (err) {
         console.warn('[Noteriv] Auto-pull failed:', err);
+      } finally {
+        syncInFlight.current = false;
       }
     })();
   }, [vault?.id, vault?.gitRemote]);
@@ -153,6 +158,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!vault?.gitRemote) return;
 
     autoSyncTimer.current = setInterval(async () => {
+      if (syncInFlight.current) return;
+      syncInFlight.current = true;
       try {
         const token = await GitSync.getVaultToken(vault.id);
         if (!token) return;
@@ -162,11 +169,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setIsDirty(false);
         }
         const result = await GitSync.sync(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
-        if (result.pulled > 0 && currentDir) {
-          const entries = FS.readDir(currentDir);
-          setFiles(entries);
+        if (result.errors.length > 0) {
+          console.warn('[Noteriv] Sync errors:', result.errors);
         }
-      } catch {}
+        // Pulled changes include notes deleted on the remote; refresh so the
+        // list doesn't keep offering a note that no longer exists.
+        if (result.pulled > 0 && currentDirRef.current) {
+          setFiles(FS.readDir(currentDirRef.current));
+        }
+      } catch {
+      } finally {
+        syncInFlight.current = false;
+      }
     }, 5_000);
 
     return () => {

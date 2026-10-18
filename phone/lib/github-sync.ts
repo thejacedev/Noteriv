@@ -1,4 +1,14 @@
 import * as FS from '@/lib/file-system';
+import {
+  conflictCopyPath,
+  contentHash,
+  loadSyncBase,
+  pullAction,
+  saveSyncBase,
+  shouldDeleteLocal,
+  vaultFileUri,
+  vaultRelativePath,
+} from '@/lib/sync-state';
 
 // --- Types ---
 
@@ -156,9 +166,9 @@ async function getFileContent(
   token: string,
   ref?: string
 ): Promise<GitHubFileContent> {
-  const query = ref ? `?ref=${ref}` : '';
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : '';
   const res = await ghFetch(
-    `/repos/${owner}/${repo}/contents/${path}${query}`,
+    `/repos/${owner}/${repo}/contents/${encodeRepoPath(path)}${query}`,
     token
   );
   if (!res.ok) throw new Error(`Failed to get file ${path}: ${res.status}`);
@@ -181,7 +191,7 @@ async function putFileContent(
   if (sha) body.sha = sha;
 
   const res = await ghFetch(
-    `/repos/${owner}/${repo}/contents/${path}`,
+    `/repos/${owner}/${repo}/contents/${encodeRepoPath(path)}`,
     token,
     { method: 'PUT', body: JSON.stringify(body) }
   );
@@ -203,16 +213,9 @@ function shouldSkipPath(path: string): boolean {
   return path.startsWith('.noteriv/') || path.startsWith('.noteriv\\');
 }
 
-/** Normalize vault path to ensure trailing separator, then build full path. */
-function localFilePath(vaultPath: string, relativePath: string): string {
-  const base = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
-  return base + relativePath;
-}
-
-/** Get relative path of a file within the vault. */
-function relativePath(vaultPath: string, filePath: string): string {
-  const base = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
-  return filePath.startsWith(base) ? filePath.slice(base.length) : filePath;
+/** A repository path for a contents-API URL; `#`, `?` and spaces must not leak into the URL. */
+function encodeRepoPath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
 }
 
 // --- Pull ---
@@ -234,6 +237,7 @@ export async function pull(
   try {
     const branchName = branch ?? (await getDefaultBranch(owner, repo, token));
     const tree = await getTree(owner, repo, branchName, token);
+    const base = await loadSyncBase(vaultPath, remote, branch);
 
     // Filter to markdown files only, skip .noteriv/
     const remoteFiles = tree.filter(
@@ -248,55 +252,51 @@ export async function pull(
       shaCache.set(shaCacheKey(owner, repo, item.path), item.sha);
     }
 
-    // Delete local files that no longer exist on remote
+    // Apply deletions made on the remote, but never delete a note that is new
+    // or edited on this device: push uploads those.
     const remotePathSet = new Set(remoteFiles.map((f) => f.path));
     const localFiles = await FS.listAllMarkdownFiles(vaultPath);
     for (const file of localFiles) {
-      let rel = relativePath(vaultPath, file.filePath);
-      if (rel.startsWith('/')) rel = rel.slice(1);
+      const rel = vaultRelativePath(vaultPath, file.filePath);
       if (shouldSkipPath(rel) || rel.startsWith('.trash/')) continue;
-      if (!remotePathSet.has(rel)) {
+      if (remotePathSet.has(rel)) continue;
+      const localContent = await FS.readFile(file.filePath);
+      if (shouldDeleteLocal(localContent, base[rel])) {
         FS.deleteFile(file.filePath);
+        delete base[rel];
+        result.pulled++;
       }
     }
 
     // Download each file
     for (const item of remoteFiles) {
       try {
-        const localPath = localFilePath(vaultPath, item.path);
+        const localPath = vaultFileUri(vaultPath, item.path);
         const localContent = await FS.readFile(localPath);
+        const remoteFile = await getFileContent(owner, repo, item.path, token, branchName);
+        const remoteContent = base64Decode(remoteFile.content.replace(/\n/g, ''));
 
-        // If file exists locally, check if remote is different by comparing sha
-        // For simplicity, download if local doesn't exist or content differs
-        if (localContent !== null) {
-          // Compare by encoding local and checking sha would be ideal,
-          // but we can just compare content directly after download
-          const remoteFile = await getFileContent(
-            owner,
-            repo,
-            item.path,
-            token,
-            branchName
-          );
-          const remoteContent = base64Decode(remoteFile.content.replace(/\n/g, ''));
-          if (remoteContent === localContent) {
-            continue; // Same content, skip
+        switch (pullAction(localContent, remoteContent, base[item.path])) {
+          case 'skip':
+            base[item.path] = contentHash(remoteContent);
+            break;
+          case 'take-remote':
+            FS.writeFile(localPath, remoteContent);
+            base[item.path] = contentHash(remoteContent);
+            result.pulled++;
+            break;
+          case 'keep-local':
+            break;
+          case 'conflict': {
+            // Edited on both sides since the last sync: keep this device's
+            // version in place and the remote's alongside it.
+            const copy = vaultFileUri(vaultPath, conflictCopyPath(item.path));
+            if ((await FS.readFile(copy)) === null) {
+              FS.writeFile(copy, remoteContent);
+              result.pulled++;
+            }
+            break;
           }
-          // Remote has changed, update local
-          FS.writeFile(localPath, remoteContent);
-          result.pulled++;
-        } else {
-          // File doesn't exist locally, download it
-          const remoteFile = await getFileContent(
-            owner,
-            repo,
-            item.path,
-            token,
-            branchName
-          );
-          const remoteContent = base64Decode(remoteFile.content.replace(/\n/g, ''));
-          FS.writeFile(localPath, remoteContent);
-          result.pulled++;
         }
       } catch (err) {
         result.errors.push(
@@ -304,6 +304,8 @@ export async function pull(
         );
       }
     }
+
+    saveSyncBase(vaultPath, remote, branch, base);
   } catch (err) {
     result.errors.push(
       `Pull failed: ${err instanceof Error ? err.message : String(err)}`
@@ -331,6 +333,7 @@ export async function push(
 
   try {
     const branchName = branch ?? (await getDefaultBranch(owner, repo, token));
+    const base = await loadSyncBase(vaultPath, remote, branch);
 
     // Get the remote tree to know current shas
     const tree = await getTree(owner, repo, branchName, token);
@@ -347,9 +350,7 @@ export async function push(
 
     for (const file of localFiles) {
       try {
-        // Normalize relative path (remove leading /)
-        let relPath = relativePath(vaultPath, file.filePath);
-        if (relPath.startsWith('/')) relPath = relPath.slice(1);
+        const relPath = vaultRelativePath(vaultPath, file.filePath);
 
         if (shouldSkipPath(relPath)) continue;
 
@@ -373,6 +374,7 @@ export async function push(
               remoteFile.content.replace(/\n/g, '')
             );
             if (remoteContent === localContent) {
+              base[relPath] = contentHash(localContent);
               continue; // Same content, skip
             }
             // Update remote file
@@ -386,6 +388,7 @@ export async function push(
               'Sync from Noteriv Mobile'
             );
             shaCache.set(shaCacheKey(owner, repo, relPath), sha);
+            base[relPath] = contentHash(localContent);
             result.pushed++;
           } catch (err) {
             result.errors.push(
@@ -405,6 +408,7 @@ export async function push(
               'Sync from Noteriv Mobile'
             );
             shaCache.set(shaCacheKey(owner, repo, relPath), sha);
+            base[relPath] = contentHash(localContent);
             result.pushed++;
           } catch (err) {
             result.errors.push(
@@ -418,6 +422,8 @@ export async function push(
         );
       }
     }
+
+    saveSyncBase(vaultPath, remote, branch, base);
   } catch (err) {
     result.errors.push(
       `Push failed: ${err instanceof Error ? err.message : String(err)}`
@@ -478,16 +484,18 @@ export async function freshClone(
         !shouldSkipPath(item.path)
     );
     console.log('[FreshClone] Remote files to download:', remoteFiles.length);
+    const clonedBase: Record<string, string> = {};
 
     for (const item of remoteFiles) {
       try {
-        const localPath = localFilePath(vaultPath, item.path);
+        const localPath = vaultFileUri(vaultPath, item.path);
         console.log('[FreshClone] Downloading:', item.path, '->', localPath);
         const remoteFile = await getFileContent(owner, repo, item.path, token, branchName);
         const remoteContent = base64Decode(remoteFile.content.replace(/\n/g, ''));
         const ok = FS.writeFile(localPath, remoteContent);
         console.log('[FreshClone] Write result:', ok);
         shaCache.set(shaCacheKey(owner, repo, item.path), item.sha);
+        if (ok && isMarkdownFile(item.path)) clonedBase[item.path] = contentHash(remoteContent);
         result.pulled++;
       } catch (err) {
         console.log('[FreshClone] Error downloading:', item.path, err);
@@ -496,6 +504,7 @@ export async function freshClone(
         );
       }
     }
+    saveSyncBase(vaultPath, remote, branch, clonedBase);
     console.log('[FreshClone] Done. Pulled:', result.pulled, 'Errors:', result.errors.length);
   } catch (err) {
     result.errors.push(
