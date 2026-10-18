@@ -682,7 +682,23 @@ pub async fn git_show_file(args: GitShowFileInput) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
+    /// A scratch directory, removed when the test ends.
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    impl std::ops::Deref for Scratch {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+
+    fn scratch(name: &str) -> Scratch {
         let suffix = format!(
             "{}-{}",
             std::process::id(),
@@ -693,7 +709,7 @@ mod tests {
         );
         let dir = std::env::temp_dir().join(format!("noteriv-git-{name}-{suffix}"));
         fs::create_dir_all(&dir).unwrap();
-        dir
+        Scratch(dir)
     }
 
     fn git(dir: &Path, args: &[&str]) -> GitRunResult {
@@ -701,7 +717,7 @@ mod tests {
     }
 
     /// A vault repo on `main` with one committed note and a local identity.
-    fn vault(name: &str) -> PathBuf {
+    fn vault(name: &str) -> Scratch {
         let dir = scratch(name);
         assert!(git(&dir, &["init", "-b", "main"]).success);
         git(&dir, &["config", "user.email", "test@example.com"]);
