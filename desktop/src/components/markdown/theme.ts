@@ -4,6 +4,18 @@ import { tags } from "@lezer/highlight";
 
 /** Theme for rendered markdown elements (non-cursor lines). */
 export const markdownRenderTheme = EditorView.baseTheme({
+  // CodeMirror wraps every rendered widget in two zero-width `cm-widgetBuffer`
+  // images. WebKitGTK's accessibility code counts each one as a character when
+  // it locates the caret, but leaves them out of the editor's accessible text,
+  // so each widget before the caret pushes the caret index 2 past the text.
+  // Typing a non-ASCII character near the end of a note then makes
+  // AccessibilityObjectAtspi::textInserted read past its offset table and
+  // abort the web process, which leaves the window frozen (issue #39). WebKit's
+  // text iterator skips invisible replaced elements, so hiding the buffers
+  // keeps the two counts in step. They are already invisible and keep their
+  // layout box, which CodeMirror measures for caret placement.
+  "& .cm-widgetBuffer": { visibility: "hidden" },
+
   // Headings
   ".md-h1": { fontSize: "2em", fontWeight: "700", color: "var(--accent)", lineHeight: "1.3", padding: "0.3em 0" },
   ".md-h2": { fontSize: "1.5em", fontWeight: "600", color: "var(--mauve)", lineHeight: "1.3", padding: "0.2em 0" },
