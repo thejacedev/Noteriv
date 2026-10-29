@@ -298,6 +298,10 @@ export default function TitleBar({
               onDrop={(e) => handleDrop(e, idx)}
               onDragEnd={handleDragEnd}
               onClick={() => onTabSelect(tab.filePath)}
+              // Middle-click closes the tab. mouseup rather than auxclick so it
+              // works in every webview; mousedown is cancelled to stop autoscroll.
+              onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
+              onMouseUp={(e) => { if (e.button === 1) onTabClose(tab.filePath); }}
               onContextMenu={(e) => handleTabContextMenu(e, tab.filePath)}
               title={tab.filePath}
               className={`tab${isActive ? " tab-active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-dragover" : ""}${isPinned ? " tab-pinned" : ""}`}
