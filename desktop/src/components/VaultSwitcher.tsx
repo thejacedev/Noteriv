@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 
 interface VaultSwitcherProps {
   vaults: Vault[];
@@ -88,11 +89,15 @@ export default function VaultSwitcher({
                     )}
                     {vaults.length > 1 && (
                       <button
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          if (confirm(`Delete vault "${vault.name}"? This won't delete your files.`)) {
-                            onDelete(vault.id);
-                          }
+                          const confirmed = await confirmDialog({
+                            title: `Remove vault "${vault.name}"?`,
+                            message: "It will be removed from Noteriv. The files on disk are not deleted.",
+                            confirmLabel: "Remove",
+                            danger: true,
+                          });
+                          if (confirmed) onDelete(vault.id);
                         }}
                         className="vault-action-btn vault-delete"
                         title="Remove vault"

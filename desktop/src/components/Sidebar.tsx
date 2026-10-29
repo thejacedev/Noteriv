@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
+import { confirmDialog } from "./ConfirmDialog";
 
 interface FileEntry {
   name: string;
@@ -604,7 +605,24 @@ export default function Sidebar({
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
     if (!window.electronAPI) return;
-    if (!entry.isDirectory && onTrashFile) {
+    const toTrash = !entry.isDirectory && !!onTrashFile;
+    const confirmed = await confirmDialog(toTrash
+      ? {
+          title: `Move "${entry.name}" to Trash?`,
+          message: "You can restore it from the Trash for 30 days.",
+          confirmLabel: "Move to Trash",
+          danger: true,
+        }
+      : {
+          title: `Delete "${entry.name}"?`,
+          message: entry.isDirectory
+            ? "This folder and everything inside it will be permanently deleted. This can't be undone."
+            : "This file will be permanently deleted. This can't be undone.",
+          confirmLabel: "Delete",
+          danger: true,
+        });
+    if (!confirmed) return;
+    if (toTrash && onTrashFile) {
       onTrashFile(entry.path);
       await refreshEntries();
       setRefreshKey((k) => k + 1);
@@ -618,6 +636,21 @@ export default function Sidebar({
 
   const handleDeleteSelected = useCallback(async () => {
     if (!window.electronAPI || selectedFiles.size === 0) return;
+    const count = selectedFiles.size;
+    const confirmed = await confirmDialog(onTrashFile
+      ? {
+          title: `Move ${count} files to Trash?`,
+          message: "You can restore them from the Trash for 30 days.",
+          confirmLabel: "Move to Trash",
+          danger: true,
+        }
+      : {
+          title: `Delete ${count} files?`,
+          message: "These files will be permanently deleted. This can't be undone.",
+          confirmLabel: "Delete",
+          danger: true,
+        });
+    if (!confirmed) return;
     for (const path of selectedFiles) {
       if (onTrashFile) {
         onTrashFile(path);

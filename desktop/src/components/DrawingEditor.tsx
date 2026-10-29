@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import {
   createEmptyDrawing,
   parseDrawing,
@@ -567,9 +568,15 @@ export default function DrawingEditor({ filePath, onClose, onSave }: DrawingEdit
     rerender();
   }
 
-  function clearAll() {
+  async function clearAll() {
     if (s.elements.length === 0) return;
-    if (!confirm("Clear all elements?")) return;
+    const confirmed = await confirmDialog({
+      title: "Clear the drawing?",
+      message: "Every element on the canvas will be removed.",
+      confirmLabel: "Clear",
+      danger: true,
+    });
+    if (!confirmed) return;
     s.elements = [];
     s.selectedId = null;
     s.dirty = true;

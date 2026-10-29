@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { confirmDialog } from "@/components/ConfirmDialog";
 import {
   HotkeyBinding,
   HotkeyAction,
@@ -611,6 +612,13 @@ export default function SettingsModal({
 
   const handleDisconnectToken = async () => {
     if (!window.electronAPI || !vault) return;
+    const confirmed = await confirmDialog({
+      title: "Disconnect your git account?",
+      message: "The stored token for this vault will be removed. Sync stops until you add a token again.",
+      confirmLabel: "Disconnect",
+      danger: true,
+    });
+    if (!confirmed) return;
     await window.electronAPI.authRemoveToken(vault.id);
     setGhUser(null);
     setHasToken(false);

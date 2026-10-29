@@ -38,6 +38,7 @@ import TrashPanel from "@/components/TrashPanel";
 import NoteHistory from "@/components/NoteHistory";
 import TimeScrubber from "@/components/TimeScrubber";
 import LintPanel from "@/components/LintPanel";
+import ConfirmDialogHost, { confirmDialog } from "@/components/ConfirmDialog";
 import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
 import { insertAtCursor } from "@/lib/editor-commands";
@@ -112,6 +113,30 @@ function pathIdentity(filePath: string, platform: string): string {
 async function writeTabGuarded(tab: TabState, content: string) {
   const baseHash = await hashContent(tab.savedContent);
   return window.electronAPI.writeFileGuarded(tab.filePath, content, baseHash);
+}
+
+function isTabDirty(tab: TabState): boolean {
+  return tab.content !== tab.savedContent;
+}
+
+// Closing a tab drops its unsaved edits, so check with the user first.
+function confirmDiscardUnsaved(closing: TabState[]): Promise<boolean> {
+  const dirty = closing.filter(isTabDirty);
+  if (dirty.length === 0) return Promise.resolve(true);
+  const name = (tab: TabState) => tab.filePath.split(/[\\/]/).pop() || tab.filePath;
+  return confirmDialog(dirty.length === 1
+    ? {
+        title: `Close "${name(dirty[0])}" without saving?`,
+        message: "Your unsaved changes will be lost.",
+        confirmLabel: "Discard Changes",
+        danger: true,
+      }
+    : {
+        title: `Close ${dirty.length} tabs without saving?`,
+        message: `Unsaved changes in ${dirty.map(name).join(", ")} will be lost.`,
+        confirmLabel: "Discard Changes",
+        danger: true,
+      });
 }
 
 export default function Home() {
@@ -915,7 +940,7 @@ export default function Home() {
     }
   }, []);
 
-  const closeTab = useCallback((filePath: string) => {
+  const removeTab = useCallback((filePath: string) => {
     // Pinned tabs cannot be closed
     if (pinnedTabs.has(filePath)) return;
     // Close split if this tab is in the split pane
@@ -931,6 +956,13 @@ export default function Home() {
       return next;
     });
   }, [activeTab, pinnedTabs, splitTab]);
+
+  const closeTab = useCallback(async (filePath: string) => {
+    if (pinnedTabs.has(filePath)) return;
+    const tab = tabsRef.current.find((t) => t.filePath === filePath);
+    if (tab && !(await confirmDiscardUnsaved([tab]))) return;
+    removeTab(filePath);
+  }, [pinnedTabs, removeTab]);
 
   const handleTogglePin = useCallback((filePath: string) => {
     setPinnedTabs((prev) => {
@@ -1360,7 +1392,9 @@ export default function Home() {
   // Additional actions
   // ============================================================
 
-  const handleCloseAllTabs = useCallback(() => {
+  const handleCloseAllTabs = useCallback(async () => {
+    const closing = tabsRef.current.filter((t) => !pinnedTabs.has(t.filePath));
+    if (!(await confirmDiscardUnsaved(closing))) return;
     setTabs((prev) => {
       const remaining = prev.filter((t) => pinnedTabs.has(t.filePath));
       if (activeTab && !pinnedTabs.has(activeTab)) {
@@ -1370,19 +1404,29 @@ export default function Home() {
     });
   }, [pinnedTabs, activeTab]);
 
-  const handleCloseOtherTabs = useCallback(() => {
+  const handleCloseOtherTabs = useCallback(async () => {
     if (!activeTab) return;
+    const closing = tabsRef.current.filter((t) => t.filePath !== activeTab && !pinnedTabs.has(t.filePath));
+    if (!(await confirmDiscardUnsaved(closing))) return;
     setTabs((prev) => prev.filter((t) => t.filePath === activeTab || pinnedTabs.has(t.filePath)));
   }, [activeTab, pinnedTabs]);
 
   const handleDeleteFile = useCallback(async () => {
     if (!window.electronAPI || !currentTab || !activeVault) return;
+    const name = currentTab.filePath.split(/[\\/]/).pop() || currentTab.filePath;
+    const confirmed = await confirmDialog({
+      title: `Move "${name}" to Trash?`,
+      message: "You can restore it from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
+      danger: true,
+    });
+    if (!confirmed) return;
     const success = await trashFile(activeVault.path, currentTab.filePath);
     if (success) {
-      closeTab(currentTab.filePath);
+      removeTab(currentTab.filePath);
       setSidebarRefresh((k) => k + 1);
     }
-  }, [currentTab, closeTab, activeVault]);
+  }, [currentTab, removeTab, activeVault]);
 
   const handleTrashFileFromSidebar = useCallback(async (filePath: string) => {
     if (!activeVault) return;
@@ -1966,7 +2010,10 @@ export default function Home() {
           onTogglePin={handleTogglePin}
           onCloseOtherTabs={handleCloseOtherTabs}
           onCloseAllTabs={handleCloseAllTabs}
-          onCloseTabsToRight={(filePath) => {
+          onCloseTabsToRight={async (filePath) => {
+            const idx = tabsRef.current.findIndex((t) => t.filePath === filePath);
+            const closing = tabsRef.current.filter((t, i) => i > idx && !pinnedTabs.has(t.filePath));
+            if (idx === -1 || !(await confirmDiscardUnsaved(closing))) return;
             setTabs((prev) => {
               const idx = prev.findIndex((t) => t.filePath === filePath);
               if (idx === -1) return prev;
@@ -2583,6 +2630,8 @@ export default function Home() {
           isFileDirty={isKnowledgeTargetDirty}
         />
       )}
+
+      <ConfirmDialogHost />
     </div>
   );
 }

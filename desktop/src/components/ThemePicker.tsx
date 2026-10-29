@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import {
   ThemeDefinition,
   BUILT_IN_THEMES,
@@ -98,7 +99,15 @@ export default function ThemePicker({
   }, [importJson, vaultPath, customThemes]);
 
   const handleDelete = useCallback(
-    async (themeId: string) => {
+    async (theme: { id: string; name: string }) => {
+      const confirmed = await confirmDialog({
+        title: `Delete theme "${theme.name}"?`,
+        message: "The theme file will be permanently deleted. This can't be undone.",
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!confirmed) return;
+      const themeId = theme.id;
       await deleteCustomTheme(vaultPath, themeId);
       setCustomThemes((prev) => prev.filter((t) => t.id !== themeId));
       if (currentThemeId === themeId) {
@@ -174,7 +183,7 @@ export default function ThemePicker({
               )}
             </button>
             {isCustom && (
-              <button className="tp-icon-btn tp-icon-btn-danger" onClick={() => handleDelete(theme.id)} title="Delete">
+              <button className="tp-icon-btn tp-icon-btn-danger" onClick={() => handleDelete(theme)} title="Delete">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V2.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5V3M3 3l.5 7a1 1 0 001 1h3a1 1 0 001-1L9 3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" /></svg>
               </button>
             )}

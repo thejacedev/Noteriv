@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import {
   parseBoard,
   serializeBoard,
@@ -224,10 +225,16 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
     setAddingColumn(false);
   }, [board, newColTitle, emitChange]);
 
-  const handleRemoveColumn = useCallback((colId: string) => {
+  const handleRemoveColumn = useCallback(async (colId: string) => {
     const col = board.columns.find((c) => c.id === colId);
     if (col && col.cards.length > 0) {
-      if (!confirm(`Delete "${col.title}" and its ${col.cards.length} cards?`)) return;
+      const confirmed = await confirmDialog({
+        title: `Delete "${col.title}"?`,
+        message: `The column and its ${col.cards.length} ${col.cards.length === 1 ? "card" : "cards"} will be removed.`,
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!confirmed) return;
     }
     emitChange(removeColumn(board, colId));
   }, [board, emitChange]);

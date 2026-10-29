@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import {
   listAttachments,
   deleteAttachment,
@@ -86,9 +87,12 @@ export default function AttachmentManager({
   const handleDelete = useCallback(
     async (e: React.MouseEvent, attachment: Attachment) => {
       e.stopPropagation();
-      const confirmed = window.confirm(
-        `Delete "${attachment.name}"? This cannot be undone.`,
-      );
+      const confirmed = await confirmDialog({
+        title: `Delete "${attachment.name}"?`,
+        message: "The file will be permanently deleted. This can't be undone.",
+        confirmLabel: "Delete",
+        danger: true,
+      });
       if (!confirmed) return;
 
       await deleteAttachment(attachment.path);

@@ -8,6 +8,7 @@ import {
   emptyTrash,
   type TrashItem,
 } from "@/lib/trash-utils";
+import { confirmDialog } from "./ConfirmDialog";
 
 interface TrashPanelProps {
   vaultPath: string;
@@ -39,15 +40,29 @@ export default function TrashPanel({ vaultPath, onClose, onRestored }: TrashPane
     }
   }, [vaultPath, refresh, onRestored]);
 
-  const handlePermanentDelete = useCallback(async (id: string) => {
-    const success = await permanentDelete(vaultPath, id);
+  const handlePermanentDelete = useCallback(async (item: TrashItem) => {
+    const confirmed = await confirmDialog({
+      title: `Permanently delete "${item.fileName}"?`,
+      message: "It will be removed from the Trash and can't be restored.",
+      confirmLabel: "Delete Forever",
+      danger: true,
+    });
+    if (!confirmed) return;
+    const success = await permanentDelete(vaultPath, item.id);
     if (success) await refresh();
   }, [vaultPath, refresh]);
 
   const handleEmptyTrash = useCallback(async () => {
+    const confirmed = await confirmDialog({
+      title: "Empty the Trash?",
+      message: `${items.length} ${items.length === 1 ? "item" : "items"} will be permanently deleted. This can't be undone.`,
+      confirmLabel: "Empty Trash",
+      danger: true,
+    });
+    if (!confirmed) return;
     await emptyTrash(vaultPath);
     await refresh();
-  }, [vaultPath, refresh]);
+  }, [vaultPath, refresh, items.length]);
 
   const filtered = items.filter((item) => {
     if (!filter) return true;
@@ -161,7 +176,7 @@ export default function TrashPanel({ vaultPath, onClose, onRestored }: TrashPane
                   </button>
                   <button
                     className="trash-action-btn trash-delete-btn"
-                    onClick={() => handlePermanentDelete(item.id)}
+                    onClick={() => handlePermanentDelete(item)}
                     title="Delete permanently"
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14">

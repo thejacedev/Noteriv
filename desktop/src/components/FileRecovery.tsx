@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import { getSnapshots, loadSnapshot } from "@/lib/file-recovery";
 import "@/styles/file-recovery.css";
 
@@ -84,6 +85,13 @@ export default function FileRecovery({
   const handleDeleteSnapshot = async (snap: SnapshotInfo, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.electronAPI) return;
+    const confirmed = await confirmDialog({
+      title: "Delete this snapshot?",
+      message: `The snapshot from ${formatDate(snap.timestamp)} at ${formatTime(snap.timestamp)} will be permanently deleted.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
 
     await window.electronAPI.deleteFile(snap.path);
     setSnapshots((prev) => prev.filter((s) => s.path !== snap.path));

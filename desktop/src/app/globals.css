@@ -8430,6 +8430,96 @@ body {
 }
 
 /* ============================================================
+   Confirm Dialog
+   ============================================================ */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.confirm-dialog {
+  background: var(--bg-primary, #1e1e2e);
+  border: 1px solid var(--border, #313244);
+  border-radius: 12px;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.confirm-message {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  color: var(--text-secondary, #a6adc8);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.confirm-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #313244);
+  background: var(--bg-surface, #313244);
+  color: var(--text-primary, #cdd6f4);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.confirm-btn:hover {
+  background: var(--bg-hover, #45475a);
+}
+
+.confirm-btn:focus-visible {
+  outline: 2px solid var(--accent, #89b4fa);
+  outline-offset: 2px;
+}
+
+.confirm-btn-primary {
+  background: var(--accent, #89b4fa);
+  border-color: var(--accent, #89b4fa);
+  color: var(--bg-primary, #1e1e2e);
+}
+
+.confirm-btn-primary:hover {
+  background: var(--accent-hover, #74c7ec);
+  border-color: var(--accent-hover, #74c7ec);
+}
+
+.confirm-btn-danger {
+  background: var(--red, #f38ba8);
+  border-color: var(--red, #f38ba8);
+  color: var(--bg-primary, #1e1e2e);
+}
+
+.confirm-btn-danger:hover {
+  background: color-mix(in srgb, var(--red, #f38ba8) 85%, var(--text-primary, #cdd6f4));
+  border-color: color-mix(in srgb, var(--red, #f38ba8) 85%, var(--text-primary, #cdd6f4));
+}
+
+/* ============================================================
    Tab Pinning
    ============================================================ */
 
