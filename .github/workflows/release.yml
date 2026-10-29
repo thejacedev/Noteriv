@@ -106,9 +106,66 @@ jobs:
           name: bundles-${{ matrix.platform }}
           path: bundles/
 
+  # Sideloadable APK built with EAS using the project's stored Android
+  # credentials. Requires an EXPO_TOKEN secret; skipped until it is set, and
+  # a failure here never blocks the desktop release.
+  android:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: phone
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Check for Expo token
+        id: token
+        working-directory: .
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "EXPO_TOKEN secret not set; skipping APK build."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: phone/package-lock.json
+
+      - uses: actions/setup-java@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install npm deps
+        if: steps.token.outputs.present == 'true'
+        run: npm ci
+
+      - name: Build APK
+        if: steps.token.outputs.present == 'true'
+        run: |
+          VERSION=$(node -p "require('../desktop/package.json').version")
+          mkdir -p ../bundles
+          npx --yes eas-cli@latest build --platform android --profile apk --local \
+            --non-interactive --output "../bundles/Noteriv-${VERSION}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          name: bundles-android
+          path: bundles/
+
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' }}
+    needs: [build, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -185,6 +242,7 @@ jobs:
             bundles/*.msi.zip
             bundles/*.msi.zip.sig
             bundles/Noteriv-*-windows-x64-portable.zip
+            bundles/Noteriv-*-android.apk
             bundles/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
