@@ -300,7 +300,7 @@ export default function SetupScreen() {
                   color={colors.peach}
                 />
                 <Text style={[styles.featureText, { color: colors.textSecondary }]}>
-                  Sync with GitHub for backup & versioning
+                  Sync with GitHub, GitLab, Gitea, or Forgejo
                 </Text>
               </View>
             </View>
@@ -384,8 +384,8 @@ export default function SetupScreen() {
             </View>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Connect GitHub</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Back up and sync your notes to a GitHub repo. You can skip this
-              and set it up later.
+              Back up and sync your notes to a GitHub repo. Using GitLab,
+              Gitea, or Forgejo? Skip this step and connect it in Settings.
             </Text>
 
             {!ghUser ? (
@@ -657,7 +657,7 @@ export default function SetupScreen() {
               Your vault "{vaultName.trim()}" is ready.
               {enableGit && ghUser
                 ? ' GitHub sync is configured.'
-                : ' You can connect GitHub later in Settings.'}
+                : ' You can connect GitHub, GitLab, Gitea, or Forgejo later in Settings.'}
             </Text>
             <TouchableOpacity
               style={[styles.primaryButton, { backgroundColor: colors.blue, shadowColor: colors.blue }]}

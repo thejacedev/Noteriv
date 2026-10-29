@@ -159,7 +159,7 @@ export default function SettingsScreen() {
 
   const handleDisconnectGitHub = useCallback(async () => {
     if (!vault) return;
-    Alert.alert('Disconnect GitHub', 'Remove the stored token for this vault?', [
+    Alert.alert('Disconnect Remote', 'Remove the stored token for this vault?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Disconnect',
