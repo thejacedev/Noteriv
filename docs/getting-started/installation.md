@@ -5,15 +5,41 @@ order: 2
 
 # Installation
 
-Noteriv is available for Linux, Windows, and macOS. Pre-built packages are published as GitHub releases, so you can download the right format for your platform and start using Noteriv in minutes.
+Noteriv is available for Linux, Windows, and macOS, plus a mobile app for Android and iOS. Desktop packages are published as GitHub releases, and Linux users can also install from a COPR or Flatpak repository that keeps the app up to date.
 
 ## Download
 
-Go to the [GitHub Releases](https://github.com/thejacedev/Noteriv/releases) page and download the latest version for your operating system. Each release includes packages for all supported platforms.
+Go to the [latest GitHub release](https://github.com/thejacedev/Noteriv/releases/latest) and download the package for your operating system. Each release includes packages for all supported platforms.
+
+| Platform | Formats |
+|---|---|
+| Linux | COPR (Fedora), Flatpak, `.rpm`, `.deb`, AppImage |
+| Windows | `.exe` installer, `.msi`, portable `.zip` |
+| macOS | `.dmg` (universal: Apple silicon and Intel) |
+| Android | [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), sideloadable `.apk` |
+| iOS | [App Store](https://apps.apple.com/app/id6761115699) |
 
 ## Linux
 
-Linux users have three package formats to choose from. Pick the one that matches your distribution.
+On Fedora, the COPR repository is the easiest option. On any other distribution, use Flatpak for automatic updates, or pick the release package that matches your distribution.
+
+### Fedora (COPR)
+
+```bash
+sudo dnf copr enable jacedev/noteriv
+sudo dnf install noteriv
+```
+
+`sudo dnf upgrade` keeps Noteriv up to date along with the rest of your system.
+
+### Flatpak (any distribution)
+
+```bash
+flatpak remote-add --if-not-exists --no-gpg-verify noteriv https://flatpak.thejacedev.xyz/noteriv/repo
+flatpak install noteriv com.noteriv.Noteriv
+```
+
+Run it from your application menu or with `flatpak run com.noteriv.Noteriv`. `flatpak update` keeps it current.
 
 ### AppImage (all distributions)
 
@@ -84,9 +110,19 @@ sudo zypper remove noteriv
 
 To uninstall, use "Add or remove programs" in Windows Settings, or run the uninstaller from the Noteriv installation directory.
 
+### MSI installer
+
+An `.msi` package is also attached to each release, for deployment tools such as Group Policy or Intune that expect Windows Installer packages. It installs the same app as the `.exe`.
+
+### Portable
+
+The `Noteriv-<version>-windows-x64-portable.zip` build runs without installing. Unzip it anywhere, for example onto a USB drive, and run the EXE. A `portable.txt` file next to the EXE switches on portable mode: all settings, vaults, and cache stay in that folder instead of AppData. Delete `portable.txt` to switch back to standard mode.
+
+Auto-updates are disabled in the portable build. Download a new zip to upgrade.
+
 ## macOS
 
-1. Download the `.dmg` file from the releases page.
+1. Download the `.dmg` file from the releases page. It is a universal build that runs natively on both Apple silicon and Intel Macs.
 2. Open the DMG and drag Noteriv to your Applications folder.
 3. On first launch, macOS may block the app because it is not signed with an Apple Developer certificate. To open it:
    - Right-click (or Control-click) the Noteriv icon in Applications.
@@ -104,13 +140,22 @@ Noteriv includes a built-in auto-updater powered by `tauri-plugin-updater`. When
 - **Download and install** -- When an update is found, Noteriv downloads it in the background. Once the download completes, you are prompted to restart the app to apply the update.
 - **Automatic updates** are enabled by default. You can disable them in Settings if you prefer to update manually.
 
-The auto-updater works with all package formats: AppImage on Linux, the NSIS installer on Windows, and the DMG on macOS.
+The auto-updater covers the AppImage on Linux, the installers on Windows, and the DMG on macOS. If you installed through COPR or Flatpak, your package manager handles updates instead (`dnf upgrade` or `flatpak update`). The portable Windows build does not auto-update.
+
+## Mobile app
+
+The mobile app for Android and iOS is a work in progress. Features land on desktop first, then come to mobile. See [Mobile App](../mobile/) for what it can do today.
+
+- **iOS**: install from the [App Store](https://apps.apple.com/app/id6761115699).
+- **Android**: install from [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the APK. A prebuilt [`noteriv.apk`](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk) is kept in the repository, and tagged releases attach one as `Noteriv-<version>-android.apk`. To sideload, open the APK on your phone and allow installs from that source when Android asks.
+
+Mobile notes live in the app's document directory and sync through the GitHub REST API. See [Mobile Sync](../sync/mobile-sync.md) to connect a vault.
 
 ## Prerequisites for development
 
 If you want to run Noteriv from source rather than using a pre-built package, you need:
 
-- **Node.js** 18 or later
+- **Node.js** 20.19 or later
 - **npm** (comes with Node.js)
 - **Git** (required for GitHub sync features)
 
@@ -142,11 +187,9 @@ Build outputs go to `desktop/dist/`. The build process generates packages for yo
 | Windows | .exe (NSIS installer) |
 | macOS | .dmg |
 
-## Mobile app
+## Running the mobile app from source
 
-The mobile app (Android and iOS) is built with Expo and React Native. It is currently a work in progress -- all features ship to desktop first, then come to mobile.
-
-To run the mobile app in development:
+The mobile app (Android and iOS) is built with Expo and React Native. To run it in development:
 
 ```bash
 cd Noteriv/phone

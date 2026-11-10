@@ -1,0 +1,76 @@
+name: Docs
+
+# Builds the VitePress site in docs/ and deploys it to GitHub Pages.
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Pull requests that touch the docs are built (to catch broken links) but not deployed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write # configure-pages reads the site's URL; as in GitHub's starter workflow
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history, for each page's "Last updated" date
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+
+      - run: npm ci
+
+      - run: npm run docs:build
+        env:
+          # Taken from the Pages settings: /Noteriv/ on thejacedev.github.io, or /
+          # once a custom domain (e.g. docs.noteriv.com) is set there. Empty on pull
+          # requests, where the config's defaults apply.
+          DOCS_BASE: ${{ github.event_name != 'pull_request' && format('{0}/', steps.pages.outputs.base_path) || '' }}
+          DOCS_URL: ${{ github.event_name != 'pull_request' && format('{0}/', steps.pages.outputs.base_url) || '' }}
+
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

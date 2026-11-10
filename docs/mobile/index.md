@@ -9,6 +9,15 @@ Noteriv's mobile app brings your notes to your phone and tablet. Built with Reac
 
 The mobile app is not a stripped-down companion. It is a full-featured note-taking environment that shares the same file format and vault structure as the desktop app. Notes you create on your phone are standard `.md` files in your vault folder, and they work identically when you open them on your desktop.
 
+The mobile app is a work in progress: features land on desktop first, then come to mobile.
+
+## Install
+
+- **iOS**: [App Store](https://apps.apple.com/app/id6761115699)
+- **Android**: [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the [APK](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk)
+
+To run the app from source instead, see [Mobile Setup](./setup.md).
+
 ## Technology Stack
 
 The mobile app is built on the following technologies:

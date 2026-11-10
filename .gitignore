@@ -56,3 +56,6 @@ eas.json
 # build tools
 bundletool-*.jar
 phone/eas.json
+
+# docs site (VitePress)
+docs/.vitepress/cache/

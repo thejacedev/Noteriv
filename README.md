@@ -16,7 +16,7 @@
 <h3>
   <a href="https://www.noteriv.com">Website</a>
   <span>&nbsp;·&nbsp;</span>
-  <a href="https://docs.noteriv.com">Docs</a>
+  <a href="https://thejacedev.github.io/Noteriv/">Docs</a>
   <span>&nbsp;·&nbsp;</span>
   <a href="#-install">Download</a>
   <span>&nbsp;·&nbsp;</span>

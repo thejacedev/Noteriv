@@ -5,7 +5,7 @@ order: 2
 
 # Mobile App Setup
 
-This guide walks you through setting up the Noteriv mobile app for local development. If you just want to use the app, download it from the App Store (iOS) or Google Play (Android). This page is for contributors and developers who want to run the app from source.
+This guide walks you through setting up the Noteriv mobile app for local development. If you just want to use the app, download it from the [App Store](https://apps.apple.com/app/id6761115699) (iOS) or [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv) (Android). This page is for contributors and developers who want to run the app from source.
 
 ## Prerequisites
 

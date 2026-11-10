@@ -91,7 +91,7 @@ TABLE title, status FROM #project WHERE status != "done"
 board: true
 ```
 
-When set to `true`, Noteriv renders this note as a Kanban board instead of a regular markdown document. In board view, H2 headings become columns and list items become cards. See the [Board View](../views/board.md) documentation for details.
+When set to `true`, Noteriv renders this note as a Kanban board instead of a regular markdown document. In board view, H2 headings become columns and list items become cards. See the [Board View](../views/board-view.md) documentation for details.
 
 Board note example:
 

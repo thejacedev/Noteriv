@@ -49,7 +49,7 @@ Build useful CSS snippets and share them via the [NoterivSnippets](https://githu
 
 ### Improve Documentation
 
-Documentation improvements are valuable contributions. Fix typos, add missing details, improve examples, or write new guides. The documentation source files are in the `docs/` directory of this repository, which is the canonical source for [docs.noteriv.com](https://docs.noteriv.com). The marketing website's `/docs` route redirects there; do not add documentation content to the website project.
+Documentation improvements are valuable contributions. Fix typos, add missing details, improve examples, or write new guides. The documentation source files are in the `docs/` directory of this repository, which is the canonical source for the [documentation site](https://thejacedev.github.io/Noteriv/). Every page has an "Edit this page on GitHub" link at the bottom. Do not add documentation content to the website project. See [Documentation Site](#documentation-site) below to preview your changes locally.
 
 ## Development Setup
 
@@ -123,6 +123,22 @@ npm run build
 ```
 
 Load the built extension in Chrome via `chrome://extensions` (developer mode) or in Firefox via `about:debugging`.
+
+### Documentation Site
+
+The documentation site is built with [VitePress](https://vitepress.dev/) from the markdown files in `docs/`, and deployed to GitHub Pages by `.github/workflows/docs.yml` on every push to `main` that touches `docs/`.
+
+```bash
+cd docs
+npm install
+npm run docs:dev      # live-reloading dev server
+npm run docs:build    # production build into docs/.vitepress/dist
+npm run docs:preview  # serve the production build
+```
+
+Each page starts with `title` and `order` frontmatter. The sidebar is generated from it: pages are grouped by folder and sorted by `order`, and `index.md` is always the section's "Overview". To add a page, create the file with that frontmatter and it appears in the sidebar automatically. A new folder also needs an entry in the `sections` list in `docs/.vitepress/config.mts`.
+
+The build fails on broken internal links, so run `npm run docs:build` before opening a PR that changes the docs. Link to other pages with relative paths that include the `.md` extension, for example `[Git Sync](../sync/git-sync.md)`.
 
 ## Architecture Overview
 

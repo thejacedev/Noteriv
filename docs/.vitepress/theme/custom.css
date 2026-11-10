@@ -1,0 +1,166 @@
+/*
+ * Catppuccin for the Noteriv docs: Mocha in dark mode (the default, matching
+ * the README), Latte in light mode. Palette: https://catppuccin.com/palette
+ */
+
+:root {
+  /* Latte */
+  --ctp-rosewater: #dc8a78;
+  --ctp-pink: #ea76cb;
+  --ctp-mauve: #8839ef;
+  --ctp-red: #d20f39;
+  --ctp-peach: #fe640b;
+  --ctp-yellow: #df8e1d;
+  --ctp-green: #40a02b;
+  --ctp-teal: #179299;
+  --ctp-blue: #1e66f5;
+  --ctp-lavender: #7287fd;
+  --ctp-text: #4c4f69;
+  --ctp-subtext1: #5c5f77;
+  --ctp-subtext0: #6c6f85;
+  --ctp-overlay1: #8c8fa1;
+  --ctp-overlay0: #9ca0b0;
+  --ctp-surface2: #acb0be;
+  --ctp-surface1: #bcc0cc;
+  --ctp-surface0: #ccd0da;
+  --ctp-base: #eff1f5;
+  --ctp-mantle: #e6e9ef;
+  --ctp-crust: #dce0e8;
+  --ctp-on-accent: #ffffff;
+}
+
+.dark {
+  /* Mocha */
+  --ctp-rosewater: #f5e0dc;
+  --ctp-pink: #f5c2e7;
+  --ctp-mauve: #cba6f7;
+  --ctp-red: #f38ba8;
+  --ctp-peach: #fab387;
+  --ctp-yellow: #f9e2af;
+  --ctp-green: #a6e3a1;
+  --ctp-teal: #94e2d5;
+  --ctp-blue: #89b4fa;
+  --ctp-lavender: #b4befe;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext1: #bac2de;
+  --ctp-subtext0: #a6adc8;
+  --ctp-overlay1: #7f849c;
+  --ctp-overlay0: #6c7086;
+  --ctp-surface2: #585b70;
+  --ctp-surface1: #45475a;
+  --ctp-surface0: #313244;
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+  --ctp-on-accent: #11111b;
+}
+
+:root,
+.dark {
+  --vp-c-bg: var(--ctp-base);
+  --vp-c-bg-alt: var(--ctp-mantle);
+  --vp-c-bg-elv: var(--ctp-mantle);
+  --vp-c-bg-soft: var(--ctp-mantle);
+
+  --vp-c-text-1: var(--ctp-text);
+  --vp-c-text-2: var(--ctp-subtext0);
+  --vp-c-text-3: var(--ctp-overlay1);
+
+  --vp-c-border: var(--ctp-surface1);
+  --vp-c-divider: var(--ctp-surface0);
+  --vp-c-gutter: var(--ctp-crust);
+
+  --vp-c-default-1: var(--ctp-surface2);
+  --vp-c-default-2: var(--ctp-surface1);
+  --vp-c-default-3: var(--ctp-surface0);
+  --vp-c-default-soft: color-mix(in srgb, var(--ctp-surface1) 45%, transparent);
+
+  --vp-c-brand-1: var(--ctp-blue);
+  --vp-c-brand-2: var(--ctp-lavender);
+  --vp-c-brand-3: var(--ctp-blue);
+  --vp-c-brand-soft: color-mix(in srgb, var(--ctp-blue) 16%, transparent);
+
+  --vp-c-tip-1: var(--ctp-teal);
+  --vp-c-tip-2: var(--ctp-teal);
+  --vp-c-tip-3: var(--ctp-teal);
+  --vp-c-tip-soft: color-mix(in srgb, var(--ctp-teal) 14%, transparent);
+
+  --vp-c-important-1: var(--ctp-mauve);
+  --vp-c-important-2: var(--ctp-mauve);
+  --vp-c-important-3: var(--ctp-mauve);
+  --vp-c-important-soft: color-mix(in srgb, var(--ctp-mauve) 14%, transparent);
+
+  --vp-c-warning-1: var(--ctp-yellow);
+  --vp-c-warning-2: var(--ctp-yellow);
+  --vp-c-warning-3: var(--ctp-peach);
+  --vp-c-warning-soft: color-mix(in srgb, var(--ctp-yellow) 14%, transparent);
+
+  --vp-c-danger-1: var(--ctp-red);
+  --vp-c-danger-2: var(--ctp-red);
+  --vp-c-danger-3: var(--ctp-red);
+  --vp-c-danger-soft: color-mix(in srgb, var(--ctp-red) 14%, transparent);
+
+  --vp-c-caution-1: var(--ctp-red);
+  --vp-c-caution-2: var(--ctp-red);
+  --vp-c-caution-3: var(--ctp-red);
+  --vp-c-caution-soft: color-mix(in srgb, var(--ctp-red) 14%, transparent);
+
+  --vp-button-brand-text: var(--ctp-on-accent);
+  --vp-button-brand-hover-text: var(--ctp-on-accent);
+  --vp-button-brand-active-text: var(--ctp-on-accent);
+  --vp-button-brand-bg: var(--ctp-blue);
+  --vp-button-brand-hover-bg: var(--ctp-lavender);
+  --vp-button-brand-active-bg: var(--ctp-lavender);
+
+  --vp-code-color: var(--ctp-mauve);
+  --vp-code-bg: var(--ctp-surface0);
+  --vp-code-block-bg: var(--ctp-mantle);
+  --vp-code-copy-code-bg: var(--ctp-surface0);
+  --vp-code-copy-code-hover-bg: var(--ctp-surface1);
+
+  --vp-sidebar-bg-color: var(--ctp-mantle);
+  --vp-nav-bg-color: var(--ctp-base);
+  --vp-local-nav-bg-color: var(--ctp-base);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, var(--ctp-blue) 25%, var(--ctp-mauve));
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--ctp-blue) 55%, transparent) 40%,
+    color-mix(in srgb, var(--ctp-mauve) 55%, transparent) 60%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark .vp-doc table {
+  --vp-c-bg-soft: var(--ctp-mantle);
+}
+
+.vp-doc a {
+  text-underline-offset: 3px;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background-color: var(--ctp-mantle);
+}
+
+.VPFeature {
+  transition: border-color 0.2s;
+}
+
+a.VPFeature:hover {
+  border-color: var(--ctp-blue);
+}
+
+.VPHero .image-src {
+  border-radius: 22%;
+  max-width: 180px;
+  max-height: 180px;
+}
+
+@media (min-width: 640px) {
+  .VPHero .image-src {
+    max-width: 220px;
+    max-height: 220px;
+  }
+}
