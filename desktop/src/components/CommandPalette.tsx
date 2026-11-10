@@ -2,44 +2,62 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { HotkeyBinding, HotkeyAction, formatHotkey } from "@/lib/hotkeys";
+import type { PluginCommand } from "@/lib/plugin-api";
 
 interface CommandPaletteProps {
   hotkeys: HotkeyBinding[];
   platform: string;
   recentActions?: HotkeyAction[];
+  pluginCommands?: PluginCommand[];
   onExecute: (action: HotkeyAction) => void;
   onRecent?: (action: HotkeyAction) => void;
+  onRunPluginCommand?: (cmd: PluginCommand) => void;
   onClose: () => void;
 }
 
-export default function CommandPalette({ hotkeys, platform, recentActions = [], onExecute, onRecent, onClose }: CommandPaletteProps) {
+/** A built-in action or a plugin command, as listed in the palette. */
+interface PaletteItem {
+  id: string;
+  label: string;
+  category: string;
+  keys: string;
+  action?: HotkeyAction;
+  plugin?: PluginCommand;
+}
+
+export default function CommandPalette({ hotkeys, platform, recentActions = [], pluginCommands = [], onExecute, onRecent, onRunPluginCommand, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const items = useMemo<PaletteItem[]>(() => [
+    ...hotkeys.map((h) => ({ id: h.action, label: h.label, category: h.category, keys: h.keys, action: h.action })),
+    ...pluginCommands.map((c) => ({ id: c.id, label: c.name, category: "Plugins", keys: c.hotkey ?? "", plugin: c })),
+  ], [hotkeys, pluginCommands]);
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return hotkeys;
+    if (!query.trim()) return items;
     const lower = query.toLowerCase();
-    return hotkeys.filter(
-      (h) =>
-        h.label.toLowerCase().includes(lower) ||
-        h.category.toLowerCase().includes(lower) ||
-        h.action.toLowerCase().includes(lower)
+    return items.filter(
+      (item) =>
+        item.label.toLowerCase().includes(lower) ||
+        item.category.toLowerCase().includes(lower) ||
+        item.id.toLowerCase().includes(lower)
     );
-  }, [query, hotkeys]);
+  }, [query, items]);
 
   // Recent items (only shown when query is empty)
   const recentItems = useMemo(() => {
     if (query.trim()) return [];
     return recentActions
-      .map((action) => hotkeys.find((h) => h.action === action))
-      .filter((h): h is HotkeyBinding => h !== undefined);
-  }, [query, recentActions, hotkeys]);
+      .map((action) => items.find((item) => item.action === action))
+      .filter((item): item is PaletteItem => item !== undefined);
+  }, [query, recentActions, items]);
 
   // Group by category
   const grouped = useMemo(() => {
-    const groups: { category: string; items: HotkeyBinding[] }[] = [];
+    const groups: { category: string; items: PaletteItem[] }[] = [];
     const seen = new Set<string>();
     for (const item of filtered) {
       if (!seen.has(item.category)) {
@@ -72,11 +90,15 @@ export default function CommandPalette({ hotkeys, platform, recentActions = [], 
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [selectedIdx]);
 
-  const executeCommand = useCallback((action: HotkeyAction) => {
-    onRecent?.(action);
-    onExecute(action);
+  const executeCommand = useCallback((item: PaletteItem) => {
+    if (item.plugin) {
+      onRunPluginCommand?.(item.plugin);
+    } else if (item.action) {
+      onRecent?.(item.action);
+      onExecute(item.action);
+    }
     onClose();
-  }, [onExecute, onRecent, onClose]);
+  }, [onExecute, onRecent, onRunPluginCommand, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -91,7 +113,7 @@ export default function CommandPalette({ hotkeys, platform, recentActions = [], 
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (flatItems[selectedIdx]) {
-          executeCommand(flatItems[selectedIdx].action);
+          executeCommand(flatItems[selectedIdx]);
         }
       }
     },
@@ -128,10 +150,10 @@ export default function CommandPalette({ hotkeys, platform, recentActions = [], 
                 const isActive = idx === selectedIdx;
                 return (
                   <button
-                    key={`recent-${item.action}`}
+                    key={`recent-${item.id}`}
                     data-cmd-idx={idx}
                     className={`palette-item${isActive ? " palette-item-active" : ""}`}
-                    onClick={() => executeCommand(item.action)}
+                    onClick={() => executeCommand(item)}
                     onMouseEnter={() => setSelectedIdx(idx)}
                   >
                     <span className="palette-item-name">{item.label}</span>
@@ -153,10 +175,10 @@ export default function CommandPalette({ hotkeys, platform, recentActions = [], 
                 const isActive = idx === selectedIdx;
                 return (
                   <button
-                    key={item.action}
+                    key={item.id}
                     data-cmd-idx={idx}
                     className={`palette-item${isActive ? " palette-item-active" : ""}`}
-                    onClick={() => executeCommand(item.action)}
+                    onClick={() => executeCommand(item)}
                     onMouseEnter={() => setSelectedIdx(idx)}
                   >
                     <span className="palette-item-name">{item.label}</span>

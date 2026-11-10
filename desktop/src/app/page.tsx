@@ -71,7 +71,8 @@ import { toggleBookmark, isBookmarked } from "@/lib/bookmark-utils";
 import { getRandomNote } from "@/lib/random-note";
 import { exportToPDF } from "@/lib/pdf-export";
 import { saveSnapshot } from "@/lib/file-recovery";
-import { PluginManager, type PluginInstance } from "@/lib/plugin-api";
+import { PluginManager, type PluginInstance, type PluginCommand, type StatusBarItem, type SidebarPanel, type SettingsTab } from "@/lib/plugin-api";
+import PluginSidebarPanel, { PluginPanelIcon } from "@/components/PluginSidebarPanel";
 import { BUILT_IN_THEMES, applyTheme, loadCustomThemes } from "@/lib/theme-utils";
 import { loadSnippets, refreshSnippets, type CSSSnippet } from "@/lib/css-snippets";
 import { hashContent } from "@/lib/knowledge/knowledge-service";
@@ -219,8 +220,14 @@ export default function Home() {
   const [recentCommands, setRecentCommands] = useState<HotkeyAction[]>([]);
   const [pluginInstances, setPluginInstances] = useState<PluginInstance[]>([]);
   const [cssSnippets, setCSSSnippets] = useState<CSSSnippet[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [pluginUITick, setPluginUITick] = useState(0);
+  // UI registered by plugins, refreshed whenever a plugin adds or removes some
+  const [pluginUI, setPluginUI] = useState<{
+    commands: PluginCommand[];
+    statusBarItems: StatusBarItem[];
+    sidebarPanels: SidebarPanel[];
+    settingsTabs: SettingsTab[];
+  }>({ commands: [], statusBarItems: [], sidebarPanels: [], settingsTabs: [] });
+  const [openPluginPanels, setOpenPluginPanels] = useState<string[]>([]);
   const pluginManagerRef = useRef<PluginManager | null>(null);
 
   // Editor view ref (for formatting commands)
@@ -522,7 +529,14 @@ export default function Home() {
               },
             };
           });
-          pm.setUIChangeHandler(() => setPluginUITick((t) => t + 1));
+          pm.setUIChangeHandler(() =>
+            setPluginUI({
+              commands: pm.getCommands(),
+              statusBarItems: pm.getStatusBarItems(),
+              sidebarPanels: pm.getSidebarPanels(),
+              settingsTabs: pm.getSettingsTabs(),
+            })
+          );
           pluginManagerRef.current = pm;
           await pm.loadAllEnabled();
           setPluginInstances(pm.getPlugins());
@@ -1637,6 +1651,18 @@ export default function Home() {
     view.focus();
   }, []);
 
+  const runPluginCommand = useCallback((cmd: PluginCommand) => {
+    Promise.resolve()
+      .then(() => cmd.callback())
+      .catch((err) => console.error(`[plugin] command "${cmd.id}" failed:`, err));
+  }, []);
+
+  const togglePluginPanel = useCallback((id: string) => {
+    setOpenPluginPanels((open) =>
+      open.includes(id) ? open.filter((p) => p !== id) : [...open, id]
+    );
+  }, []);
+
   const handleCommandExecute = useCallback((action: HotkeyAction) => {
     const view = editorViewRef.current;
     const actions: Record<HotkeyAction, () => void> = {
@@ -1932,10 +1958,18 @@ export default function Home() {
           return;
         }
       }
+
+      for (const cmd of pluginManagerRef.current?.getCommands() ?? []) {
+        if (cmd.hotkey && matchesHotkey(e, cmd.hotkey)) {
+          e.preventDefault();
+          runPluginCommand(cmd);
+          return;
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, showKnowledgeIngest, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize, openKnowledgeIngest]);
+  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, showKnowledgeIngest, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize, openKnowledgeIngest, runPluginCommand]);
 
   // Electron menu events
   useEffect(() => {
@@ -2110,6 +2144,16 @@ export default function Home() {
                   <path d="M8 11v3M5 14h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
               </button>
+              {pluginUI.sidebarPanels.map((panel) => (
+                <button
+                  key={panel.id}
+                  className={`ribbon-btn${openPluginPanels.includes(panel.id) ? " ribbon-btn-active" : ""}`}
+                  title={panel.title}
+                  onClick={() => togglePluginPanel(panel.id)}
+                >
+                  <PluginPanelIcon icon={panel.icon} />
+                </button>
+              ))}
             </div>
             <div className="ribbon-bottom">
               <button className="ribbon-btn" title="Settings" onClick={() => setShowSettings(true)}>
@@ -2267,6 +2311,15 @@ export default function Home() {
             onClose={() => setShowBacklinks(false)}
           />
         )}
+        {pluginUI.sidebarPanels
+          .filter((panel) => openPluginPanels.includes(panel.id))
+          .map((panel) => (
+            <PluginSidebarPanel
+              key={panel.id}
+              panel={panel}
+              onClose={() => togglePluginPanel(panel.id)}
+            />
+          ))}
         <TagPane
           vaultPath={activeVault?.path || ""}
           onTagClick={() => {}}
@@ -2331,7 +2384,7 @@ export default function Home() {
                 <span>{content.length} chars</span>
               </>
             )}
-            {!currentTab?.kind && pluginManagerRef.current?.getStatusBarItems().map((item) => (
+            {!currentTab?.kind && pluginUI.statusBarItems.map((item) => (
               <span
                 key={item.id}
                 className={item.onClick ? "cursor-pointer hover:text-[var(--text-secondary)]" : ""}
@@ -2358,6 +2411,7 @@ export default function Home() {
           onVaultUpdate={(v) => { setActiveVault(v); setVaults((prev) => prev.map((x) => x.id === v.id ? v : x)); }}
           onOpenPlugins={() => { setShowSettings(false); setShowPluginManager(true); }}
           onOpenSnippets={() => { setShowSettings(false); setShowCSSSnippets(true); }}
+          pluginTabs={pluginUI.settingsTabs}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -2386,7 +2440,9 @@ export default function Home() {
           hotkeys={hotkeys}
           platform={platform}
           recentActions={recentCommands}
+          pluginCommands={pluginUI.commands}
           onExecute={handleCommandExecute}
+          onRunPluginCommand={runPluginCommand}
           onRecent={handleRecentCommand}
           onClose={() => setShowCommandPalette(false)}
         />

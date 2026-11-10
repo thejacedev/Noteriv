@@ -23,6 +23,8 @@ import {
   type SyncProviderType,
 } from "@/lib/sync-providers";
 import ThemePicker from "@/components/ThemePicker";
+import PluginMount from "@/components/PluginMount";
+import type { SettingsTab } from "@/lib/plugin-api";
 
 type Section = "general" | "appearance" | "editor" | "shortcuts" | "sync" | "ecosystem";
 
@@ -83,6 +85,8 @@ interface SettingsModalProps {
   onVaultUpdate: (vault: Vault) => void;
   onOpenPlugins: () => void;
   onOpenSnippets: () => void;
+  /** Settings tabs registered by plugins, listed under their own heading. */
+  pluginTabs?: SettingsTab[];
   onClose: () => void;
 }
 
@@ -97,9 +101,13 @@ export default function SettingsModal({
   onVaultUpdate,
   onOpenPlugins,
   onOpenSnippets,
+  pluginTabs = [],
   onClose,
 }: SettingsModalProps) {
   const [active, setActive] = useState<Section>("general");
+  const [activePluginTab, setActivePluginTab] = useState<string | null>(null);
+  // Falls back to the built-in section if the plugin's tab goes away
+  const pluginTab = pluginTabs.find((t) => t.id === activePluginTab) ?? null;
   const [recording, setRecording] = useState<HotkeyAction | null>(null);
   const [shortcutQuery, setShortcutQuery] = useState("");
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -994,20 +1002,38 @@ export default function SettingsModal({
           {SECTIONS.map((s) => (
             <button
               key={s.id}
-              className={`st-nav-item${active === s.id ? " st-nav-active" : ""}`}
-              onClick={() => setActive(s.id)}
+              className={`st-nav-item${!pluginTab && active === s.id ? " st-nav-active" : ""}`}
+              onClick={() => { setActive(s.id); setActivePluginTab(null); }}
             >
               <SectionIcon section={s.id} />
               <span>{s.label}</span>
             </button>
           ))}
+          {pluginTabs.length > 0 && (
+            <>
+              <div className="st-nav-title st-nav-subtitle">Plugins</div>
+              {pluginTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`st-nav-item${pluginTab?.id === tab.id ? " st-nav-active" : ""}`}
+                  onClick={() => setActivePluginTab(tab.id)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                    <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M10 2v12" stroke="currentColor" strokeWidth="1.2" />
+                  </svg>
+                  <span>{tab.name}</span>
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
         {/* Main content */}
         <div className="st-main">
           <div className="st-header">
             <h2 className="st-title">
-              {SECTIONS.find((s) => s.id === active)?.label}
+              {pluginTab ? pluginTab.name : SECTIONS.find((s) => s.id === active)?.label}
             </h2>
             <button onClick={onClose} className="settings-close-btn">
               <svg width="14" height="14" viewBox="0 0 14 14">
@@ -1015,7 +1041,13 @@ export default function SettingsModal({
               </svg>
             </button>
           </div>
-          <div className="st-content">{sectionContent[active]()}</div>
+          <div className="st-content">
+            {pluginTab ? (
+              <PluginMount key={pluginTab.id} render={pluginTab.render} className="plugin-settings-body" />
+            ) : (
+              sectionContent[active]()
+            )}
+          </div>
         </div>
       </div>
     </div>

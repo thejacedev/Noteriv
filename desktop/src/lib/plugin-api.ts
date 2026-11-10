@@ -381,6 +381,7 @@ export class PluginManager {
     plugin.onUnload = undefined;
     plugin.error = undefined;
 
+    this.notifyUIChange();
     this.emit("plugin-unloaded", id);
   }
 
@@ -490,9 +491,11 @@ export class PluginManager {
         addCommand: (cmd: PluginCommand) => {
           const fullId = `${prefix}${cmd.id}`;
           manager.commands.set(fullId, { ...cmd, id: fullId });
+          manager.notifyUIChange();
         },
         removeCommand: (id: string) => {
           manager.commands.delete(`${prefix}${id}`);
+          manager.notifyUIChange();
         },
         addStatusBarItem: (item: StatusBarItem) => {
           const fullId = `${prefix}${item.id}`;
@@ -506,16 +509,20 @@ export class PluginManager {
         addSidebarPanel: (panel: SidebarPanel) => {
           const fullId = `${prefix}${panel.id}`;
           manager.sidebarPanels.set(fullId, { ...panel, id: fullId });
+          manager.notifyUIChange();
         },
         removeSidebarPanel: (id: string) => {
           manager.sidebarPanels.delete(`${prefix}${id}`);
+          manager.notifyUIChange();
         },
         addSettingsTab: (tab: SettingsTab) => {
           const fullId = `${prefix}${tab.id}`;
           manager.settingsTabs.set(fullId, { ...tab, id: fullId });
+          manager.notifyUIChange();
         },
         removeSettingsTab: (id: string) => {
           manager.settingsTabs.delete(`${prefix}${id}`);
+          manager.notifyUIChange();
         },
         showNotice: (message: string, duration?: number) => {
           if (manager.noticeHandler) {
