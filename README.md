@@ -30,7 +30,7 @@
   and an MCP server for your AI, built on <b>Tauri 2</b>. About 15 MB, on Linux, macOS and Windows.
 </p>
 
-<img src="assets/readme/screenshot.svg" alt="The Noteriv desktop editor" width="100%" />
+<img src="assets/readme/demo.gif" alt="Noteriv in use: live preview as you type, the graph view, and an AI assistant writing to a note through the MCP server" width="100%" />
 
 <sub>📱 The <a href="#-mobile">mobile app</a> is a work in progress. Every feature ships to desktop first.</sub>
 
