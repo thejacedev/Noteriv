@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
+import { isAppHotkey } from "@/lib/hotkeys";
 import {
   liveMarkdownPlugin,
   markdownRenderTheme,
@@ -58,6 +59,9 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
         liveMarkdownPlugin,
         mathExtension(),
         search({ top: true }),
+        // App shortcuts win over the editor's own bindings for the same keys.
+        // The key press still reaches the app's handler on the window.
+        Prec.highest(EditorView.domEventHandlers({ keydown: (e) => isAppHotkey(e) })),
         keymap.of([
           ...searchKeymap,
           ...defaultKeymap,

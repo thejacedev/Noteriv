@@ -50,6 +50,8 @@ import {
   matchesHotkey,
   mergeHotkeys,
   hotkeysToPersist,
+  EDITOR_NATIVE_ACTIONS,
+  setActiveHotkeys,
 } from "@/lib/hotkeys";
 import {
   AppSettings,
@@ -1902,6 +1904,11 @@ export default function Home() {
     return hotkeys.find((h) => h.action === action)?.keys ?? "";
   }, [hotkeys]);
 
+  // The editor checks these so it does not also act on an app shortcut's keys.
+  useEffect(() => {
+    setActiveHotkeys(hotkeys);
+  }, [hotkeys]);
+
   useEffect(() => {
     if (appState !== "app") return;
     // Don't capture hotkeys when a modal is open (settings handles its own)
@@ -2020,7 +2027,7 @@ export default function Home() {
       for (const binding of hotkeys) {
         // Skip empty bindings and actions handled by CodeMirror natively
         if (!binding.keys) continue;
-        if (binding.action === "findInFile" || binding.action === "undo" || binding.action === "redo") continue;
+        if (EDITOR_NATIVE_ACTIONS.has(binding.action)) continue;
 
         if (matchesHotkey(e, binding.keys)) {
           e.preventDefault();

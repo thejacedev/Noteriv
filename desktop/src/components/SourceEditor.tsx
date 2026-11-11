@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
+import { isAppHotkey } from "@/lib/hotkeys";
 import { tags } from "@lezer/highlight";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 
@@ -74,6 +75,9 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
         syntaxHighlighting(sourceHighlight),
         sourceTheme,
         search({ top: true }),
+        // App shortcuts win over the editor's own bindings for the same keys.
+        // The key press still reaches the app's handler on the window.
+        Prec.highest(EditorView.domEventHandlers({ keydown: (e) => isAppHotkey(e) })),
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChangeRef.current(update.state.doc.toString());

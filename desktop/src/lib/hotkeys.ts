@@ -198,6 +198,35 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
  * Parse a key combo string like "Ctrl+Shift+F" and check if
  * a KeyboardEvent matches it.
  */
+/**
+ * Actions the editor handles itself. The app's key handler skips these, and the
+ * editor keeps their keys.
+ */
+export const EDITOR_NATIVE_ACTIONS: ReadonlySet<HotkeyAction> = new Set<HotkeyAction>([
+  "findInFile",
+  "undo",
+  "redo",
+]);
+
+// The bindings currently in effect, kept here so the editor can consult them
+// without being re-created whenever a shortcut is rebound.
+let activeHotkeys: HotkeyBinding[] = DEFAULT_HOTKEYS;
+
+export function setActiveHotkeys(bindings: HotkeyBinding[]): void {
+  activeHotkeys = bindings;
+}
+
+/**
+ * True when a key press is one of the app's shortcuts. The editor uses this to
+ * leave the key alone: otherwise Ctrl+G opens the graph and the editor's search
+ * panel, and Ctrl+D opens the daily note and selects the next occurrence.
+ */
+export function isAppHotkey(e: KeyboardEvent): boolean {
+  return activeHotkeys.some(
+    (b) => b.keys && !EDITOR_NATIVE_ACTIONS.has(b.action) && matchesHotkey(e, b.keys)
+  );
+}
+
 export function matchesHotkey(e: KeyboardEvent, keys: string): boolean {
   const parts = keys.toLowerCase().split("+").map((p) => p.trim());
   const needCtrl = parts.includes("ctrl") || parts.includes("cmd");
