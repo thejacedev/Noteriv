@@ -140,7 +140,7 @@ function searchNotes(vaultPath, query) {
 // --- MCP Server ---
 
 const server = new Server(
-  { name: "noteriv", version: "1.0.0" },
+  { name: "noteriv", version: "1.0.2" },
   { capabilities: { tools: {}, resources: {} } }
 );
 

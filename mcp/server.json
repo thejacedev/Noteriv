@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.thejacedev/noteriv",
+  "title": "Noteriv",
+  "description": "Read, write, search and organize the markdown notes in your Noteriv vault.",
+  "websiteUrl": "https://www.noteriv.com",
+  "repository": {
+    "url": "https://github.com/thejacedev/Noteriv",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "noteriv-mcp",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "valueHint": "vault_path",
+          "description": "Path to a vault folder. Optional: without it, the active vault from the Noteriv app config is used.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

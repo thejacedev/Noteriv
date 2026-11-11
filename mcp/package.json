@@ -1,6 +1,7 @@
 {
   "name": "noteriv-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
+  "mcpName": "io.github.thejacedev/noteriv",
   "description": "MCP server for Noteriv — lets AI assistants read, write, and search your notes",
   "main": "index.js",
   "type": "module",
@@ -14,7 +15,7 @@
     "url": "https://github.com/thejacedev/Noteriv"
   },
   "homepage": "https://github.com/thejacedev/Noteriv#readme",
-  "files": ["index.js"],
+  "files": ["index.js", "server.json"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   }
