@@ -1,5 +1,7 @@
 /** Markdown linting rules and utilities */
 
+import { splitWikiTarget } from "./wiki-link-utils";
+
 export interface LintWarning {
   line: number;
   column: number;
@@ -81,7 +83,9 @@ export function lintMarkdown(
       const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
       let wlMatch;
       while ((wlMatch = wikilinkRegex.exec(line)) !== null) {
-        const target = wlMatch[1].trim().toLowerCase();
+        // [[Note#Heading]] points at Note; [[#Heading]] stays in this note.
+        const target = splitWikiTarget(wlMatch[1]).file.toLowerCase();
+        if (!target) continue;
         const exists = fileList.some(
           (f) => f.toLowerCase() === target
         );

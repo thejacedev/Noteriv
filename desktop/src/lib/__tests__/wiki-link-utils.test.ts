@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { findAnchorLine, splitWikiTarget } from "../wiki-link-utils";
+import { findAnchorLine, findBacklinks, splitWikiTarget } from "../wiki-link-utils";
+import { lintMarkdown } from "../markdown-lint";
 
 describe("splitWikiTarget", () => {
   it("leaves a plain target alone", () => {
@@ -77,5 +78,26 @@ describe("findAnchorLine", () => {
   it("returns null when nothing matches", () => {
     expect(findAnchorLine(note, { type: "heading", text: "Missing" })).toBeNull();
     expect(findAnchorLine(note, { type: "block", id: "missing" })).toBeNull();
+  });
+});
+
+describe("links with a heading or block part", () => {
+  it("count as backlinks to the note", async () => {
+    const files = [
+      { filePath: "/v/Home.md", fileName: "Home.md" },
+      { filePath: "/v/Project Alpha.md", fileName: "Project Alpha.md" },
+    ];
+    const contents: Record<string, string> = {
+      "/v/Home.md": "See [[Project Alpha#Goals]].\nAnd [[Project Alpha#^key-decision|the decision]].\nNot [[Project Alphabet]].",
+      "/v/Project Alpha.md": "# Project Alpha",
+    };
+    const backlinks = await findBacklinks("Project Alpha.md", "/v", files, async (p) => contents[p] ?? null);
+    expect(backlinks.map((b) => b.line)).toEqual([1, 2]);
+  });
+
+  it("are not reported as broken by the linter", () => {
+    const content = "[[Project Alpha#Goals]] [[#Local heading]] [[Missing Note#Part]]";
+    const broken = lintMarkdown(content, "/v", ["project alpha"]).filter((w) => w.rule === "broken-wikilink");
+    expect(broken.map((w) => w.message)).toEqual(["Broken wiki-link: [[Missing Note#Part]]"]);
   });
 });

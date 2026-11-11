@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import "@/styles/graph-view.css";
+import { splitWikiTarget } from "@/lib/wiki-link-utils";
 
 // ── Types ──
 
@@ -167,7 +168,8 @@ export default function GraphView({
           let match: RegExpExecArray | null;
           const regex = new RegExp(LINK_REGEX.source, LINK_REGEX.flags);
           while ((match = regex.exec(content)) !== null) {
-            const linkTarget = match[1].trim().toLowerCase();
+            // [[Note#Heading]] and [[Note#^block]] link to Note.
+            const linkTarget = splitWikiTarget(match[1]).file.toLowerCase();
             const targetPath = labelToPath.get(linkTarget);
             if (targetPath && targetPath !== file.filePath) {
               const key = `${file.filePath}\0${targetPath}`;

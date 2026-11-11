@@ -187,9 +187,10 @@ export async function findBacklinks(
   const backlinks: Backlink[] = [];
   // Strip .md for matching
   const targetBase = targetFileName.replace(/\.md$/i, "");
-  // Match [[targetBase]], [[targetBase|...]], ![[targetBase]], ![[targetBase|...]]
+  // Match [[targetBase]], [[targetBase#heading]], [[targetBase|...]] and the
+  // ![[...]] embed forms of each.
   const regex = new RegExp(
-    `!?\\[\\[${escapeRegex(targetBase)}(?:\\|[^\\]]*)?\\]\\]`,
+    `!?\\[\\[${escapeRegex(targetBase)}(?:#[^\\]|]*)?(?:\\|[^\\]]*)?\\]\\]`,
     "gi"
   );
 
