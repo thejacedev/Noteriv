@@ -5,6 +5,10 @@ PackageVersion: 2.4.8
 InstallerType: nullsoft
 Scope: user
 UpgradeBehavior: install
+ProductCode: Noteriv
+AppsAndFeaturesEntries:
+- Publisher: noteriv
+  ProductCode: Noteriv
 ReleaseDate: 2026-11-10
 Installers:
 - Architecture: x64
