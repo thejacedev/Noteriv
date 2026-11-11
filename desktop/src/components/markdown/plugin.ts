@@ -14,10 +14,14 @@ import { HtmlBlockTracker } from "./renderers/html";
 import { processTocLine } from "./renderers/toc";
 import { extractHeadings } from "@/lib/toc-utils";
 import { onCodeBlockProcessorsChange } from "@/lib/markdown-code-block-registry";
+import { onEmbedDataChange } from "./renderers/embeds";
 import type { BlockContext, InlineReplacement } from "./types";
 
 /** Dispatched when a plugin registers or removes a code-block processor. */
 const codeBlockProcessorsChanged = StateEffect.define<null>();
+
+/** Dispatched when the note or file behind an embed has been loaded or has changed. */
+const embedDataChanged = StateEffect.define<null>();
 
 /** When true, all lines render as non-cursor (pure view mode). */
 export const renderAllLines = Facet.define<boolean, boolean>({
@@ -214,6 +218,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
     private cachedHeadings: { level: number; text: string; line: number }[] | null = null;
     private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
     private unsubscribeProcessors: () => void;
+    private unsubscribeEmbeds: () => void;
     private processorRebuildQueued = false;
     private destroyed = false;
 
@@ -233,11 +238,17 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
           if (!this.destroyed) view.dispatch({ effects: codeBlockProcessorsChanged.of(null) });
         });
       });
+      // Embeds load their note or image in the background; render them once
+      // it is there. The notification is already deferred and coalesced.
+      this.unsubscribeEmbeds = onEmbedDataChange(() => {
+        if (!this.destroyed) view.dispatch({ effects: embedDataChanged.of(null) });
+      });
     }
 
     destroy() {
       this.destroyed = true;
       this.unsubscribeProcessors();
+      this.unsubscribeEmbeds();
     }
 
     private runPreScans(view: EditorView) {
@@ -263,7 +274,9 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       } else if (
         update.selectionSet ||
         update.viewportChanged ||
-        update.transactions.some((tr) => tr.effects.some((e) => e.is(codeBlockProcessorsChanged)))
+        update.transactions.some((tr) =>
+          tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged))
+        )
       ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
         this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);

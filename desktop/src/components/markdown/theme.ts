@@ -335,6 +335,19 @@ export const markdownRenderTheme = EditorView.baseTheme({
     fontSize: "0.85em",
     opacity: "0.6",
   },
+  "& .md-embed-missing": {
+    opacity: "0.6",
+    textDecoration: "line-through",
+  },
+  "& .md-embed-block": {
+    display: "block",
+  },
+  "& .md-embed-img": {
+    display: "inline-block",
+    maxWidth: "100%",
+    borderRadius: "4px",
+    verticalAlign: "middle",
+  },
 
   // Highlight
   "& .md-highlight mark": {

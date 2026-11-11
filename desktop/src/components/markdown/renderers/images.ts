@@ -6,7 +6,10 @@ export function setEditorViewForImages(view: any) { _editorView = view; }
 
 // Cache of loaded images: absolute path → data URL
 const imageCache = new Map<string, string>();
-const loadingPaths = new Set<string>();
+// Loads in flight, shared so that every <img> waiting on a file gets it. A
+// second element for the same file (the editor re-creates them when it
+// re-renders) used to be told "not loaded" and was never tried again.
+const loadingPaths = new Map<string, Promise<string | null>>();
 
 function resolveToAbsPath(src: string): string | null {
   if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:") || src.startsWith("file://")) {
@@ -26,22 +29,27 @@ function getMime(name: string): string {
   return mimes[ext] || "image/png";
 }
 
-async function loadLocalImage(absPath: string): Promise<string | null> {
-  if (imageCache.has(absPath)) return imageCache.get(absPath)!;
-  if (loadingPaths.has(absPath)) return null;
-  loadingPaths.add(absPath);
-  try {
-    if (!window.electronAPI?.readBinaryFile) return null;
-    const base64 = await window.electronAPI.readBinaryFile(absPath);
-    if (!base64) return null;
-    const dataUrl = `data:${getMime(absPath)};base64,${base64}`;
-    imageCache.set(absPath, dataUrl);
-    return dataUrl;
-  } catch {
-    return null;
-  } finally {
-    loadingPaths.delete(absPath);
-  }
+function loadLocalImage(absPath: string): Promise<string | null> {
+  if (imageCache.has(absPath)) return Promise.resolve(imageCache.get(absPath)!);
+  const inFlight = loadingPaths.get(absPath);
+  if (inFlight) return inFlight;
+
+  const load = (async () => {
+    try {
+      if (!window.electronAPI?.readBinaryFile) return null;
+      const base64 = await window.electronAPI.readBinaryFile(absPath);
+      if (!base64) return null;
+      const dataUrl = `data:${getMime(absPath)};base64,${base64}`;
+      imageCache.set(absPath, dataUrl);
+      return dataUrl;
+    } catch {
+      return null;
+    } finally {
+      loadingPaths.delete(absPath);
+    }
+  })();
+  loadingPaths.set(absPath, load);
+  return load;
 }
 
 function loadPendingImages() {
@@ -183,6 +191,19 @@ attachResizeListeners();
 
 function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * An <img> for a file inside the vault. Uses the cached data URL when the file
+ * has been loaded already; otherwise a placeholder that the loader above fills.
+ * `attrs` is extra attribute text such as ` style="width:160px"`.
+ */
+export function localImageTag(absPath: string, alt: string, attrs = "", className = "md-inline-img"): string {
+  const cached = imageCache.get(absPath);
+  if (cached) {
+    return `<img src="${cached}" alt="${escapeAttr(alt)}" class="${className}"${attrs}/>`;
+  }
+  return `<img src="" alt="${escapeAttr(alt)}" data-local-src="${escapeAttr(absPath)}" class="${className}"${attrs}/>`;
 }
 
 export const imageRenderer: InlineRenderer = {

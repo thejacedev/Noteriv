@@ -51,7 +51,7 @@ function normalizeHeading(text: string): string {
 }
 
 /** Number of lines taken by YAML frontmatter at the top of a note, or 0. */
-function frontmatterLineCount(lines: string[]): number {
+export function frontmatterLineCount(lines: string[]): number {
   if (lines[0]?.trim() !== "---") return 0;
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === "---") return i + 1;
