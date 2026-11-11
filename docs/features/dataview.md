@@ -204,7 +204,7 @@ These fields are available on every note without any frontmatter:
 |---|---|---|
 | `file.name` | Filename without extension | `meeting-notes` |
 | `file.path` | Full file path | `/vault/projects/meeting-notes.md` |
-| `file.folder` | Parent directory path | `/vault/projects` |
+| `file.folder` | Folder inside the vault, empty for notes at the top level | `Projects/Archive` |
 | `file.tags` | Comma-separated list of tags | `project, meeting` |
 | `file.created` | Creation date | `2025-11-01` |
 | `file.modified` | Last modified date | `2025-11-03` |

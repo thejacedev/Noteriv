@@ -148,7 +148,7 @@ The display text is shown in the preview, but the link points to `actual-note-na
 ![[embedded-note]]
 ```
 
-Embeds inline the full content of another note at the embed location. In preview mode, the embedded note's content is rendered as if it were part of the current note.
+An embed on a line of its own shows the other note's content in a box at that place. You can also embed one section, one block, or an image: see [Wiki-links](/features/wiki-links).
 
 ---
 

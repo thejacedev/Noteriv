@@ -78,13 +78,31 @@ Prefixing a wiki-link with `!` turns it into an embed:
 ![[meeting-notes]]
 ```
 
-This renders the full content of `meeting-notes.md` inline in the current note, similar to a transclusion. Embeds are useful for reusing content across notes -- for example, embedding a template section or a reference table.
+On a line of its own, this shows the content of `meeting-notes.md` inline in the current note, in a box titled with the note's name. Click the title to open the note. Embeds are useful for reusing content across notes -- for example, embedding a template section or a reference table.
 
-Image files can also be embedded this way:
+You can embed part of a note:
+
+```markdown
+![[meeting-notes#Decisions]]
+![[meeting-notes#^action-items]]
+```
+
+The first shows the section under the "Decisions" heading, up to the next heading of the same level. The second shows the paragraph that carries the block id `^action-items`.
+
+Image files can also be embedded this way, by name from anywhere in the vault, with an optional width or width and height:
 
 ```markdown
 ![[diagram.png]]
+![[diagram.png|160]]
+![[diagram.png|320x200]]
 ```
+
+A few things to know:
+
+- An embed written inside a sentence stays a link rather than expanding.
+- Long notes are cut off after 150 lines, and the box scrolls.
+- Embedded content is shown with basic formatting. Callouts, math and diagrams inside the embedded note are not drawn the way they are in the note itself.
+- Files that open in their own view, such as drawings, canvases and PDFs, stay links.
 
 ## Backlinks Panel
 

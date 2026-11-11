@@ -21,13 +21,15 @@ Noteriv keeps its own settings in a `.noteriv/` folder inside the vault. It does
 
 ## What carries over
 
-Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading and block links were tested on 2.4.9.
+Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading and block links were tested on 2.4.9, and embeds on 2.4.10.
 
 | Obsidian feature | In Noteriv |
 |---|---|
 | Notes and folders | Shown as they are |
 | `[[Note]]` and `[[Note\|alias]]` links | Work, including links by name to notes in other folders |
 | `[[Note#Heading]]` and `[[Note#^block]]` links | Open the note at that heading or block (from 2.4.9) |
+| `![[Note]]`, `![[Note#Heading]]` and `![[Note#^block]]` embeds | Shown inline when the embed is on a line of its own (from 2.4.10). Inside a sentence it stays a link |
+| `![[image.png]]` and `![[image.png\|160]]` embeds | The image is shown, found by name anywhere in the vault (from 2.4.10) |
 | `#tags` and nested `#parent/child` tags | Work |
 | YAML frontmatter | Kept and displayed |
 | Callouts (`> [!note]`) | Work |
@@ -39,7 +41,7 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 
 | Obsidian feature | In Noteriv |
 |---|---|
-| `![[Note]]` and `![[image.png]]` embeds | Shown as a link to the file in both edit and read modes, not rendered inline |
+| Callouts, math and diagrams inside an embedded note | The embedded text is shown, but these are not drawn the way they are in the note itself |
 | Foldable callouts (`> [!tip]-`) | The callout renders, but does not fold, and the `-` or `+` is shown |
 | `%%comments%%` | Shown as text |
 | File cards on a canvas | The card appears but its note content does not load |
