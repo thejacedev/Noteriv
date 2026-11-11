@@ -258,3 +258,18 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/thejacedev/flatpak/dispatches" \
             -d "{\"event_type\":\"noteriv-release\",\"client_payload\":{\"version\":\"${GITHUB_REF_NAME#v}\"}}"
+
+      # Tell the Scoop bucket and Homebrew tap to pick up this version now.
+      # Both repos also check once a day on their own, so a failure here only
+      # delays them. Reuses the Flatpak PAT (classic, 'repo' scope).
+      - name: Trigger Scoop bucket and Homebrew tap updates
+        continue-on-error: true
+        run: |
+          for repo in scoop-bucket homebrew-tap; do
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer ${{ secrets.FLATPAK_DISPATCH_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/thejacedev/${repo}/dispatches" \
+              -d "{\"event_type\":\"noteriv-release\",\"client_payload\":{\"version\":\"${GITHUB_REF_NAME#v}\"}}" \
+              || echo "::warning::could not ping thejacedev/${repo}"
+          done
