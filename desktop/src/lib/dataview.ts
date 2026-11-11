@@ -268,6 +268,19 @@ function evaluateWhere(note: NoteData, clause: WhereClause): boolean {
   }
 }
 
+/**
+ * True when a note's folder is `wanted` or lies inside it. Both are paths
+ * relative to the vault. Matching stops at folder boundaries, so "Projects"
+ * does not match "ProjectsOld".
+ */
+function isInFolder(folder: string, wanted: string): boolean {
+  const normalize = (p: string) => p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+  const want = normalize(wanted);
+  if (!want) return true;
+  const have = normalize(folder);
+  return have === want || have.startsWith(`${want}/`);
+}
+
 /** Execute a parsed query against a list of notes */
 export function executeQuery(query: DataviewQuery, notes: NoteData[]): QueryResult {
   // Filter by FROM
@@ -276,7 +289,7 @@ export function executeQuery(query: DataviewQuery, notes: NoteData[]): QueryResu
   if (from.type === "tag") {
     filtered = filtered.filter((n) => n.file.tags.includes(from.tag));
   } else if (from.type === "folder") {
-    filtered = filtered.filter((n) => n.file.folder.startsWith(from.path));
+    filtered = filtered.filter((n) => isInFolder(n.file.folder, from.path));
   }
 
   // Filter by WHERE
@@ -338,14 +351,22 @@ export function executeQuery(query: DataviewQuery, notes: NoteData[]): QueryResu
   return { type: "TABLE", fields, rows };
 }
 
-/** Parse note content into NoteData */
+/**
+ * Parse note content into NoteData.
+ *
+ * Pass `relativePath` (the note's path inside the vault) so that `file.folder`
+ * is relative to the vault and `FROM "Projects"` can match it. Without it the
+ * folder is taken from the absolute path, which no folder query matches.
+ */
 export function parseNoteData(
   filePath: string,
   content: string,
-  stats: { created: string; modified: string; size: number }
+  stats: { created: string; modified: string; size: number },
+  relativePath?: string
 ): NoteData {
-  const name = filePath.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "";
-  const folder = filePath.substring(0, filePath.lastIndexOf("/"));
+  const name = filePath.split(/[\\/]/).pop()?.replace(/\.(md|markdown)$/i, "") || "";
+  const folderSource = (relativePath ?? filePath).replace(/\\/g, "/");
+  const folder = folderSource.substring(0, Math.max(0, folderSource.lastIndexOf("/")));
 
   // Extract tags
   const tags: string[] = [];

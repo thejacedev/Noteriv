@@ -263,7 +263,7 @@ class DataviewWidget extends WidgetType {
         if (!file.filePath.match(/\.(md|markdown)$/i)) continue;
         const content = await window.electronAPI.readFile(file.filePath);
         if (content === null) continue;
-        notes.push(parseNoteData(file.filePath, content, { created: "", modified: "", size: content.length }));
+        notes.push(parseNoteData(file.filePath, content, { created: "", modified: "", size: content.length }, file.relativePath));
       }
 
       const result = executeQuery(parsed, notes);

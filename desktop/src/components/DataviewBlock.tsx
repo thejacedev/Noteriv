@@ -40,11 +40,12 @@ export default function DataviewBlock({ query, vaultPath, onFileSelect }: Datavi
           const content = await window.electronAPI.readFile(file.filePath);
           if (content === null) continue;
 
-          const note = parseNoteData(file.filePath, content, {
-            created: "",
-            modified: "",
-            size: content.length,
-          });
+          const note = parseNoteData(
+            file.filePath,
+            content,
+            { created: "", modified: "", size: content.length },
+            file.relativePath
+          );
           notes.push(note);
         }
 
