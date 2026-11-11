@@ -324,7 +324,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (note.path === args.path) continue;
           const content = readNote(vp, note.path);
           if (!content) continue;
-          if (content.includes(`[[${targetName}]]`) || content.includes(`[[${targetName}|`)) links.push(note.path);
+          // [[Note]], [[Note|alias]], and links to a heading or block: [[Note#...]]
+          if (
+            content.includes(`[[${targetName}]]`) ||
+            content.includes(`[[${targetName}|`) ||
+            content.includes(`[[${targetName}#`)
+          ) links.push(note.path);
         }
         return ok(links.join("\n") || "No backlinks");
       }
