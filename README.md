@@ -292,6 +292,19 @@ flatpak remote-add --if-not-exists --no-gpg-verify noteriv https://flatpak.theja
 flatpak install noteriv com.noteriv.Noteriv
 ```
 
+**macOS (Homebrew)**: `brew upgrade --cask noteriv` keeps it current.
+
+```bash
+brew install --cask thejacedev/tap/noteriv
+```
+
+**Windows (Scoop)**: the portable build. `scoop update noteriv` keeps it current.
+
+```powershell
+scoop bucket add thejacedev https://github.com/thejacedev/scoop-bucket
+scoop install noteriv
+```
+
 **Everything else**: grab a build from the [latest release](https://github.com/thejacedev/Noteriv/releases/latest).
 
 | Platform | Formats |

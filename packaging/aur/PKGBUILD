@@ -1,0 +1,29 @@
+# Maintainer: Jace Sleeman <jace@noteriv.com>
+#
+# Repackages the prebuilt upstream .deb (same artifact as the COPR and Flatpak
+# builds). To bump: set pkgver to a published release, update sha256sums
+# (updpkgsums), then `makepkg --printsrcinfo > .SRCINFO` and push to the AUR.
+
+pkgname=noteriv-bin
+pkgver=2.4.8
+pkgrel=1
+pkgdesc="Open-source markdown editor with graph view, plugins, themes, Git/WebDAV sync and an MCP server"
+arch=('x86_64')
+url="https://www.noteriv.com"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+optdepends=('git: Git sync')
+provides=('noteriv')
+conflicts=('noteriv')
+options=('!strip' '!debug')
+source=("noteriv-${pkgver}.deb::https://github.com/thejacedev/Noteriv/releases/download/v${pkgver}/Noteriv_${pkgver}_amd64.deb"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/thejacedev/Noteriv/v${pkgver}/LICENSE")
+noextract=("noteriv-${pkgver}.deb")
+sha256sums=('90047966c63f8e7541a0ab1feb96068301d11ea719d123104ee5ca59b339527a'
+            '2fa5b217344633c55e347f25f17d9523131e473f574c07272609b2ec9b947b4a')
+
+package() {
+  # A .deb is an 'ar' archive; data.tar.gz holds the file tree (usr/...).
+  bsdtar -xOf "noteriv-${pkgver}.deb" data.tar.gz | bsdtar -xf - -C "${pkgdir}"
+  install -Dm644 "LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

@@ -1,0 +1,22 @@
+pkgbase = noteriv-bin
+	pkgdesc = Open-source markdown editor with graph view, plugins, themes, Git/WebDAV sync and an MCP server
+	pkgver = 2.4.8
+	pkgrel = 1
+	url = https://www.noteriv.com
+	arch = x86_64
+	license = MIT
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	depends = libayatana-appindicator
+	optdepends = git: Git sync
+	provides = noteriv
+	conflicts = noteriv
+	noextract = noteriv-2.4.8.deb
+	options = !strip
+	options = !debug
+	source = noteriv-2.4.8.deb::https://github.com/thejacedev/Noteriv/releases/download/v2.4.8/Noteriv_2.4.8_amd64.deb
+	source = LICENSE-2.4.8::https://raw.githubusercontent.com/thejacedev/Noteriv/v2.4.8/LICENSE
+	sha256sums = 90047966c63f8e7541a0ab1feb96068301d11ea719d123104ee5ca59b339527a
+	sha256sums = 2fa5b217344633c55e347f25f17d9523131e473f574c07272609b2ec9b947b4a
+
+pkgname = noteriv-bin
