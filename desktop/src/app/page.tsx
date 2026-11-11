@@ -1505,11 +1505,13 @@ export default function Home() {
 
       window.electronAPI.listAllFiles(activeVault.path).then((files) => {
         const findNote = (name: string) => {
-          const normalized = name.replace(/\.md$/i, "").toLowerCase();
+          const normalized = name.replace(/\.(md|markdown)$/i, "").toLowerCase();
           return files.find((f) => {
             const rel = f.relativePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
             const base = (f.filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "").toLowerCase();
-            return base === normalized || rel === normalized;
+            // Dataview results link by the note's full path.
+            const full = f.filePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
+            return base === normalized || rel === normalized || full === normalized;
           });
         };
 
