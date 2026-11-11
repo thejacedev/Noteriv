@@ -21,12 +21,13 @@ Noteriv keeps its own settings in a `.noteriv/` folder inside the vault. It does
 
 ## What carries over
 
-Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop.
+Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading and block links were tested on 2.4.9.
 
 | Obsidian feature | In Noteriv |
 |---|---|
 | Notes and folders | Shown as they are |
 | `[[Note]]` and `[[Note\|alias]]` links | Work, including links by name to notes in other folders |
+| `[[Note#Heading]]` and `[[Note#^block]]` links | Open the note at that heading or block (from 2.4.9) |
 | `#tags` and nested `#parent/child` tags | Work |
 | YAML frontmatter | Kept and displayed |
 | Callouts (`> [!note]`) | Work |
@@ -36,9 +37,8 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop.
 
 ## What does not carry over yet
 
-| Obsidian feature | In Noteriv 2.4.8 |
+| Obsidian feature | In Noteriv |
 |---|---|
-| `[[Note#Heading]]` and `[[Note#^block]]` links | Displayed as links, but clicking them does not open the note |
 | `![[Note]]` and `![[image.png]]` embeds | Shown as a link to the file in both edit and read modes, not rendered inline |
 | Foldable callouts (`> [!tip]-`) | The callout renders, but does not fold, and the `-` or `+` is shown |
 | `%%comments%%` | Shown as text |
