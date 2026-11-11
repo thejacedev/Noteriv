@@ -18,10 +18,12 @@ import {
 interface ReadOnlyViewProps {
   content: string;
   onChange?: (content: string) => void;
+  /** Called with the view once it exists, so the page can scroll it to a link target. */
+  onViewReady?: (view: EditorView) => void;
   className?: string;
 }
 
-export default function ReadOnlyView({ content, onChange, className = "" }: ReadOnlyViewProps) {
+export default function ReadOnlyView({ content, onChange, onViewReady, className = "" }: ReadOnlyViewProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -69,6 +71,7 @@ export default function ReadOnlyView({ content, onChange, className = "" }: Read
     });
 
     viewRef.current = new EditorView({ state, parent: editorRef.current });
+    onViewReady?.(viewRef.current);
   }, []);
 
   useEffect(() => {

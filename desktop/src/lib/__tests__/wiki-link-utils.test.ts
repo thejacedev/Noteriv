@@ -1,0 +1,81 @@
+import { describe, expect, it } from "vitest";
+import { findAnchorLine, splitWikiTarget } from "../wiki-link-utils";
+
+describe("splitWikiTarget", () => {
+  it("leaves a plain target alone", () => {
+    expect(splitWikiTarget("Project Alpha")).toEqual({ file: "Project Alpha", anchor: null });
+  });
+
+  it("splits off a heading", () => {
+    expect(splitWikiTarget("Project Alpha#Goals")).toEqual({
+      file: "Project Alpha",
+      anchor: { type: "heading", text: "Goals" },
+    });
+  });
+
+  it("splits off a block id", () => {
+    expect(splitWikiTarget("Project Alpha#^key-decision")).toEqual({
+      file: "Project Alpha",
+      anchor: { type: "block", id: "key-decision" },
+    });
+  });
+
+  it("treats an empty note part as the current note", () => {
+    expect(splitWikiTarget("#Goals")).toEqual({ file: "", anchor: { type: "heading", text: "Goals" } });
+  });
+
+  it("uses the last of nested headings", () => {
+    expect(splitWikiTarget("Note#Plan#Goals").anchor).toEqual({ type: "heading", text: "Goals" });
+  });
+
+  it("ignores an empty fragment", () => {
+    expect(splitWikiTarget("Note#")).toEqual({ file: "Note", anchor: null });
+    expect(splitWikiTarget("Note#^")).toEqual({ file: "Note", anchor: null });
+  });
+});
+
+describe("findAnchorLine", () => {
+  const note = [
+    "---", // 1
+    "title: Alpha", // 2
+    "# not a heading, a YAML comment", // 3
+    "---", // 4
+    "", // 5
+    "# Project Alpha", // 6
+    "", // 7
+    "```md", // 8
+    "## Goals", // 9  (inside a code block)
+    "```", // 10
+    "", // 11
+    "## **Goals** for 2026 ##", // 12
+    "", // 13
+    "We decided to stay local-first. ^key-decision", // 14
+    "", // 15
+    "- one", // 16
+    "- two", // 17
+    "", // 18
+    "^the-list", // 19
+  ].join("\n");
+
+  it("finds a heading, ignoring case and inline markup", () => {
+    expect(findAnchorLine(note, { type: "heading", text: "goals for 2026" })).toBe(12);
+  });
+
+  it("does not match headings inside code blocks or frontmatter", () => {
+    expect(findAnchorLine(note, { type: "heading", text: "Goals" })).toBeNull();
+    expect(findAnchorLine(note, { type: "heading", text: "not a heading, a YAML comment" })).toBeNull();
+  });
+
+  it("finds a block id at the end of a line", () => {
+    expect(findAnchorLine(note, { type: "block", id: "key-decision" })).toBe(14);
+  });
+
+  it("points an id on its own line at the block above it", () => {
+    expect(findAnchorLine(note, { type: "block", id: "the-list" })).toBe(17);
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(findAnchorLine(note, { type: "heading", text: "Missing" })).toBeNull();
+    expect(findAnchorLine(note, { type: "block", id: "missing" })).toBeNull();
+  });
+});

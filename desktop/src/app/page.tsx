@@ -41,6 +41,7 @@ import LintPanel from "@/components/LintPanel";
 import ConfirmDialogHost, { confirmDialog } from "@/components/ConfirmDialog";
 import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
+import { splitWikiTarget, findAnchorLine, type WikiAnchor } from "@/lib/wiki-link-utils";
 import { insertAtCursor } from "@/lib/editor-commands";
 import {
   HotkeyBinding,
@@ -233,6 +234,17 @@ export default function Home() {
   // Editor view ref (for formatting commands)
   const editorViewRef = useRef<EditorView | null>(null);
   const splitEditorViewRef = useRef<EditorView | null>(null);
+  // The read-only view gets its own ref: formatting commands write through
+  // editorViewRef and must never reach it.
+  const readViewRef = useRef<EditorView | null>(null);
+  // A wiki link to a heading or block, waiting for its note to be on screen.
+  const pendingJumpRef = useRef<{
+    filePath: string;
+    anchor: WikiAnchor;
+    expires: number;
+    appliedTo?: EditorView;
+  } | null>(null);
+  const [jumpTick, setJumpTick] = useState(0);
   const contentRef = useRef<string>("");
   const activeTabRef = useRef<string | null>(null);
 
@@ -1468,6 +1480,12 @@ export default function Home() {
 
   const handleEditorViewReady = useCallback((view: EditorView) => {
     editorViewRef.current = view;
+    if (pendingJumpRef.current) setJumpTick((t) => t + 1);
+  }, []);
+
+  const handleReadViewReady = useCallback((view: EditorView) => {
+    readViewRef.current = view;
+    if (pendingJumpRef.current) setJumpTick((t) => t + 1);
   }, []);
 
   // Wiki link click handler — global mousedown capture
@@ -1483,20 +1501,72 @@ export default function Home() {
       e.stopImmediatePropagation();
       e.preventDefault();
 
-      const normalized = linkTarget.replace(/\.md$/i, "").toLowerCase();
       window.electronAPI.listAllFiles(activeVault.path).then((files) => {
-        const match = files.find((f) => {
-          const rel = f.relativePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
-          const name = (f.filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "").toLowerCase();
-          return name === normalized || rel === normalized;
-        });
-        if (match) openFile(match.filePath);
+        const findNote = (name: string) => {
+          const normalized = name.replace(/\.md$/i, "").toLowerCase();
+          return files.find((f) => {
+            const rel = f.relativePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
+            const base = (f.filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "").toLowerCase();
+            return base === normalized || rel === normalized;
+          });
+        };
+
+        // The whole target first, so a note whose name contains "#" still opens.
+        let filePath = findNote(linkTarget)?.filePath ?? null;
+        let anchor: WikiAnchor | null = null;
+        if (!filePath && linkTarget.includes("#")) {
+          // [[Note#Heading]], [[Note#^block]] or, within one note, [[#Heading]].
+          const split = splitWikiTarget(linkTarget);
+          anchor = split.anchor;
+          filePath = split.file ? findNote(split.file)?.filePath ?? null : activeTab;
+        }
+        if (!filePath) return;
+
+        pendingJumpRef.current = anchor
+          ? { filePath, anchor, expires: Date.now() + 3000 }
+          : null;
+        openFile(filePath);
+        // The note may already be on screen, in which case nothing else re-renders.
+        if (anchor) setJumpTick((t) => t + 1);
       });
     };
 
     document.addEventListener("mousedown", handleWikiClick, true);
     return () => document.removeEventListener("mousedown", handleWikiClick, true);
-  }, [activeVault, openFile]);
+  }, [activeVault, activeTab, openFile]);
+
+  // Scroll to the heading or block a wiki link pointed at, once its note is
+  // the one on screen. Runs again when the tab, its content, the view mode or
+  // the editor view changes, because opening a note can do any of those.
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending) return;
+    if (Date.now() > pending.expires) {
+      pendingJumpRef.current = null;
+      return;
+    }
+    if (pending.filePath !== activeTab) return;
+
+    const view = viewMode === "view" ? readViewRef.current : editorViewRef.current;
+    // Not mounted yet, or still showing the previous note: a later run handles it.
+    if (!view || !view.dom.isConnected || view.state.doc.toString() !== content) return;
+    // Done on this view already. The request stays until it expires so that a
+    // view replaced right after opening (a per-file view mode) gets it too.
+    if (pending.appliedTo === view) return;
+    pending.appliedTo = view;
+
+    const line = findAnchorLine(content, pending.anchor);
+    if (line === null) return;
+
+    const pos = view.state.doc.line(line).from;
+    // EditorView is imported as a type only here; reach the static through the instance.
+    const View = view.constructor as typeof EditorView;
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: View.scrollIntoView(pos, { y: "start", yMargin: 24 }),
+    });
+    if (viewMode !== "view") view.focus();
+  }, [activeTab, content, viewMode, jumpTick]);
 
   // External link click handler — open in system browser
   useEffect(() => {
@@ -2209,7 +2279,7 @@ export default function Home() {
                     {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
                       <BoardView content={content} onChange={handleContentChange} />
                     ) : viewMode === "view" ? (
-                      <ReadOnlyView content={content} onChange={handleContentChange} />
+                      <ReadOnlyView content={content} onChange={handleContentChange} onViewReady={handleReadViewReady} />
                     ) : viewMode === "source" ? (
                       <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
                     ) : (

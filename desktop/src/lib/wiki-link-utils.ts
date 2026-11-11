@@ -2,6 +2,104 @@
  * Shared utilities for wiki link parsing, resolution, and backlink scanning.
  */
 
+import { extractHeadings } from "./toc-utils";
+
+/** The place inside a note that a wiki link points at. */
+export type WikiAnchor =
+  | { type: "heading"; text: string }
+  | { type: "block"; id: string };
+
+export interface WikiTarget {
+  /** The note part. Empty for a link within the same note, e.g. [[#Heading]]. */
+  file: string;
+  anchor: WikiAnchor | null;
+}
+
+/**
+ * Split a wiki link target (the part before any "|") into the note and the
+ * heading or block it points at:
+ *   "Note"            -> note only
+ *   "Note#Heading"    -> heading
+ *   "Note#^block-id"  -> block
+ *   "#Heading"        -> heading in the current note
+ */
+export function splitWikiTarget(target: string): WikiTarget {
+  const hash = target.indexOf("#");
+  if (hash < 0) return { file: target.trim(), anchor: null };
+
+  const file = target.slice(0, hash).trim();
+  // "Note#H1#H2" narrows down through nested headings; the last one is the target.
+  const fragment = (target.slice(hash + 1).split("#").pop() ?? "").trim();
+  if (!fragment) return { file, anchor: null };
+
+  if (fragment.startsWith("^")) {
+    const id = fragment.slice(1).trim();
+    return { file, anchor: id ? { type: "block", id } : null };
+  }
+  return { file, anchor: { type: "heading", text: fragment } };
+}
+
+/** Compare heading text the way a link refers to it: case, spacing and inline markup ignored. */
+function normalizeHeading(text: string): string {
+  return text
+    .replace(/\s+#+\s*$/, "") // closing hashes: "## Title ##"
+    .replace(/[*_`~=]/g, "") // inline markup
+    .replace(/[#^|[\]]/g, " ") // characters a link target cannot contain
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Number of lines taken by YAML frontmatter at the top of a note, or 0. */
+function frontmatterLineCount(lines: string[]): number {
+  if (lines[0]?.trim() !== "---") return 0;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === "---") return i + 1;
+  }
+  return 0;
+}
+
+/**
+ * Find the 1-based line a wiki link anchor points at, or null when the note
+ * has no such heading or block.
+ */
+export function findAnchorLine(content: string, anchor: WikiAnchor): number | null {
+  const lines = content.split("\n");
+  const skip = frontmatterLineCount(lines);
+
+  if (anchor.type === "heading") {
+    const want = normalizeHeading(anchor.text);
+    if (!want) return null;
+    const hit = extractHeadings(content).find(
+      (h) => h.line > skip && normalizeHeading(h.text) === want
+    );
+    return hit ? hit.line : null;
+  }
+
+  const id = anchor.id.toLowerCase();
+  let inCodeBlock = false;
+  for (let i = skip; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^(```|~~~)/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = line.match(/(?:^|\s)\^([A-Za-z0-9-]+)\s*$/);
+    if (!match || match[1].toLowerCase() !== id) continue;
+
+    // An id on a line of its own labels the block above it.
+    if (line.trim() === `^${match[1]}`) {
+      for (let j = i - 1; j >= skip; j--) {
+        if (lines[j].trim()) return j + 1;
+      }
+    }
+    return i + 1;
+  }
+  return null;
+}
+
 export interface ParsedWikiLink {
   filename: string;
   display: string | null;
