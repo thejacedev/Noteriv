@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
-import { EditorState, Prec } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -10,6 +10,7 @@ import { syntaxHighlighting } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
 import { isAppHotkey } from "@/lib/hotkeys";
+import { replaceDocument } from "@/lib/replace-document";
 import {
   liveMarkdownPlugin,
   markdownRenderTheme,
@@ -34,6 +35,7 @@ interface EditorProps {
 export default function Editor({ content, onChange, onViewReady, vaultPath, className = "", focusMode = false }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const historyConfig = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   const vaultPathRef = useRef(vaultPath);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -50,7 +52,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
       extensions: [
         drawSelection(),
         closeBrackets(),
-        history(),
+        historyConfig.current.of(history()),
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(mdHighlightStyle),
@@ -93,9 +95,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
     if (!viewRef.current) return;
     const current = viewRef.current.state.doc.toString();
     if (current !== content) {
-      viewRef.current.dispatch({
-        changes: { from: 0, to: current.length, insert: content },
-      });
+      replaceDocument(viewRef.current, historyConfig.current, content);
     }
   }, [content]);
 

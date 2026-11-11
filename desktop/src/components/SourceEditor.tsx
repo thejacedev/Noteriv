@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
-import { EditorState, Prec } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -10,6 +10,7 @@ import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { search, searchKeymap } from "@codemirror/search";
 import { isAppHotkey } from "@/lib/hotkeys";
+import { replaceDocument } from "@/lib/replace-document";
 import { tags } from "@lezer/highlight";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 
@@ -55,6 +56,7 @@ interface SourceEditorProps {
 export default function SourceEditor({ content, onChange, onViewReady, vaultPath, className = "" }: SourceEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const historyConfig = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -69,7 +71,7 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
         highlightActiveLine(),
         drawSelection(),
         closeBrackets(),
-        history(),
+        historyConfig.current.of(history()),
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(sourceHighlight),
@@ -99,7 +101,7 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
     if (!viewRef.current) return;
     const current = viewRef.current.state.doc.toString();
     if (current !== content) {
-      viewRef.current.dispatch({ changes: { from: 0, to: current.length, insert: content } });
+      replaceDocument(viewRef.current, historyConfig.current, content);
     }
   }, [content]);
 
