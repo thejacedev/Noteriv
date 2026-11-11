@@ -59,11 +59,41 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
+      # Tauri's bundler downloads the AppImage launcher into its cache and
+      # saves it with mode 0770. Inside the AppImage every file is owned by
+      # root, so wherever permissions are enforced (sandboxes such as firejail,
+      # and the AppImage catalog's test) nobody may run it and the app fails
+      # with "AppRun.wrapped: Permission denied". The bundler only sets the
+      # mode when it downloads the file, so put it there first, runnable by all.
+      - name: Prepare the AppImage launcher (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          mkdir -p "$HOME/.cache/tauri"
+          curl -fsSL --retry 3 -o "$HOME/.cache/tauri/AppRun-x86_64" \
+            https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+          chmod 755 "$HOME/.cache/tauri/AppRun-x86_64"
+
       - name: Build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build -- ${{ matrix.args }}
+
+      - name: Check the AppImage launcher can be run by anyone (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          APP=$(ls "$PWD"/src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
+          WORK=$(mktemp -d)
+          (cd "$WORK" && "$APP" --appimage-extract 'AppRun*' >/dev/null)
+          stat -c '%a %n' "$WORK"/squashfs-root/AppRun*
+          for f in "$WORK"/squashfs-root/AppRun "$WORK"/squashfs-root/AppRun.wrapped; do
+            [ -e "$f" ] || continue
+            case "$(stat -c '%A' "$f")" in
+              ???????r?x) ;;
+              *) echo "::error::$(basename "$f") inside the AppImage is not readable and runnable by everyone"; exit 1 ;;
+            esac
+          done
+          rm -rf "$WORK"
 
       - name: Collect bundles
         shell: bash
