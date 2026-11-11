@@ -42,6 +42,8 @@
 
 Most note apps lock you into their cloud, their format, or their platform. Noteriv doesn't.
 
+**Coming from Obsidian?** Open your existing vault folder as it is: no import, no conversion. Notes, folders, `[[wiki-links]]`, tags, frontmatter and callouts carry over, and Noteriv leaves your `.obsidian` folder alone. See [what carries over and what doesn't](https://thejacedev.github.io/Noteriv/getting-started/from-obsidian).
+
 <table>
   <tr>
     <td width="25%" valign="top">
