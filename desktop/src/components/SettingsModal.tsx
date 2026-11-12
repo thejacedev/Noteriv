@@ -795,7 +795,7 @@ export default function SettingsModal({
 
       <div className="st-divider" />
       <div className="st-group-label">Git Sync</div>
-      <Row label="Auto sync interval" desc="Periodically commit and push changes in the background.">
+      <Row label="Auto sync interval" desc="Periodically sync with Git or WebDAV in the background.">
         <select
           className="st-select"
           value={settings.gitSyncInterval}
@@ -806,7 +806,7 @@ export default function SettingsModal({
           ))}
         </select>
       </Row>
-      <Row label="Sync on save" desc="Commit and push every time you manually save a file.">
+      <Row label="Sync on save" desc="Sync with Git or WebDAV every time you manually save a file.">
         <Toggle checked={settings.syncOnSave} onChange={(v) => update({ syncOnSave: v })} />
       </Row>
       <Row label="Pull on open" desc="Fetch the latest changes from remote when opening a vault.">

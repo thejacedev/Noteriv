@@ -14,6 +14,7 @@ mod paths;
 mod scope;
 mod shim;
 mod store;
+mod sync_webdav;
 mod updater_cmds;
 mod watcher;
 

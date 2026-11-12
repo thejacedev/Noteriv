@@ -12,6 +12,15 @@ export interface WebDAVSyncConfig {
   remotePath: string;
 }
 
+/**
+ * Whether the vault syncs on the timer and on save. A WebDAV vault does,
+ * with or without a Git remote. A vault that only uses folder sync does not:
+ * folder sync copies every file on each run, so on its own it stays manual.
+ */
+export function autoSyncApplies(gitRemote: string | null | undefined, extraProvider: SyncProviderType): boolean {
+  return Boolean(gitRemote) || extraProvider === "webdav";
+}
+
 export const DEFAULT_FOLDER_CONFIG: FolderSyncConfig = {
   targetPath: "",
   direction: "both",

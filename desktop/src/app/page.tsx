@@ -60,6 +60,7 @@ import {
   applySettings,
   formatCommitMessage,
 } from "@/lib/settings";
+import { autoSyncApplies } from "@/lib/sync-providers";
 import {
   wrapSelection,
   insertLink as editorInsertLink,
@@ -766,22 +767,30 @@ export default function Home() {
   // Auto-sync on the interval set in Settings → Sync (minutes, 0 = off)
   // ============================================================
 
+  const syncVaultPath = activeVault?.path;
+  const syncGitRemote = activeVault?.gitRemote;
   useEffect(() => {
     const minutes = settings.gitSyncInterval;
-    if (appState !== "app" || showKnowledgeIngest || !activeVault?.gitRemote || minutes <= 0) return;
-    const vaultPath = activeVault.path;
+    const hasGit = Boolean(syncGitRemote);
+    const hasWebdav = settings.extraSyncProvider === "webdav";
+    if (appState !== "app" || showKnowledgeIngest || !syncVaultPath || minutes <= 0) return;
+    if (!autoSyncApplies(syncGitRemote, settings.extraSyncProvider)) return;
+    const vaultPath = syncVaultPath;
     const interval = setInterval(async () => {
       if (!window.electronAPI) return;
-      try {
-        const status = await window.electronAPI.gitStatus(vaultPath);
-        setGitChanges(status.changes);
-        if (status.isRepo && status.remote) {
-          performSyncRef.current();
-        }
-      } catch {}
+      let gitReady = false;
+      if (hasGit) {
+        try {
+          const status = await window.electronAPI.gitStatus(vaultPath);
+          setGitChanges(status.changes);
+          gitReady = status.isRepo && Boolean(status.remote);
+        } catch {}
+      }
+      // WebDAV syncs on the timer whether or not Git is set up.
+      if (gitReady || hasWebdav) performSyncRef.current();
     }, minutes * 60_000);
     return () => clearInterval(interval);
-  }, [appState, activeVault?.path, activeVault?.gitRemote, settings.gitSyncInterval, showKnowledgeIngest]);
+  }, [appState, syncVaultPath, syncGitRemote, settings.gitSyncInterval, settings.extraSyncProvider, showKnowledgeIngest]);
 
   // Keep the status bar's change count current between syncs. Local only:
   // `git status` doesn't touch the network.
@@ -1343,7 +1352,7 @@ export default function Home() {
         )
       );
       // Sync on save if enabled
-      if (settings.syncOnSave && activeVault?.gitRemote) {
+      if (settings.syncOnSave && autoSyncApplies(activeVault?.gitRemote, settings.extraSyncProvider)) {
         performSync();
       }
     } else if (result.status === "conflict") {
@@ -1351,7 +1360,7 @@ export default function Home() {
         t.filePath === currentTab.filePath ? { ...t, externalConflict: true } : t
       ));
     }
-  }, [currentTab, settings.syncOnSave, activeVault, performSync]);
+  }, [currentTab, settings.syncOnSave, settings.extraSyncProvider, activeVault, performSync]);
 
   const handleSaveAs = useCallback(async () => {
     if (!window.electronAPI) return;

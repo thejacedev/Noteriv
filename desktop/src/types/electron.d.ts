@@ -201,7 +201,7 @@ interface ElectronAPI {
   onUpdaterError: (callback: (data: { message: string }) => void) => () => void;
 
   // Sync providers (folder, webdav, s3)
-  syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{ pushed: number; pulled: number }>;
+  syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{ pushed: number; pulled: number; deleted: number; conflicts: number }>;
   syncProviderTest: (providerType: string, config: Record<string, any>) => Promise<{ ok: boolean; error?: string }>;
 
   // Search / file listing
