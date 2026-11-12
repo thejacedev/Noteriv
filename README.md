@@ -280,13 +280,6 @@ Or run `npx noteriv-mcp` yourself. It finds your active vault from the Noteriv c
 
 > **Tauri 2 + Next.js**: Windows, macOS, Linux. A CodeMirror editor, native file system access, and Git through your system's git binary.
 
-**Fedora (COPR)**: `dnf upgrade` keeps it current.
-
-```bash
-sudo dnf copr enable jacedev/noteriv
-sudo dnf install noteriv
-```
-
 **Flatpak (any distro)**: `flatpak update` keeps it current.
 
 ```bash

@@ -5,7 +5,7 @@ order: 2
 
 # Installation
 
-Noteriv is available for Linux, Windows, and macOS, plus a mobile app for Android and iOS. Desktop packages are published as GitHub releases, and Linux users can also install from a COPR or Flatpak repository that keeps the app up to date.
+Noteriv is available for Linux, Windows, and macOS, plus a mobile app for Android and iOS. Desktop packages are published as GitHub releases, and Linux users can also install from a Flatpak repository that keeps the app up to date.
 
 ## Download
 
@@ -13,7 +13,7 @@ Go to the [latest GitHub release](https://github.com/thejacedev/Noteriv/releases
 
 | Platform | Formats |
 |---|---|
-| Linux | COPR (Fedora), Flatpak, `.rpm`, `.deb`, AppImage |
+| Linux | Flatpak, `.rpm`, `.deb`, AppImage |
 | Windows | `.exe` installer, `.msi`, portable `.zip` |
 | macOS | `.dmg` (universal: Apple silicon and Intel) |
 | Android | [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), sideloadable `.apk` |
@@ -21,16 +21,7 @@ Go to the [latest GitHub release](https://github.com/thejacedev/Noteriv/releases
 
 ## Linux
 
-On Fedora, the COPR repository is the easiest option. On any other distribution, use Flatpak for automatic updates, or pick the release package that matches your distribution.
-
-### Fedora (COPR)
-
-```bash
-sudo dnf copr enable jacedev/noteriv
-sudo dnf install noteriv
-```
-
-`sudo dnf upgrade` keeps Noteriv up to date along with the rest of your system.
+Use Flatpak for automatic updates, or pick the release package that matches your distribution.
 
 ### Flatpak (any distribution)
 
@@ -140,7 +131,7 @@ Noteriv includes a built-in auto-updater powered by `tauri-plugin-updater`. When
 - **Download and install** -- When an update is found, Noteriv downloads it in the background. Once the download completes, you are prompted to restart the app to apply the update.
 - **Automatic updates** are enabled by default. You can disable them in Settings if you prefer to update manually.
 
-The auto-updater covers the AppImage on Linux, the installers on Windows, and the DMG on macOS. If you installed through COPR or Flatpak, your package manager handles updates instead (`dnf upgrade` or `flatpak update`). The portable Windows build does not auto-update.
+The auto-updater covers the AppImage on Linux, the installers on Windows, and the DMG on macOS. If you installed through Flatpak, `flatpak update` handles updates instead. The portable Windows build does not auto-update.
 
 ## Mobile app
 
