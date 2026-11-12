@@ -65,7 +65,7 @@ The test creates a small temporary file (`.noteriv-test`), verifies it was writt
 
 ## Sync Interval
 
-Folder sync runs on the same auto-sync timer as git sync (default: every 5 seconds). Each interval tick triggers the push and pull passes described above. Since file copies are local disk operations, each sync cycle typically completes in under a second, even for vaults with hundreds of files.
+When the vault also has a Git remote, folder sync runs on the same auto-sync timer as git sync (default: every 5 minutes). Without one, it runs when you click the sync indicator in the status bar. Each interval tick triggers the push and pull passes described above. Since file copies are local disk operations, each sync cycle typically completes in under a second, even for vaults with hundreds of files.
 
 You can adjust the interval in Settings > Sync > Auto sync interval.
 

@@ -34,9 +34,9 @@ See [WebDAV Sync](./webdav-sync.md) for details.
 
 ## Auto-Sync
 
-When configured, Noteriv automatically syncs at regular intervals. The default interval is every 5 seconds. This means changes you make are committed and pushed (git) or copied (folder/WebDAV) within seconds, without manual intervention.
+When configured, Noteriv automatically syncs at regular intervals. On desktop the default interval is every 5 minutes. This means changes you make are committed and pushed (git) or copied (folder/WebDAV) without manual intervention.
 
-The auto-sync interval is configurable in Settings under the Sync section. You can set it from 1 second (aggressive, suitable for fast connections) to several minutes (conservative, suitable for metered connections), or disable it entirely and sync manually.
+The auto-sync interval is configurable in Settings under the Sync section. On desktop you can set it to 1, 5, 10 or 30 minutes, or disable it entirely and sync manually.
 
 ### Sync on Save
 
@@ -86,14 +86,14 @@ Folder sync resolves conflicts by **modification time**: the file with the more 
 
 ### WebDAV Sync
 
-WebDAV sync uses the same modification-time strategy as folder sync.
+WebDAV sync keeps both versions when a file changed on both sides since the last sync. The newer one keeps the note's name and the other is saved next to it as a conflict copy. See [WebDAV Sync](./webdav-sync.md#conflicts).
 
 ## Provider Comparison
 
 | Feature | Git | Folder | WebDAV |
 |---|---|---|---|
 | Version history | Full git log | None (overwrite) | None (overwrite) |
-| Conflict handling | Merge/rebase | Last-modified wins | Last-modified wins |
+| Conflict handling | Merge/rebase | Last-modified wins | Keeps both versions |
 | Requires internet | For push/pull | No (local folder) | Yes |
 | Setup complexity | Moderate (token) | Low (pick folder) | Moderate (URL/auth) |
 | Mobile support | Yes (via GitHub API) | No | No |
@@ -131,7 +131,7 @@ On mobile, the GitHub token is stored in the app's secure storage, tied to the s
 
 ### WebDAV Credentials
 
-WebDAV username and password are stored in the vault configuration. They are transmitted over HTTPS to the WebDAV server. Ensure your WebDAV server uses HTTPS to prevent credential interception.
+WebDAV username and password are stored in Noteriv's settings file on the device, not in the vault. They are transmitted over HTTPS to the WebDAV server. Ensure your WebDAV server uses HTTPS to prevent credential interception.
 
 ## Troubleshooting
 

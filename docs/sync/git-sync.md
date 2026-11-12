@@ -150,7 +150,7 @@ Noteriv builds the authenticated URL as `https://<username>:<token>@host/...`. A
 
 ## Auto-Sync
 
-When auto-sync is enabled, Noteriv runs the full sync cycle every 5 seconds (configurable in Settings). The auto-sync timer:
+When auto-sync is enabled, Noteriv runs the full sync cycle every 5 minutes by default (configurable in Settings). The auto-sync timer:
 
 1. Checks if a remote is configured.
 2. Fetches the latest remote state.
