@@ -155,3 +155,115 @@
   color: #e53e3e;
   background: var(--bg-primary);
 }
+
+/* ─── Groups ─── */
+
+.bm-add-group {
+  margin-left: 6px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bm-add-group:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.bm-group-new {
+  padding: 4px 10px;
+}
+
+.bm-group-new input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.bm-group-header {
+  display: flex;
+  align-items: center;
+}
+
+.bm-group-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bm-group-toggle:hover {
+  color: var(--text-primary);
+}
+
+.bm-group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-group-arrow {
+  width: 10px;
+  font-size: 10px;
+}
+
+.bm-group .bm-item {
+  padding-left: 22px;
+}
+
+.bm-group-remove {
+  margin-right: 8px;
+}
+
+.bm-group-header:hover .bm-group-remove {
+  opacity: 1;
+}
+
+/* Shown on hover, like the remove button, so the list stays quiet. */
+.bm-group-select {
+  flex: none;
+  max-width: 84px;
+  padding: 1px 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  opacity: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.bm-item:hover .bm-group-select,
+.bm-group-select:focus {
+  opacity: 1;
+}
+
+.bm-add-group:focus-visible,
+.bm-group-toggle:focus-visible,
+.bm-group-select:focus-visible,
+.bm-remove-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  opacity: 1;
+}

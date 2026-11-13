@@ -79,7 +79,15 @@ import {
   insertTaskList as editorInsertTaskList,
   insertTable as editorInsertTable,
 } from "@/lib/editor-commands";
-import { toggleBookmark, isBookmarked } from "@/lib/bookmark-utils";
+import {
+  EMPTY_BOOKMARKS,
+  parseBookmarks,
+  renameBookmarkPaths,
+  serializeBookmarks,
+  toggleBookmarkItem,
+  type Bookmark,
+  type BookmarkStore,
+} from "@/lib/bookmarks";
 import { getRandomNote } from "@/lib/random-note";
 import { exportToPDF } from "@/lib/pdf-export";
 import { saveSnapshot } from "@/lib/file-recovery";
@@ -212,7 +220,11 @@ export default function Home() {
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [showSlidePresentation, setShowSlidePresentation] = useState(false);
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkStore>(EMPTY_BOOKMARKS);
+  // The vault whose bookmarks are loaded: nothing is written back before then.
+  const bookmarksLoadedFor = useRef<string | null>(null);
+  // A search to open the search panel with, from a bookmarked search.
+  const [vaultSearchQuery, setVaultSearchQuery] = useState("");
   const [frontmatterCollapsed, setFrontmatterCollapsed] = useState(true);
 
   // Ecosystem
@@ -1050,6 +1062,61 @@ export default function Home() {
     if (line !== undefined) setJumpTick((t) => t + 1);
   }, [openFile]);
 
+  // Bookmarks live in the vault, so they are loaded when a vault opens and
+  // written back whenever they change.
+  const bookmarksVault = activeVault?.path ?? null;
+  useEffect(() => {
+    bookmarksLoadedFor.current = null;
+    if (!bookmarksVault || !window.electronAPI) return;
+    let cancelled = false;
+    window.electronAPI.readFile(`${bookmarksVault}/.noteriv/bookmarks.json`).then((text) => {
+      if (cancelled) return;
+      setBookmarks(parseBookmarks(text));
+      bookmarksLoadedFor.current = bookmarksVault;
+    });
+    return () => { cancelled = true; };
+  }, [bookmarksVault]);
+  useEffect(() => {
+    if (!bookmarksVault || bookmarksLoadedFor.current !== bookmarksVault || !window.electronAPI) return;
+    const timer = setTimeout(async () => {
+      await window.electronAPI.createDir(`${bookmarksVault}/.noteriv`);
+      await window.electronAPI.writeFile(`${bookmarksVault}/.noteriv/bookmarks.json`, serializeBookmarks(bookmarks));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [bookmarks, bookmarksVault]);
+
+  const openBookmark = useCallback((bookmark: Bookmark) => {
+    if (bookmark.kind === "file") {
+      void openFile(bookmark.target);
+    } else if (bookmark.kind === "search") {
+      setVaultSearchQuery(bookmark.target);
+      setShowVaultSearch(true);
+    } else if (bookmark.kind === "folder") {
+      // Open the folder, and the folders it is inside, in the file list.
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        let path = bookmark.target;
+        const root = activeVault?.path ?? "";
+        while (path.length > root.length) {
+          next.add(path);
+          path = path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
+        }
+        return [...next];
+      });
+      if (sidebarCollapsed) setSidebarCollapsed(false);
+    } else {
+      const hash = bookmark.target.indexOf("#");
+      const filePath = bookmark.target.slice(0, hash);
+      pendingJumpRef.current = {
+        filePath,
+        anchor: { type: "heading", text: bookmark.target.slice(hash + 1) },
+        expires: Date.now() + 3000,
+      };
+      void openFile(filePath);
+      setJumpTick((t) => t + 1);
+    }
+  }, [openFile, activeVault, sidebarCollapsed]);
+
   const removeTab = useCallback((filePath: string) => {
     // Pinned tabs cannot be closed
     if (pinnedTabs.has(filePath)) return;
@@ -1127,6 +1194,7 @@ export default function Home() {
     } else if (activeTab?.startsWith(oldPath + "/")) {
       setActiveTab(activeTab.replace(oldPath, newPath));
     }
+    setBookmarks((b) => renameBookmarkPaths(b, oldPath, newPath));
   }, [activeTab]);
 
   // Renames and moves run one at a time: each reads the open tabs and scans
@@ -1951,7 +2019,19 @@ export default function Home() {
       toggleBacklinks: () => setShowBacklinks((b) => !b),
       toggleTags: () => setShowTagPane((t) => !t),
       insertTemplate: () => setShowTemplatePicker(true),
-      toggleBookmark: () => { if (activeTab) setBookmarks((b) => toggleBookmark(b, activeTab)); },
+      toggleBookmark: () => { if (activeTab) setBookmarks((b) => toggleBookmarkItem(b, "file", activeTab)); },
+      bookmarkHeading: () => {
+        // The heading the cursor is under, in the open note.
+        if (!view || !activeTab) return;
+        const doc = view.state.doc;
+        for (let n = doc.lineAt(view.state.selection.main.head).number; n >= 1; n--) {
+          const match = doc.line(n).text.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+          if (match) {
+            setBookmarks((b) => toggleBookmarkItem(b, "heading", `${activeTab}#${match[1]}`));
+            return;
+          }
+        }
+      },
       randomNote: async () => { if (activeVault) { const f = await getRandomNote(activeVault.path); if (f) openFile(f); } },
       noteComposer: () => setShowNoteComposer(true),
       fileRecovery: () => setShowFileRecovery(true),
@@ -2341,6 +2421,9 @@ export default function Home() {
             onTrashFile={handleTrashFileFromSidebar}
             onAnalyzeNote={handleAnalyzeSidebarNote}
             renamePath={renamePath}
+            onToggleBookmark={(path, isDirectory) =>
+              setBookmarks((b) => toggleBookmarkItem(b, isDirectory ? "folder" : "file", path))
+            }
           />
         )}
 
@@ -2486,12 +2569,12 @@ export default function Home() {
           visible={showTagPane}
         />
         <BookmarksPanel
-          bookmarks={bookmarks}
+          store={bookmarks}
           vaultPath={activeVault?.path || ""}
           currentFile={activeTab}
-          onFileSelect={openFile}
-          onBookmarkRemove={(f) => setBookmarks((b) => b.filter((x) => x !== f))}
-          visible={bookmarks.length > 0 || showTagPane}
+          onOpen={openBookmark}
+          onChange={setBookmarks}
+          visible={bookmarks.items.length > 0 || bookmarks.groups.length > 0 || showTagPane}
         />
         {showLintPanel && currentTab && activeVault && (
           <LintPanel
@@ -2600,8 +2683,11 @@ export default function Home() {
       {showVaultSearch && activeVault && (
         <VaultSearch
           vaultPath={activeVault.path}
+          initialQuery={vaultSearchQuery}
           onSelect={openFileAtLine}
-          onClose={() => setShowVaultSearch(false)}
+          onClose={() => { setShowVaultSearch(false); setVaultSearchQuery(""); }}
+          isBookmarked={(q) => bookmarks.items.some((b) => b.kind === "search" && b.target === q)}
+          onToggleBookmark={(q) => setBookmarks((b) => toggleBookmarkItem(b, "search", q))}
         />
       )}
 

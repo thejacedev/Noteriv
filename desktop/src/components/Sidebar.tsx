@@ -32,6 +32,8 @@ interface SidebarProps {
   refreshTrigger?: number;
   onTrashFile?: (filePath: string) => void;
   onAnalyzeNote?: (filePath: string) => void;
+  /** Adds or removes a bookmark for a note or a folder. */
+  onToggleBookmark?: (path: string, isDirectory: boolean) => void;
 }
 
 interface ContextMenuData {
@@ -333,6 +335,7 @@ export default function Sidebar({
   refreshTrigger,
   onTrashFile,
   onAnalyzeNote,
+  onToggleBookmark,
 }: SidebarProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -749,6 +752,12 @@ export default function Sidebar({
           onClick: () => handleDelete(entry),
         });
       }
+    }
+    if (!isVaultRoot && !hasMultiSelect && onToggleBookmark) {
+      items.push({
+        label: entry.isDirectory ? "Bookmark Folder" : "Bookmark",
+        onClick: () => onToggleBookmark(entry.path, entry.isDirectory),
+      });
     }
     if (!entry.isDirectory && /\.(md|markdown)$/i.test(entry.name) && onAnalyzeNote) {
       items.push({ label: "", separator: true, onClick: () => {} });

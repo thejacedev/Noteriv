@@ -16,12 +16,23 @@ interface VaultSearchProps {
   /** Opens a note, at a line when the result was a line. */
   onSelect: (filePath: string, line?: number) => void;
   onClose: () => void;
+  /** A search to start with, from a bookmarked search. */
+  initialQuery?: string;
+  isBookmarked?: (query: string) => boolean;
+  onToggleBookmark?: (query: string) => void;
 }
 
 const EMPTY: VaultSearchResult = { files: [], totalFiles: 0, error: null };
 
-export default function VaultSearch({ vaultPath, onSelect, onClose }: VaultSearchProps) {
-  const [query, setQuery] = useState("");
+export default function VaultSearch({
+  vaultPath,
+  onSelect,
+  onClose,
+  initialQuery = "",
+  isBookmarked,
+  onToggleBookmark,
+}: VaultSearchProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [result, setResult] = useState<VaultSearchResult>(EMPTY);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [searching, setSearching] = useState(false);
@@ -175,6 +186,17 @@ export default function VaultSearch({ vaultPath, onSelect, onClose }: VaultSearc
           {shown > 0 && (
             <button type="button" className="vs-toggle" onClick={copyResults}>
               {copied ? "Copied" : "Copy results"}
+            </button>
+          )}
+          {onToggleBookmark && query.trim() && !result.error && (
+            <button
+              type="button"
+              className={`vs-toggle${isBookmarked?.(query.trim()) ? " vs-toggle-on" : ""}`}
+              onClick={() => onToggleBookmark(query.trim())}
+              title={isBookmarked?.(query.trim()) ? "Remove this search from the bookmarks" : "Bookmark this search"}
+              aria-pressed={!!isBookmarked?.(query.trim())}
+            >
+              ★
             </button>
           )}
         </div>

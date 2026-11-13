@@ -83,6 +83,7 @@ export type HotkeyAction =
   | "closeSplit"
   | "vaultInsights"
   | "localGraph"
+  | "bookmarkHeading"
   | "foldAll"
   | "unfoldAll"
   // Knowledge
@@ -194,6 +195,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
   { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
   { action: "localGraph", label: "Open Local Graph", keys: "", category: "View" },
+  { action: "bookmarkHeading", label: "Bookmark the Heading Under the Cursor", keys: "", category: "Navigation" },
   { action: "foldAll", label: "Fold All Headings and Lists", keys: "", category: "View" },
   { action: "unfoldAll", label: "Unfold All Headings and Lists", keys: "", category: "View" },
   // Knowledge
