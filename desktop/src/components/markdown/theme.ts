@@ -306,6 +306,35 @@ export const markdownRenderTheme = EditorView.baseTheme({
     color: "var(--accent)",
     fontSize: "0.85em",
   },
+  // Embedded search results
+  "& .md-query": {
+    display: "block",
+    border: "1px solid var(--border)",
+    borderRadius: "8px",
+    padding: "8px 12px",
+    margin: "4px 0",
+    background: "color-mix(in srgb, var(--bg-surface) 40%, transparent)",
+    fontSize: "0.9em",
+  },
+  "& .md-query-header": {
+    color: "var(--text-muted)",
+    fontSize: "0.8em",
+    marginBottom: "6px",
+  },
+  "& .md-query-file": { marginTop: "4px" },
+  "& .md-query-line": {
+    color: "var(--text-secondary)",
+    paddingLeft: "14px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  "& .md-query-more, & .md-query-empty": {
+    color: "var(--text-muted)",
+    paddingLeft: "14px",
+    fontSize: "0.85em",
+  },
+  "& .md-query-error": { color: "var(--red)" },
   // Comments: there for the writer, so shown, but out of the way
   "& .md-comment": {
     color: "var(--text-muted)",

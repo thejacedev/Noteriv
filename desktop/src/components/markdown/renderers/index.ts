@@ -40,6 +40,7 @@ import { tagRenderer } from "./tags";
 import { inlineHtmlRenderer } from "./html";
 import { inlineRenderers } from "./inline";
 import { commentRenderer, inlineFootnoteRenderer } from "./comments";
+import { registerQueryBlock } from "./query-block";
 
 /**
  * Register all built-in renderers.
@@ -47,6 +48,9 @@ import { commentRenderer, inlineFootnoteRenderer } from "./comments";
  * renderers after this.
  */
 export function registerBuiltinRenderers() {
+  // Fenced blocks the app draws itself, beside the ones plugins add.
+  registerQueryBlock();
+
   // Block renderers — order matters (first match wins)
   registerBlockRenderer(horizontalRuleRenderer);
   registerBlockRenderer(headingRenderer);
