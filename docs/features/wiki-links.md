@@ -74,7 +74,8 @@ How aliases are matched:
 - Case is ignored: `[[ai]]` works as well as `[[AI]]`.
 - A link is matched against note names first. An alias is only used when no note has that name, so a note called `AI.md` wins over a note with the alias `AI`.
 - If two notes have the same alias, the link goes to the first of them in the file listing.
-- Embeds do not use aliases. `![[AI]]` looks for a note named `AI`; write `![[Artificial Intelligence]]` to embed the note.
+- Embeds use aliases the same way: `![[AI]]` shows the note when no note is named `AI`.
+- The [lint panel](./lint.md) does not report a link written with an alias as broken.
 
 ## Autocomplete
 
@@ -156,6 +157,7 @@ A few things to know:
 - Embedded content is shown with basic formatting. Callouts, math and diagrams inside the embedded note are not drawn the way they are in the note itself.
 - [Comments](../editor/comments.md) in the embedded note are left out.
 - Files that open in their own view, such as drawings and canvases, stay links. Clicking the link opens the file.
+- A base is the exception: `![[Projects.base]]` on a line of its own shows the base in the note, and `![[Projects.base#Cards]]` opens it on the view called `Cards`. See [Bases](../views/bases.md).
 - Web pages are not embedded. An `<iframe>` in a note is removed when the note is drawn. This is on purpose: a note can arrive through sync or the web clipper, and a frame could load anything.
 
 ## Links to Other Files
@@ -166,7 +168,7 @@ A wiki-link can point at a file that is not a note. Write the file name with its
 The figures are in [[paper.pdf]], and the table is on [[paper.pdf#page=3]].
 ```
 
-Clicking the link opens the file in Noteriv. A PDF opens in the [PDF viewer](../views/pdf-viewer.md), at the page given after `#page=` if there is one. Images, canvases and drawings open in their own views too. Versions up to 2.4.13 do nothing when a link to a file other than a note is clicked.
+Clicking the link opens the file in Noteriv. A PDF opens in the [PDF viewer](../views/pdf-viewer.md), at the page given after `#page=` if there is one. Images, canvases, drawings and bases open in their own views too. Versions up to 2.4.13 do nothing when a link to a file other than a note is clicked.
 
 The file is found by its path inside the vault, or failing that by its name, with the shallowest file winning a shared name. Notes come first: if a note matches the link, the note is opened.
 

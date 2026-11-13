@@ -83,6 +83,7 @@ Source mode supports folding for sections and blocks. The fold arrows are in the
 - **Heading sections**: Click the arrow next to a heading to collapse everything between it and the next heading of the same or higher level.
 - **Lists**: A list item with lines nested under it can be folded, at any depth.
 - **Other blocks**: A block written over several lines, such as a fenced code block or a table, has an arrow too.
+- **Properties**: The YAML block at the top of a note folds from the arrow beside its first line. It is not folded for you in source mode.
 
 Folded regions show a `…` placeholder. Click it, or click the arrow again, to unfold. The arrow of a folded line stays visible.
 

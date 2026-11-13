@@ -63,6 +63,20 @@ Choose where new notes go, which folder the Attachment Manager uses, which files
 
 Numbered footnotes, inline footnotes written as `^[text]`, and a panel that lists the footnotes of the open note and jumps to each one.
 
+### [Properties](./properties.md)
+
+Edit a note's frontmatter as typed values above the note: text, list, number, checkbox, date, and date and time. A property's type is kept for the whole vault, and a panel lists every property in the vault with the number of notes that use it.
+
+## Windows and Layouts
+
+### [Workspace Layouts](./workspaces.md)
+
+Save the open notes, the split, the file list and the side panels under a name, and bring them back later.
+
+### [Pop-Out Windows](./pop-out-windows.md)
+
+Open a note in a small window of its own, next to the main window.
+
 ## History and Recovery
 
 ### [File Recovery](./file-recovery.md)
@@ -98,6 +112,10 @@ Spaced repetition built into the editor. Define `Q:/A:` pairs or `{{cloze}}` del
 ### [Dataview](./dataview.md)
 
 Query your vault like a database using `dataview` code blocks. Build tables, lists, and task views filtered by tags, folders, or frontmatter fields. Results render live in the editor.
+
+### [Bases](../views/bases.md)
+
+A `.base` file shows the files of the vault as a table, cards or a list, with filters, formulas, sorting, grouping and summaries. Bases are written as YAML text and can also be shown inside a note.
 
 ## Quality
 

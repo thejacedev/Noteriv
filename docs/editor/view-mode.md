@@ -88,7 +88,7 @@ A heading or a list item with something under it shows an arrow to its left whil
 
 ### Frontmatter
 
-YAML frontmatter blocks are hidden in view mode by default. The metadata they contain (title, tags, date, etc.) is not displayed in the rendered output. If you want to see frontmatter, switch to source mode.
+The YAML frontmatter block is hidden in view mode. The properties it holds are shown above the note in the [properties editor](../features/properties.md), where you can read and change them. To see the YAML itself, switch to source mode.
 
 ## Interactive Elements
 
@@ -146,5 +146,5 @@ View mode is ideal for:
 | Editing | Not available | Full editing |
 | Rendering | Entire document | Non-cursor lines only |
 | Interactive checkboxes | Yes | Yes |
-| Frontmatter | Hidden | Visible on cursor line |
+| Frontmatter | YAML hidden; properties editor above the note | YAML folded; properties editor above the note |
 | Best for | Reading, reviewing | Writing, composing |

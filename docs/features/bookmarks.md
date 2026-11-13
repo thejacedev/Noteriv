@@ -83,20 +83,24 @@ Bookmarks are stored per vault, in the file `.noteriv/bookmarks.json` inside the
 ```json
 {
   "items": [
-    { "kind": "file", "target": "/home/you/Notes/Projects/Plan.md", "group": "Work" },
+    { "kind": "file", "target": "Projects/Plan.md", "group": "Work" },
     { "kind": "search", "target": "tag:#work task-todo:call" }
   ],
   "groups": ["Work"]
 }
 ```
 
-Notes, folders and headings are stored by their full path on your computer. If the same vault is opened from a different location, such as on a second computer through sync, bookmarks made on the first one do not point at anything there. Search bookmarks are not affected.
+Notes, folders and headings are stored by their path from the top of the vault, so the bookmarks work wherever the vault folder is. A bookmarks file that holds full paths is still read.
+
+To have the same bookmarks on every device, switch on **Vault settings** for folder sync or WebDAV sync. Read [Vault Settings](../sync/what-syncs.md#vault-settings) first: when two devices have different bookmarks files, one replaces the other whole and no copy is kept, and that includes the first sync of a second device.
 
 ## Renaming, Moving and Deleting
 
 When you rename or move a note or a folder in Noteriv, bookmarks that point at it, or at anything inside it, are updated to follow it. This covers note, folder and heading bookmarks.
 
-Bookmarks are not updated when a file is renamed outside Noteriv, and a bookmark is not removed when its note is deleted. A bookmark that no longer points at anything stays in the list until you remove it.
+When you delete a note or a folder in Noteriv, its bookmarks are removed, along with the bookmarks of anything that was inside a deleted folder.
+
+Bookmarks are not updated when a file is renamed or deleted outside Noteriv. A bookmark that no longer points at anything stays in the list until you remove it.
 
 ## Use Cases
 

@@ -238,6 +238,7 @@ What the block shows:
 - Each matching note as a link. Click it to open the note.
 - Up to five matching lines under each note, with the matches highlighted, followed by a count of the rest.
 - Up to 50 notes, newest changes first. If more notes match, the block says how many are not shown.
+- Notes matched by [Excluded files](./file-settings.md#excluded-files) are left out, as in the search panel.
 - `No results` when nothing matches, or the reason when the query cannot be read.
 
 The search runs again each time the block is drawn, which is when the note is opened or the block is edited. The results are not written into the note: the file only holds the query.

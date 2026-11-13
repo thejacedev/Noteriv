@@ -83,6 +83,10 @@ An inline footnote, written as `^[text]`, is shown where it is written, small an
 
 A comment, written as `%%text%%` or as a block between two `%%` lines, is shown as written, dimmed and in italics. Markdown inside a comment is not rendered. See [Comments](./comments.md).
 
+### Properties
+
+The YAML block at the top of a note is not rendered as Markdown. It starts folded, and its values are shown above the note in the properties editor. Unfold the block to edit the YAML as text. See [Properties](../features/properties.md).
+
 ### Search Results
 
 A fenced code block with the language `query` is replaced by the results of that search. Put the cursor inside the block to see and edit the query. See [Search Results in a Note](../features/search.md#search-results-in-a-note).

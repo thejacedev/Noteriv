@@ -25,12 +25,16 @@ Folder sync mirrors your vault to a local folder on your file system. The target
 Folder sync is bidirectional by default: files modified locally are copied to the target, and files modified in the target are copied back. Direction can be configured as push-only, pull-only, or two-way.
 
 See [Folder Sync](./folder-sync.md) for details.
+See [What Syncs](./what-syncs.md) for choosing which files it carries.
 
 ### WebDAV Sync
 
 WebDAV sync connects your vault to any WebDAV-compatible server, such as Nextcloud, ownCloud, or a self-hosted WebDAV endpoint. Noteriv pushes and pulls files over HTTP using the WebDAV protocol. This option is ideal for users who run their own cloud infrastructure and want to avoid third-party services.
 
+WebDAV sync can encrypt the contents of files on your device before they are uploaded (desktop app, after 2.4.13). File and folder names are not encrypted.
+
 See [WebDAV Sync](./webdav-sync.md) for details.
+See [What Syncs](./what-syncs.md) for choosing which files it carries.
 
 ## Auto-Sync
 
@@ -98,15 +102,17 @@ WebDAV sync keeps both versions when a file changed on both sides since the last
 | Setup complexity | Moderate (token) | Low (pick folder) | Moderate (URL/auth) |
 | Mobile support | Yes (via GitHub API) | No | No |
 | Self-hostable | Yes (any git server) | Yes | Yes |
+| Choosing what syncs | Through `.gitignore` | Yes (after 2.4.13) | Yes (after 2.4.13) |
+| Encrypts file contents | No | No | Optional (after 2.4.13) |
 
 ## Settings Location
 
-Sync configuration is stored per-vault. Each vault can have its own git remote, folder target, and WebDAV server. This means you can sync your work vault to a company GitHub repo and your personal vault to a personal Nextcloud server, all within the same Noteriv installation.
+The Git remote is stored per vault, so each vault can sync to its own repository. The additional sync provider is not. The folder target or WebDAV server, the choice of what syncs and the WebDAV encryption password are stored once, in Noteriv's settings on the device, and are used for whichever vault is open. If you open more than one vault on a device, they all sync with the same target folder or remote path.
 
 On desktop, sync settings are accessed from:
 
 1. **Sidebar**: The git sync panel at the bottom of the sidebar shows status and has a gear icon for settings.
-2. **Settings modal**: Settings > Sync section, where you configure the auto-sync interval, pull-on-open behavior, and additional sync providers (folder, WebDAV).
+2. **Settings modal**: Settings > Sync section, where you configure the auto-sync interval, pull-on-open behavior, and additional sync providers (folder, WebDAV). Once a provider is picked, the same section holds the choice of what it syncs and, for WebDAV, the encryption password.
 
 On mobile, sync settings are in the vault settings screen.
 
@@ -121,6 +127,8 @@ All files in the vault directory are included in sync, with a few exceptions:
 
 Markdown files, canvas files, drawing files, images, PDFs, PDF annotation sidecars, and all other vault content is synced.
 
+The list above is for Git sync. Folder sync and WebDAV sync carry a narrower set of files. Notes and other text files always sync. Images and PDFs sync unless you turn them off, audio and video sync only if you turn them on, and other file types never sync. You can also leave folders out, and add the vault's bookmarks, property types and saved layouts. These choices are in the desktop app and were added after 2.4.13. See [What Syncs](./what-syncs.md).
+
 ## Security
 
 ### Git Tokens
@@ -133,9 +141,15 @@ On mobile, the GitHub token is stored in the app's secure storage, tied to the s
 
 WebDAV username and password are stored in Noteriv's settings file on the device, not in the vault. They are transmitted over HTTPS to the WebDAV server. Ensure your WebDAV server uses HTTPS to prevent credential interception.
 
+### WebDAV Encryption
+
+WebDAV sync can encrypt the contents of files on the device before they are uploaded (desktop app, after 2.4.13). File and folder names are not encrypted, and folder sync is not encrypted. Every device needs the same encryption password, and a forgotten password cannot be recovered. The password is stored in Noteriv's settings file on the device, like the WebDAV password, and is not sent to the server. See [Encryption](./webdav-sync.md#encryption).
+
 ## Troubleshooting
 
 - **"Sync failed" with no details**: Check that your git remote URL is correct and your token has `repo` scope.
 - **Merge conflicts appearing in files**: Resolve the conflict markers manually, save the file, and sync again.
 - **Folder sync not detecting changes**: Ensure the target folder is accessible and not locked by another process.
 - **WebDAV connection refused**: Verify the server URL includes the protocol (`https://`) and the correct port.
+- **WebDAV sync stops with a message about encryption**: The encryption password on this device does not fit the remote folder. See [When a Sync Stops](./webdav-sync.md#when-a-sync-stops).
+- **A file is missing on the other side**: Folder sync and WebDAV sync only carry the file types and folders you have chosen. See [What Syncs](./what-syncs.md).

@@ -7,7 +7,7 @@ order: 10
 
 Folding hides the text under a heading or a list item, so you can see the outline of a long note and open only the part you are working on. It works in live mode, source mode and view mode. Versions up to 2.4.13 do not have it.
 
-Folding changes what is shown, not the note. Nothing is written to the file, and a note opens unfolded.
+Folding changes what is shown, not the note. Nothing is written to the file, and folds are not remembered: a note opens with its headings and lists unfolded.
 
 ## What Can Be Folded
 
@@ -28,6 +28,14 @@ For a list item, the nested lines are the lines after it that are indented furth
 ```
 
 Here `## Shopping` and `- Bakery` can be folded. `- Market` cannot, because nothing is nested under it.
+
+### The Properties Block
+
+The YAML block at the top of a note, between the two `---` lines, folds as well. Its arrow is beside the first line.
+
+- In live mode the block is folded each time a note is loaded, because the [properties editor](../features/properties.md) above the note shows the same values. Click the `…` marker or the arrow to unfold it.
+- In source mode it is not folded for you, but you can fold it from the arrow in the margin.
+- **Fold All Headings and Lists** leaves the block as it is. **Unfold All Headings and Lists** unfolds it with everything else.
 
 ## Fold Arrows
 

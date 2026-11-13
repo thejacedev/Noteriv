@@ -82,7 +82,9 @@ My Notes/
 │   ├── themes/            Custom themes
 │   ├── snippets/          CSS snippets
 │   ├── trash/             Soft-deleted notes (restorable)
-│   └── bookmarks.json     Bookmarks and bookmark groups
+│   ├── bookmarks.json     Bookmarks and bookmark groups
+│   ├── types.json         The types chosen for properties
+│   └── workspaces.json    Saved workspace layouts
 ├── Daily/                 Daily notes folder
 │   ├── 2026-03-18.md
 │   ├── 2026-03-19.md
@@ -145,6 +147,7 @@ Each vault stores its own customizations in the `.noteriv/` directory:
 - **Themes** -- Custom themes live in `.noteriv/themes/`. Install community themes from the Theme Picker or create your own.
 - **CSS Snippets** -- Custom CSS files live in `.noteriv/snippets/`. Toggle them individually to fine-tune the editor and preview appearance.
 - **Trash** -- Soft-deleted notes live in `.noteriv/trash/` with metadata for restoration. Open the Trash panel to browse and restore deleted notes.
+- **Bookmarks, property types and layouts** -- Your [bookmarks](../features/bookmarks.md) are kept in `.noteriv/bookmarks.json`, the types you choose for [properties](../features/properties.md) in `.noteriv/types.json`, and saved [workspace layouts](../features/workspaces.md) in `.noteriv/workspaces.json` (after 2.4.13). Folder sync and WebDAV sync can carry these three files. When two devices have different copies of one, one copy replaces the other whole and nothing is merged: see [Vault Settings](../sync/what-syncs.md#vault-settings) before you switch it on.
 
 ## Tips for vault organization
 

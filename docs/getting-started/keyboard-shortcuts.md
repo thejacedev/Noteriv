@@ -235,6 +235,14 @@ Many commands do not have a default keyboard shortcut but can be accessed throug
 | Collapse All Folders | Close every folder in the file list |
 | Fold All Headings and Lists | Fold the headings and lists of the current note |
 | Unfold All Headings and Lists | Unfold everything that is folded in the current note |
+| Add Property to the Open Note | Add a property in the properties editor above the note |
+| Toggle All Properties | Show or hide the panel that lists every property in the vault |
+| Manage Workspace Layouts | Save, load, rename and delete workspace layouts |
+| Save Workspace Layout | Save what is on screen over the current layout, or open the layouts window when there is none |
+| Create New Base | Create a `.base` file that lists the notes of the vault |
+| Import Notes from Another App | Bring in notes from Evernote, Notion, Google Keep and other apps |
+| Open the Note in a New Window | Show the current note in a pop-out window |
+| Move the Note to a New Window | Show the current note in a pop-out window and close its tab |
 
 To bind any of these to a keyboard shortcut, open Settings (`Ctrl+,`), go to the Shortcuts section, find the action, and press the key combination you want to assign.
 

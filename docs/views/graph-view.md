@@ -14,7 +14,7 @@ The graph can show the whole vault or only the notes around the one you have ope
 There are four ways to open the graph view:
 
 - **Keyboard shortcut**: Press `Ctrl+G`. The graph opens on the whole vault.
-- **Ribbon sidebar**: Click the graph icon in the left ribbon.
+- **Ribbon sidebar**: Click the graph icon in the left ribbon. This also opens the whole vault.
 - **Command palette**: Open `Ctrl+Shift+P` and search for "Graph View".
 - **Local graph**: Open `Ctrl+Shift+P` and run "Open Local Graph". The graph opens on the note you have open and the notes around it. See [Local Graph](#local-graph).
 

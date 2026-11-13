@@ -61,6 +61,8 @@ Noteriv supports multiple sync methods. GitHub sync uses git under the hood (nat
 - **[Vaults](vaults.md)** -- Learn how vaults work and how to manage multiple workspaces.
 - **[Interface](interface.md)** -- Understand the UI layout, from the title bar to the status bar.
 - **[Keyboard Shortcuts](keyboard-shortcuts.md)** -- Master the 70+ keyboard shortcuts that make Noteriv fast to use.
+- **[Coming from Obsidian](from-obsidian.md)** -- Open an Obsidian vault as it is, and see what carries over.
+- **[Importing Notes](importing.md)** -- Bring in notes from Evernote, Notion, Google Keep, Roam Research, Logseq, Bear, Textbundle, HTML files or a CSV table (desktop app, after 2.4.13).
 
 ## Feature highlights
 

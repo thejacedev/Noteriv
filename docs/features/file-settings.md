@@ -5,7 +5,7 @@ order: 19
 
 # File Settings
 
-These settings decide where new notes go, which folder the Attachment Manager uses, which files are left out of search and suggestions, and what happens to a file you delete. They are all in Settings > General (`Ctrl+,`) in the desktop app. They were added after 2.4.13.
+These settings decide where new notes go, where attachments are saved, which files are left out of search and suggestions, and what happens to a file you delete. They are all in Settings > General (`Ctrl+,`) in the desktop app. They were added after 2.4.13.
 
 | Setting | Choices | Default |
 |---|---|---|
@@ -33,6 +33,7 @@ The setting is used by:
 
 - **New File** (`Ctrl+N`), the new-file button in the sidebar header and the new-note button in the ribbon. The note is called `Untitled`, or `Untitled 2`, `Untitled 3` and so on if that name is taken.
 - **Create New Unique Note**, described below.
+- **Create New Base**, which makes a `.base` file. See [Bases](../views/bases.md).
 
 It is not used when you right-click a folder in the file list and choose **New File**. That note is created in the folder you clicked.
 
@@ -50,14 +51,20 @@ The note is created where **New notes go** says. The command has no default shor
 
 ## Attachment Folder
 
-**Attachment folder** is the folder inside the vault that the Attachment Manager works with. Files you add in the Attachment Manager are saved there, the manager lists what is in it, and the links it inserts point to it.
+**Attachment folder** is the folder inside the vault that new attachments are saved to. It is used for:
+
+- Images you drop onto the editor.
+- Recordings made with the Audio Recorder.
+- Files you add in the Attachment Manager. The manager also lists what is in this folder, and the links it inserts point to it.
+- An image you add to a [canvas](../views/canvas.md) from outside the vault. It is copied into this folder.
 
 Write a folder inside the vault, such as `attachments` or `files/media`. If the box is empty, `attachments` is used.
 
 Things to know:
 
-- Changing the setting does not move files that are already in the old folder.
-- Images you drop onto the editor and recordings made with the Audio Recorder are not affected by this setting.
+- Changing the setting does not move files that are already in the old folder. Links to them keep working.
+- Versions up to 2.4.13 save dropped images to a hidden `.imgs` folder. Images already there still show.
+- [Importing notes](../getting-started/importing.md) does not use this setting. An import puts its attachments in an `attachments` folder inside the folder the notes are imported into.
 
 ## Excluded Files
 
@@ -85,17 +92,17 @@ How patterns are read:
 
 Excluded files are left out of:
 
-- [Vault Search](./search.md#vault-search)
+- [Vault Search](./search.md#vault-search), and the results of a [`query` block](./search.md#search-results-in-a-note)
 - [Quick Open](./search.md#quick-open)
 - The suggestions shown after typing `[[`
 - The [graph view](../views/graph-view.md)
 - Unlinked mentions in the [links panel](./wiki-links.md#links-panel)
 
-They are still shown in the file list, and you can open them and link to them as usual.
+They are still shown in the file list, and you can open them and link to them as usual. The setting is not applied to the rows of a [base](../views/bases.md), or to `noteriv search` on the [command line](../reference/command-line.md).
 
 ## Deleted Files
 
-**Deleted files** sets where a file goes when you delete it from the file list.
+**Deleted files** sets where a file goes when you delete it.
 
 | Choice | What happens |
 |---|---|
@@ -104,7 +111,16 @@ They are still shown in the file list, and you can open them and link to them as
 
 If a file cannot be moved to the system trash, the status bar says so and the file stays where it is.
 
-The setting applies to files deleted from the file list: **Delete** in the right-click menu, and **Delete N Files** when several files are selected. Two things do not follow it:
+The setting applies to:
 
-- Deleting a folder from the file list removes the folder and everything in it for good. The confirmation says so before anything is deleted.
-- The **Delete File** command, which deletes the open note, always uses Noteriv's trash.
+- **Delete** in the right-click menu of the file list, and **Delete N Files** when several files are selected.
+- The **Delete File** command, which deletes the open note.
+
+Before anything is deleted, Noteriv asks, and the question says where the file will go.
+
+Folders depend on the choice:
+
+| Choice | Deleting a folder from the file list |
+|---|---|
+| Move to Noteriv's trash | The folder and everything in it are deleted for good. Noteriv's trash holds files only. The question says so before anything is deleted |
+| Move to the system trash | The folder and everything in it go to the system trash, and can be put back from there |

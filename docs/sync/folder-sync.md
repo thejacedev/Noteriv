@@ -15,7 +15,7 @@ Folder sync is tested with plain folders standing in for the cloud folder. The c
 
 Point folder sync at a folder that holds nothing but this vault, such as `~/Dropbox/Noteriv`, not at the top of your cloud drive.
 
-In two-way mode, every note and attachment in the target folder is brought into the vault, and a file you then delete from the vault is removed from the target folder too. A target that also holds your photos or other documents would pull all of them into the vault.
+In two-way mode, every note in the target folder, and every attachment of a kind you sync, is brought into the vault, and a file you then delete from the vault is removed from the target folder too. A target that also holds your photos or other documents would pull all of them into the vault.
 
 Noteriv refuses to sync when the target folder is inside the vault, or the vault is inside the target folder.
 
@@ -78,6 +78,10 @@ In the one-way modes:
 
 Changing the direction starts again from scratch, like a first sync: files that exist on only one side are copied to the other where the new direction allows it, and nothing is deleted. A note you deleted from the vault while in push-only mode is still in the folder, so switching to two-way brings it back.
 
+### What to Sync
+
+Below the folder settings are the switches for images, PDFs, audio and video, the **Vault settings** option and the list of folders to leave out (after 2.4.13). They are described in [What Syncs](./what-syncs.md).
+
 ## Testing the Connection
 
 Before the first sync, you can click the "Test Connection" button in settings. This verifies that:
@@ -102,15 +106,23 @@ All three work whether or not the vault also has a Git remote.
 
 ## What Gets Synced
 
-Folder sync carries these file types, in every folder of the vault:
+Folder sync carries these file types, in every folder of the vault that you have not left out:
 
-- Notes and text: `.md`, `.markdown`, `.txt`
-- Vault files: `.canvas`, `.drawing`, `.json`, `.csv`, `.css`, `.yaml`, `.yml`
-- Images and documents: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp`, `.avif`, `.pdf`
+- Always: notes and text (`.md`, `.markdown`, `.txt`) and vault files (`.canvas`, `.drawing`, `.base`, `.json`, `.csv`, `.css`, `.yaml`, `.yml`)
+- Unless you turn them off: images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp`, `.avif`) and PDFs (`.pdf`)
+- Only if you turn them on: audio (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`) and video (`.mp4`, `.webm`, `.mov`, `.mkv`)
 
-Other file types, such as audio and video, stay where they are. The folders `.git`, `.noteriv`, `.obsidian`, `.trash` and `node_modules` are never synced, on either side.
+Other file types stay where they are. The folders `.git`, `.obsidian`, `.trash` and `node_modules` are never synced, on either side. Neither is `.noteriv`, apart from three settings files that you can choose to add.
 
-Attachments take up space in your cloud storage. If you do not want a file in the cloud folder, keep it outside the vault.
+The switches for images, PDFs, audio and video, the list of folders to leave out and the **Vault settings** option are described in [What Syncs](./what-syncs.md). Versions up to 2.4.13 have none of these options and do not sync `.base` files.
+
+Attachments take up space in your cloud storage. If you do not want a kind of file or a folder in the cloud folder, turn it off or leave it out.
+
+## Encryption
+
+Folder sync does not encrypt anything. Files are copied to the target folder exactly as they are in the vault. Anything that can read that folder, including the cloud client that uploads it, reads your notes as they are.
+
+The encryption password described in [WebDAV Sync](./webdav-sync.md#encryption) applies to WebDAV sync only.
 
 ## Conflicts
 
@@ -126,6 +138,8 @@ The conflict copy is an ordinary note. You can merge the two by hand and delete 
 When a sync on this device keeps both versions, Noteriv shows a notice above the status bar that lists the notes, with a button to open each conflict copy. The notice stays until you dismiss it, so you see it even if the sync ran on the timer while you were away. In push-only mode the copy is kept in the target folder, not the vault, and the notice says so. Versions up to 2.4.13 show no notice.
 
 The notice only covers conflicts this device resolved, and it is not kept if you quit Noteriv before dismissing it. A conflict copy made by another device, or by your cloud client when two devices upload at the same moment, arrives as an ordinary new file with no notice.
+
+The vault's settings files, if you sync them, are the exception. When one of them changed on both sides, one file replaces the other and no conflict copy is kept. See [Vault Settings](./what-syncs.md#vault-settings).
 
 ## File Deletion
 
@@ -220,7 +234,8 @@ Update Noteriv on every device that syncs with the same folder. A device still o
 
 - Conflicts are resolved by keeping both versions. Nothing is merged.
 - A changed file is copied whole.
-- File types outside the list above are not synced, and neither are empty folders.
+- File types that [What Syncs](./what-syncs.md) does not list are never synced, and neither are empty folders.
 - A rename or move is synced as a deletion and a new file.
+- Folder sync does not encrypt files.
 - Folder sync is desktop-only. The mobile app does not support folder sync (use mobile git sync instead).
 - A symbolic link to a folder is not followed. A link to a file is synced as that file, and a link whose target is missing stops the sync with a message.

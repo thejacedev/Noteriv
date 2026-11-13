@@ -43,11 +43,19 @@ See [Slides](./slides.md) for details.
 
 ### Canvas
 
-The canvas is an infinite whiteboard for spatial thinking. Canvas files (`.canvas`) hold a JSON graph of text nodes, sticky notes, images, embedded files, freehand drawings, and groups, all connected by directional arrows. Zoom from 0.15x to 3x, pan with scroll or drag, and draw freehand with the pencil tool.
+The canvas is a whiteboard with no fixed size. You place cards on it (text, sticky notes, images, files from the vault, web pages, groups and freehand strokes) and draw connections between them. Zoom with the mouse wheel, pan by dragging, and draw freehand with the draw tool.
 
-Create a canvas from the file menu or command palette.
+Canvas files are saved as JSON Canvas, the format Obsidian uses for its canvases, so the same file can be opened in both apps (after 2.4.13). Cards can also hold files from the vault and web page addresses.
+
+Create a canvas with **New Canvas / Whiteboard** in the command palette.
 
 See [Canvas](./canvas.md) for details.
+
+### Bases
+
+A base shows the files of your vault as a table, cards or a list, picked by filters and sorted, grouped and summed up the way a `.base` file says (after 2.4.13). Create one with **Create New Base** from the command palette, or click a `.base` file. Views, filters and formulas are edited as YAML text.
+
+See [Bases](./bases.md) for details.
 
 ### PDF Viewer
 
@@ -71,6 +79,7 @@ Views are selected automatically based on file type:
 | `.md` with `board: true` frontmatter | Board view |
 | `.board.md` | Board view |
 | `.canvas` | Canvas |
+| `.base` | Base (table, cards and list views) |
 | `.drawing` | Drawing editor |
 | `.pdf` | PDF viewer |
 
@@ -81,8 +90,8 @@ For Markdown files, you can switch between the standard editor and specialized v
 There are three general ways to open a view:
 
 1. **Ribbon sidebar**: Icons along the left rail for graph view, calendar view, and creating new canvases or drawings.
-2. **Command palette** (`Ctrl+P`): Search for any view by name -- "Graph View", "Calendar", "New Canvas", "New Drawing", "Present as Slides".
-3. **File explorer**: Double-click a `.canvas`, `.drawing`, or `.pdf` file to open it in the appropriate view. Board files open automatically in the board view.
+2. **Command palette** (`Ctrl+Shift+P`): Search for a view's command -- "Graph View", "Calendar View", "New Canvas / Whiteboard", "Create New Base", "New Drawing", "Start Presentation".
+3. **File explorer**: Click a `.canvas`, `.base`, `.drawing`, or `.pdf` file to open it in the appropriate view. Board files open automatically in the board view.
 
 ## Keyboard Shortcuts
 

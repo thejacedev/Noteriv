@@ -90,6 +90,8 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Open Trash | -- |
 | New Canvas / Whiteboard | -- |
 | Create New Unique Note | -- |
+| Create New Base | -- |
+| Import Notes from Another App | -- |
 
 ### Navigation
 
@@ -136,6 +138,11 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Collapse All Folders | -- |
 | Fold All Headings and Lists | -- |
 | Unfold All Headings and Lists | -- |
+| Toggle All Properties | -- |
+| Manage Workspace Layouts | -- |
+| Save Workspace Layout | -- |
+| Open the Note in a New Window | -- |
+| Move the Note to a New Window | -- |
 
 ### Edit
 
@@ -144,6 +151,7 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Undo | `Ctrl+Z` |
 | Redo | `Ctrl+Shift+Z` |
 | Insert Template | `Ctrl+T` |
+| Add Property to the Open Note | -- |
 | Note Composer | -- |
 | Audio Recorder | -- |
 | Attachment Manager | -- |

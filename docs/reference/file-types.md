@@ -49,7 +49,7 @@ H2 headings become columns. List items become cards. You can move cards between 
 
 ### .canvas
 
-Canvas files are JSON documents that describe a whiteboard layout. They contain nodes (sticky notes, images, and text blocks) and connections between them. The canvas editor provides a freeform, infinite-space workspace for visual note-taking and brainstorming.
+A canvas file holds one [canvas](../views/canvas.md): the cards on it and the connections between them. It is a JSON document in the JSON Canvas 1.0 format, the format Obsidian uses for its canvases (after 2.4.13). Versions up to 2.4.13 write a layout of Noteriv's own. Newer versions still open those files, and rewrite them as JSON Canvas the first time the canvas is changed.
 
 Canvas file structure:
 
@@ -57,44 +57,124 @@ Canvas file structure:
 {
   "nodes": [
     {
-      "id": "node-1",
-      "type": "sticky",
-      "x": 100,
+      "id": "1111111111111111",
+      "type": "text",
+      "text": "Main idea",
+      "x": 101,
       "y": 200,
-      "width": 200,
-      "height": 150,
-      "content": "Sticky note text",
-      "color": "#f9e2af"
+      "width": 260,
+      "height": 160,
+      "color": "1"
     },
     {
-      "id": "node-2",
-      "type": "image",
-      "x": 400,
+      "id": "2222222222222222",
+      "type": "file",
+      "file": "Projects/Plan.md",
+      "x": 420,
       "y": 200,
-      "width": 300,
+      "width": 260,
+      "height": 120,
+      "color": "5"
+    },
+    {
+      "id": "3333333333333333",
+      "type": "text",
+      "text": "Call Dana",
+      "x": 100,
+      "y": 420,
+      "width": 200,
       "height": 200,
-      "src": "attachments/diagram.png"
+      "color": "#f5c2e7",
+      "noteriv": {
+        "type": "sticky",
+        "rotation": -1.37
+      }
+    },
+    {
+      "id": "7777777777777777",
+      "type": "group",
+      "x": 60,
+      "y": 160,
+      "width": 680,
+      "height": 520,
+      "label": "Sprint",
+      "color": "6"
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
-      "from": "node-1",
-      "to": "node-2"
+      "id": "aaaaaaaaaaaaaaaa",
+      "fromNode": "1111111111111111",
+      "fromSide": "right",
+      "toNode": "2222222222222222",
+      "toSide": "left"
     }
   ]
 }
 ```
 
-Node types:
+Fields every card has:
 
-| Type | Description |
+| Field | Description |
 |---|---|
-| `sticky` | A colored sticky note with text content |
-| `image` | An embedded image from the vault or a URL |
-| `text` | A text block with markdown support |
+| `id` | The card's id. Noteriv gives a new card 16 hex characters |
+| `type` | `text`, `file`, `link` or `group` |
+| `x`, `y` | Where the card is, in whole numbers |
+| `width`, `height` | The card's size, in whole numbers |
+| `color` | Optional. A preset from `"1"` to `"6"` (red, orange, yellow, green, blue, purple) or a hex colour such as `"#ff8800"` |
 
-Canvas files are created from the command palette ("New Canvas") or the file context menu.
+Fields by type:
+
+| Type | Fields |
+|---|---|
+| `text` | `text`: the text on the card |
+| `file` | `file`: the path from the top of the vault, with `/` between folders. `subpath`, optional: `#Heading` or `#^block-id` for part of a note, `#page=3` for a page of a PDF |
+| `link` | `url`: the address of a web page |
+| `group` | `label`. Also `background`, an image inside the vault, and `backgroundStyle` (`cover`, `ratio` or `repeat`). Noteriv draws and keeps a background but has no control for setting one |
+
+Fields of an edge:
+
+| Field | Description |
+|---|---|
+| `id` | The edge's id |
+| `fromNode`, `toNode` | The ids of the two cards |
+| `fromSide`, `toSide` | Optional. `top`, `bottom`, `left` or `right` |
+| `fromEnd`, `toEnd` | Optional. `none` or `arrow`. Left out, the start has no arrow and the end has one |
+| `color` | Optional, as for a card |
+| `label` | Optional. The text on the line |
+
+JSON Canvas has no sticky notes, image cards or freehand strokes. Noteriv writes each as a card the format does have, with a `noteriv` field that says what it is:
+
+| In Noteriv | Written as | `noteriv` holds |
+|---|---|---|
+| Sticky note | A `text` card with the note's text and its paper colour | `"type": "sticky"` and `rotation`, the tilt in degrees |
+| Image card | A `file` card that points at the image | `"type": "image"` |
+| Freehand strokes | One `text` card with the id `noteriv-drawings` | `"type": "drawings"`, `nodes` with every stroke, and `edges` with the connections that touch a stroke |
+
+Fields Noteriv does not use, and cards of a type it does not know, are written back as they were.
+
+Canvas files are created with the **New Canvas / Whiteboard** command in the command palette. See [Canvas](../views/canvas.md#file-format) for how the file is read and written.
+
+## Base Files
+
+### .base
+
+A base file is YAML text that describes views over the files of the vault: filters, formulas, and one or more table, cards or list views. It holds no copy of your notes. Base files open in the base tab in the desktop app (after 2.4.13), and can be shown inside a note with a `base` code block or with `![[name.base]]`.
+
+```yaml
+filters:
+  and:
+    - file.ext == "md"
+views:
+  - type: table
+    name: Table
+    order:
+      - file.name
+      - file.folder
+      - file.mtime
+```
+
+Base files are created with the **Create New Base** command in the command palette. See [Bases](../views/bases.md) for the file syntax.
 
 ## Drawing Files
 
@@ -116,7 +196,7 @@ Noteriv can display and manage various attachment file types within your vault:
 | Video | `.mp4`, `.webm` | Played with the built-in video player |
 | Other | Any extension | Listed in the attachment manager, opened with the system default application |
 
-Attachments are typically stored in an `attachments/` folder within your vault, but they can be placed anywhere. Reference them in markdown using standard image syntax or relative links. The folder the Attachment Manager uses is set in Settings > General: see [Attachment Folder](../features/file-settings.md#attachment-folder).
+Attachments are typically stored in an `attachments/` folder within your vault, but they can be placed anywhere. Reference them in markdown using standard image syntax or relative links. The folder that new attachments are saved to is set in Settings > General: see [Attachment Folder](../features/file-settings.md#attachment-folder).
 
 Sound, video and PDF files can also be embedded in a note with `![[file]]`, and a wiki-link to a file opens it: see [Embedding](../features/wiki-links.md#embedding-with).
 
@@ -152,6 +232,9 @@ your-vault/
     snippet-config.json   # Which CSS snippets are enabled
     flashcard-reviews.json  # Spaced repetition review data
     bookmarks.json        # Bookmarks and bookmark groups
+    types.json            # The types chosen for properties
+    workspaces.json       # Saved workspace layouts
+    workspace.json        # The tabs open on this device
 ```
 
 ### Configuration Files
@@ -200,10 +283,10 @@ Stores the vault's [bookmarks](../features/bookmarks.md) and the groups they are
 ```json
 {
   "items": [
-    { "kind": "file", "target": "/home/you/Notes/Projects/Plan.md", "group": "Work" },
-    { "kind": "folder", "target": "/home/you/Notes/Projects" },
+    { "kind": "file", "target": "Projects/Plan.md", "group": "Work" },
+    { "kind": "folder", "target": "Projects" },
     { "kind": "search", "target": "tag:#work task-todo:call" },
-    { "kind": "heading", "target": "/home/you/Notes/Projects/Plan.md#Next steps" }
+    { "kind": "heading", "target": "Projects/Plan.md#Next steps" }
   ],
   "groups": ["Work"]
 }
@@ -212,9 +295,52 @@ Stores the vault's [bookmarks](../features/bookmarks.md) and the groups they are
 | Field | Meaning |
 |---|---|
 | `kind` | `file`, `folder`, `search` or `heading` |
-| `target` | The full path of a file or folder, the text of a search, or a file's full path followed by `#` and the heading text |
+| `target` | The path of a file or folder from the top of the vault, the text of a search, or a file's path followed by `#` and the heading text. A file that holds full paths is still read |
 | `group` | The group the bookmark is in. Left out when it is in no group |
 | `groups` | The group names, in the order they are shown. A group can be empty |
+
+#### types.json
+
+Stores the type chosen for each [property](../features/properties.md), so that every note in the vault agrees on it (after 2.4.13). Only properties whose type you have chosen are listed.
+
+```json
+{
+  "types": {
+    "due": "date",
+    "rating": "number"
+  }
+}
+```
+
+The values are `text`, `list`, `number`, `checkbox`, `date` and `datetime`.
+
+#### workspaces.json
+
+Stores the saved [workspace layouts](../features/workspaces.md) (after 2.4.13). Paths are written from the top of the vault.
+
+```json
+{
+  "layouts": {
+    "Writing": {
+      "openTabs": ["Projects/Plan.md", "Inbox.md"],
+      "activeTab": "Projects/Plan.md",
+      "splitTab": "Inbox.md",
+      "pinnedTabs": ["Inbox.md"],
+      "expandedFolders": ["Projects"],
+      "fileViewModes": { "Inbox.md": "view" },
+      "viewMode": "live",
+      "sidebarCollapsed": false,
+      "sidebarWidth": 250,
+      "panels": ["outline", "backlinks"]
+    }
+  },
+  "active": "Writing"
+}
+```
+
+This is a different file from `workspace.json`, which holds the tabs that are open on this device and is rewritten as you work.
+
+`bookmarks.json`, `types.json` and `workspaces.json` are the three files that the **Vault settings** option of folder sync and WebDAV sync carries. See [What Syncs](../sync/what-syncs.md).
 
 ### Themes Directory
 

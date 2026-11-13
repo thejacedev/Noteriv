@@ -98,6 +98,7 @@ Several panels can appear in the sidebar area, toggled via keyboard shortcuts or
 - **Links panel** -- Lists the notes that link to the current note, the notes that mention it without linking, the notes it links to, and possible links. Open it with the "Toggle Backlinks" command. See [Links Panel](../features/wiki-links.md#links-panel).
 - **Footnotes panel** -- Lists the footnotes of the current note. Click one to jump to it. Open it with the "Toggle Footnotes" command. See [Footnotes](../features/footnotes.md).
 - **Tag pane** -- Shows all tags used across your vault in a hierarchical tree. Click a tag to see all notes that use it.
+- **All properties panel** -- Lists every property used in the vault, with its type and the number of notes that have it. Open it with the "Toggle All Properties" command. See [Properties](../features/properties.md#all-properties-panel).
 - **Trash panel** -- Browse soft-deleted notes and restore them. Deleted notes are kept in `.noteriv/trash/`.
 
 ## Editor area
