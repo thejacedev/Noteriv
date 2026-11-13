@@ -2176,8 +2176,25 @@ function Home() {
       else window.electronAPI?.openExternal(href);
     };
 
+    // In the editor a press of the button on a link would first move the
+    // cursor onto its line, which shows the line as written and takes the
+    // link away before the click arrives. Keeping the press from the editor
+    // leaves the link where it is; a wiki link is handled the same way.
+    const holdLinkPress = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const anchor = (e.target as HTMLElement).closest?.("a.md-link") as HTMLAnchorElement | null;
+      const href = anchor?.getAttribute("href");
+      if (!href || !/^(https?:|mailto:)/i.test(href)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    document.addEventListener("mousedown", holdLinkPress, true);
     document.addEventListener("click", handleLinkClick, true);
-    return () => document.removeEventListener("click", handleLinkClick, true);
+    return () => {
+      document.removeEventListener("mousedown", holdLinkPress, true);
+      document.removeEventListener("click", handleLinkClick, true);
+    };
   }, [setWebReaderUrl]);
 
   const handleDailyNote = useCallback(async () => {
@@ -2946,11 +2963,17 @@ function Home() {
         <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} data-open-file={currentTab?.filePath || ""} onContextMenu={handleEditorContextMenu}>
           {webReaderUrl !== null ? (
             <WebViewer
+              // One reader: its name lets it keep its history and its place while another tab is in front.
+              tabId="reader"
               url={webReaderUrl}
               onNavigate={setWebReaderUrl}
               onOpenExternal={(url) => { void window.electronAPI?.openExternal(url); }}
               onSaveNote={saveWebPage}
-              onClose={() => setWebReaderUrl(null)}
+              onClose={() => {
+                // Closed for good: its history goes with it. (Loaded this way because the reader is not part of the first page load.)
+                void import("@/components/WebViewer").then((m) => m.forgetWebTab("reader"));
+                setWebReaderUrl(null);
+              }}
             />
           ) : currentTab && !currentTab.kind ? (
             <SplitPane

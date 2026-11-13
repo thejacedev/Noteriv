@@ -974,6 +974,14 @@ const isSpace = (ch: string) => ch === " " || ch === "\n" || ch === "\u00a0";
 const isWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
 const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/;
 
+/**
+ * A "|" inside a table cell. Noteriv's own table view cuts a row at every
+ * pipe, escaped with a backslash or not, so the pipe is written as a
+ * character reference instead. Noteriv and other markdown readers both show
+ * that as a pipe.
+ */
+const PIPE_IN_A_CELL = "&#124;";
+
 /** What follows a "#" when the two together are a tag: tag characters, not all of them digits. */
 const TAG_AFTER_HASH = /^[\p{N}/]*[\p{L}_-]/u;
 
@@ -1038,7 +1046,10 @@ function escapeMarkdown(text: string, context: Inline): string {
         escape = before === "~" || after === "~";
         break;
       case "|":
-        escape = context.inTable;
+        if (context.inTable) {
+          out += PIPE_IN_A_CELL;
+          continue;
+        }
         break;
       case "$":
         // A pair of dollar signs reads as a formula in apps that draw maths.
@@ -1087,9 +1098,11 @@ function wrap(inner: string, marker: string, closing = marker): string {
 }
 
 function codeSpan(text: string, context: Inline): string {
-  let code = text.replace(/\s+/g, " ");
+  const code = text.replace(/\s+/g, " ");
   if (!code.trim()) return "";
-  if (context.inTable) code = code.replace(/\|/g, "\\|");
+  // Inside a code span the reference would be shown letter for letter, so
+  // code with a pipe in it is written into a table cell as ordinary text.
+  if (context.inTable && code.includes("|")) return escapeMarkdown(code, context);
   const longest = Math.max(0, ...(code.match(/`+/g) ?? []).map((run) => run.length));
   const fence = "`".repeat(longest + 1);
   // A space keeps a backtick at either end apart from the fence.

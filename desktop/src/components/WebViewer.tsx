@@ -24,6 +24,14 @@ interface WebViewerProps {
   onClose?: () => void;
   /** The page's title once it has loaded, for the tab's label. */
   onTitleChange?: (title: string) => void;
+  /**
+   * A name for the tab this reader is in, the same for as long as the tab is
+   * open. The app draws only the tab in front, so a reader is taken down
+   * whenever another tab is chosen. With this, the tab's history, its page
+   * and the place reached on it are there again when the tab comes back.
+   * Without it, the reader starts again from `url` each time.
+   */
+  tabId?: string;
 }
 
 /** This tab's own history: the pages visited, and which one is showing. */
@@ -51,6 +59,49 @@ const LITTLE_TEXT = 200;
 const MAX_PAGE_REDIRECTS = 2;
 
 const requestKey = (history: History, url: string) => `${history.reloads}\n${url}`;
+
+/** What a tab's reader had when it was last on screen. */
+interface Kept {
+  history: History;
+  loaded: Loaded | null;
+  scrollTop: number;
+}
+
+/** How many tabs are remembered. A page can be large, and a closed tab is only forgotten when the parent says so. */
+const KEPT_TABS = 24;
+
+const keptTabs = new Map<string, Kept>();
+
+function keepTab(tabId: string, state: Kept): void {
+  // Taken out and put back, so the tab used last is the last to be dropped.
+  keptTabs.delete(tabId);
+  keptTabs.set(tabId, state);
+  for (const oldest of keptTabs.keys()) {
+    if (keptTabs.size <= KEPT_TABS) break;
+    keptTabs.delete(oldest);
+  }
+}
+
+/** Drop what is remembered for a tab. Call it when the tab is closed. */
+export function forgetWebTab(tabId: string): void {
+  keptTabs.delete(tabId);
+}
+
+/** Where a reader starts: where its tab left off, or at `url` with nothing loaded. */
+function startingState(tabId: string | undefined, url: string): Kept {
+  const first = addressToUrl(url) ?? url;
+  const kept = tabId ? keptTabs.get(tabId) : undefined;
+  if (kept) {
+    // Only if the tab is still on the page the parent names. Otherwise the
+    // parent has moved it, or the name has been given to a new tab.
+    const at = kept.history.entries[kept.history.index];
+    if (at === first || at === url) {
+      const onScreen = kept.loaded?.key === requestKey(kept.history, at);
+      return { history: kept.history, loaded: onScreen ? kept.loaded : null, scrollTop: onScreen ? kept.scrollTop : 0 };
+    }
+  }
+  return { history: { entries: [first], index: 0, reloads: 0 }, loaded: null, scrollTop: 0 };
+}
 
 /**
  * Fetch a page through the backend and pick the article out of it. Never
@@ -155,9 +206,10 @@ function scrollToAnchor(scroller: HTMLElement, content: HTMLElement, fragment: s
  * article is shown here as sanitized content. Scripts, forms, frames and the
  * page's own styling never reach the app's window.
  */
-export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote, onClose, onTitleChange }: WebViewerProps) {
-  const [history, setHistory] = useState<History>(() => ({ entries: [addressToUrl(url) ?? url], index: 0, reloads: 0 }));
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote, onClose, onTitleChange, tabId }: WebViewerProps) {
+  const [start] = useState(() => startingState(tabId, url));
+  const [history, setHistory] = useState<History>(start.history);
+  const [loaded, setLoaded] = useState<Loaded | null>(start.loaded);
   // What is being typed in the address bar. Null while it shows the page's own address.
   const [draft, setDraft] = useState<string | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
@@ -167,7 +219,9 @@ export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote,
   const contentRef = useRef<HTMLDivElement>(null);
   const addressRef = useRef<HTMLInputElement>(null);
   /** The request whose answer is on screen, so an address change after a redirect does not fetch again. */
-  const loadedKeyRef = useRef<string | null>(null);
+  const loadedKeyRef = useRef<string | null>(start.loaded?.key ?? null);
+  /** How far down the page the tab was when it was last on screen. Used once, for the page it was on. */
+  const restoreScrollRef = useRef(start.scrollTop);
 
   const current = history.entries[history.index];
   const key = requestKey(history, current);
@@ -220,9 +274,32 @@ export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote,
     const scroller = scrollRef.current;
     if (!content || !scroller || shownHtml === null) return;
     showArticle(content, shownHtml);
-    // A new page starts at the top, unless its address names a place on it.
-    if (!scrollToAnchor(scroller, content, fragmentOf(shownUrl))) scroller.scrollTop = 0;
+    const leftOffAt = restoreScrollRef.current;
+    restoreScrollRef.current = 0;
+    if (leftOffAt > 0) {
+      // The tab coming back to the front: the reader is where it was left.
+      scroller.scrollTop = leftOffAt;
+    } else if (!scrollToAnchor(scroller, content, fragmentOf(shownUrl))) {
+      // A new page starts at the top, unless its address names a place on it.
+      scroller.scrollTop = 0;
+    }
   }, [shownHtml, shownUrl, key]);
+
+  // Remember this tab for the next time it is shown.
+  useEffect(() => {
+    if (tabId) keepTab(tabId, { history, loaded, scrollTop: scrollRef.current?.scrollTop ?? 0 });
+  }, [tabId, history, loaded]);
+
+  // And how far down the page it was, read as the reader is taken down. A
+  // layout effect, because its cleanup runs while the page is still there to
+  // be measured.
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    return () => {
+      const kept = tabId ? keptTabs.get(tabId) : undefined;
+      if (kept && scroller) kept.scrollTop = scroller.scrollTop;
+    };
+  }, [tabId]);
 
   // An empty reader is waiting for an address, so put the cursor there.
   useEffect(() => {
@@ -301,6 +378,13 @@ export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote,
       if (event.button === 1 || event.ctrlKey || event.metaKey || event.shiftKey) onOpenExternal(link.url);
       else go(link.url);
     }
+  };
+
+  // The webview's own menu on a link offers to open it, which would send the
+  // app's window to the page. So would dropping a dragged link on the window.
+  // Neither is offered for links and pictures in the article.
+  const holdBack = (event: React.SyntheticEvent) => {
+    if (event.target instanceof Element && event.target.closest("a, img")) event.preventDefault();
   };
 
   const loading = current !== "" && view === null;
@@ -431,7 +515,15 @@ export default function WebViewer({ url, onNavigate, onOpenExternal, onSaveNote,
             )}
 
             {/* Filled by `showArticle`. React renders nothing inside it. */}
-            <div ref={contentRef} className="wv-content markdown-preview" dir="auto" onClick={followLink} onAuxClick={followLink} />
+            <div
+              ref={contentRef}
+              className="wv-content markdown-preview"
+              dir="auto"
+              onClick={followLink}
+              onAuxClick={followLink}
+              onContextMenu={holdBack}
+              onDragStart={holdBack}
+            />
 
             <footer className="wv-foot">
               Reader view: scripts, forms and page styling are left out.{" "}

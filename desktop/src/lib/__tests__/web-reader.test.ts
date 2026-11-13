@@ -822,12 +822,21 @@ describe("articleToMarkdown: each kind of block", () => {
 
   it("writes tables", () => {
     const table = md(
-      '<table><thead><tr><th>Name</th><th>Use</th></tr></thead><tbody><tr><td>a|b</td><td><code>x | y</code></td></tr><tr><td>line<br>break</td><td><a href="https://example.com/">link</a></td></tr></tbody></table>'
+      '<table><thead><tr><th>Name</th><th>Use</th></tr></thead><tbody><tr><td>a|b</td><td><code>x | y</code></td></tr><tr><td>line<br>break</td><td><a href="https://example.com/">link</a></td></tr><tr><td><code>plain code</code></td><td>1</td></tr></tbody></table>'
     );
-    expect(table).toBe("| Name | Use |\n| --- | --- |\n| a\\|b | `x \\| y` |\n| line<br>break | [link](https://example.com/) |");
+    // A pipe in a cell is written as a character reference. Noteriv's table
+    // view cuts a row at every pipe, a backslash in front or not, and code
+    // with a pipe in it is written as ordinary text for the same reason.
+    expect(table).toBe(
+      "| Name | Use |\n| --- | --- |\n| a&#124;b | x &#124; y |\n| line<br>break | [link](https://example.com/) |\n| `plain code` | 1 |"
+    );
     const found = shapes(table);
     expect(found.has("Table")).toBe(true);
     expect(found.has("TableHeader")).toBe(true);
+    // Every row has the same number of pipes: none was added by a cell's text.
+    expect(table.split("\n").map((row) => row.split("|").length)).toEqual([4, 4, 4, 4, 4]);
+    // Outside a table a pipe is only a pipe.
+    expect(md("<p>a | b and <code>x | y</code></p>")).toBe("a | b and `x | y`");
   });
 
   it("gives a table without headings an empty heading row", () => {
