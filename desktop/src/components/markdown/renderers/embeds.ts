@@ -9,6 +9,7 @@ import {
 } from "@/lib/embed-utils";
 import { localImageTag, localMediaTag } from "./images";
 import { baseEmbedTag, scheduleBaseEmbeds } from "./base-block";
+import { loadVaultIndex } from "@/lib/vault-index";
 
 /**
  * Obsidian-style embeds: `![[Note]]`, `![[Note#Heading]]`, `![[image.png|160]]`.
@@ -111,9 +112,45 @@ function getNotes(vaultPath: string): NoteEntry[] | null {
 }
 
 /** Same matching as a click on a wiki link: by name, or by path inside the vault. */
-function findNote(notes: NoteEntry[], file: string): NoteEntry | null {
+/** Each note's other names (its `aliases` property), lower case, to the note's path. */
+let aliasList: Loaded<Map<string, string>> | null = null;
+let aliasListLoading = false;
+
+function getAliases(vaultPath: string): Map<string, string> | null {
+  const fresh = aliasList && aliasList.vaultPath === vaultPath;
+  if ((!fresh || Date.now() - aliasList!.loadedAt > NOTE_LIST_TTL) && !aliasListLoading) {
+    aliasListLoading = true;
+    loadVaultIndex(vaultPath)
+      .then((notes) => {
+        const value = new Map<string, string>();
+        for (const note of notes) {
+          for (const alias of note.aliases) {
+            const key = alias.trim().toLowerCase();
+            // The first note in the list keeps a name two notes both claim, as a link does.
+            if (key && !value.has(key)) value.set(key, note.filePath);
+          }
+        }
+        const before = aliasList && aliasList.vaultPath === vaultPath ? aliasList.value : null;
+        const changed =
+          !before || before.size !== value.size || [...value].some(([key, path]) => before.get(key) !== path);
+        aliasList = { vaultPath, value, loadedAt: Date.now() };
+        if (changed) notifyChanged();
+      })
+      .catch(() => {})
+      .finally(() => {
+        aliasListLoading = false;
+      });
+  }
+  return fresh ? aliasList!.value : null;
+}
+
+/** The note an embed names: by its name or path, or failing that by one of its aliases. */
+function findNote(notes: NoteEntry[], file: string, vaultPath?: string): NoteEntry | null {
   const wanted = stripNoteExtension(forwardSlashes(file)).toLowerCase();
-  return notes.find((n) => n.name === wanted || n.rel === wanted) ?? null;
+  const direct = notes.find((n) => n.name === wanted || n.rel === wanted);
+  if (direct || !vaultPath) return direct ?? null;
+  const byAlias = getAliases(vaultPath)?.get(wanted);
+  return byAlias ? notes.find((n) => n.filePath === byAlias) ?? null : null;
 }
 
 function getNoteText(filePath: string): string | null | undefined {
@@ -344,7 +381,7 @@ export const embedRenderer: InlineRenderer = {
       }
       if (embed.kind === "note" && vaultPath && wholeLine) {
         const notes = getNotes(vaultPath);
-        const note = notes && embed.file ? findNote(notes, embed.file) : null;
+        const note = notes && embed.file ? findNote(notes, embed.file, vaultPath) : null;
         const content = note ? getNoteText(note.filePath) : undefined;
 
         if (notes && embed.file && !note) {

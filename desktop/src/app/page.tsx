@@ -103,6 +103,7 @@ import {
 import {
   EMPTY_BOOKMARKS,
   parseBookmarks,
+  removeBookmarkPaths,
   renameBookmarkPaths,
   serializeBookmarks,
   toggleBookmarkItem,
@@ -1325,9 +1326,14 @@ export default function Home() {
 
   const handleFileDelete = useCallback((filePath: string) => {
     // Close tab if the deleted file (or a file inside a deleted folder) is open
+    // The file itself, or anything inside it when it is a folder: not a
+    // neighbour whose name merely starts the same way.
+    const gone = (path: string) =>
+      path === filePath || path.startsWith(`${filePath}/`) || path.startsWith(`${filePath}\\`);
+    setBookmarks((b) => removeBookmarkPaths(b, filePath));
     setTabs((prev) => {
-      const next = prev.filter((t) => !t.filePath.startsWith(filePath));
-      if (activeTab && activeTab.startsWith(filePath)) {
+      const next = prev.filter((t) => !gone(t.filePath));
+      if (activeTab && gone(activeTab)) {
         const idx = prev.findIndex((t) => t.filePath === activeTab);
         const newIdx = Math.min(idx, next.length - 1);
         setActiveTab(next[newIdx]?.filePath || null);
@@ -1889,22 +1895,21 @@ export default function Home() {
     setTabs((prev) => prev.filter((t) => t.filePath === activeTab || pinnedTabs.has(t.filePath)));
   }, [activeTab, pinnedTabs]);
 
+  const trashFromSidebarRef = useRef<(filePath: string) => Promise<void>>(async () => {});
   const handleDeleteFile = useCallback(async () => {
     if (!window.electronAPI || !currentTab || !activeVault) return;
     const name = currentTab.filePath.split(/[\\/]/).pop() || currentTab.filePath;
+    const system = settings.deletedFiles === "system";
     const confirmed = await confirmDialog({
-      title: `Move "${name}" to Trash?`,
-      message: "You can restore it from the Trash for 30 days.",
+      title: system ? `Move "${name}" to the system trash?` : `Move "${name}" to Trash?`,
+      message: system ? "You can put it back from your system's trash." : "You can restore it from the Trash for 30 days.",
       confirmLabel: "Move to Trash",
       danger: true,
     });
     if (!confirmed) return;
-    const success = await trashFile(activeVault.path, currentTab.filePath);
-    if (success) {
-      removeTab(currentTab.filePath);
-      setSidebarRefresh((k) => k + 1);
-    }
-  }, [currentTab, removeTab, activeVault]);
+    // The same way out as a delete from the file list, so the setting holds here too.
+    await trashFromSidebarRef.current(currentTab.filePath);
+  }, [currentTab, activeVault, settings.deletedFiles]);
 
   const handleTrashFileFromSidebar = useCallback(async (filePath: string) => {
     if (!activeVault) return;
@@ -1925,6 +1930,9 @@ export default function Home() {
       setSidebarRefresh((k) => k + 1);
     }
   }, [activeVault, handleFileDelete, settings.deletedFiles, showStatusNote]);
+  useEffect(() => {
+    trashFromSidebarRef.current = handleTrashFileFromSidebar;
+  }, [handleTrashFileFromSidebar]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -2605,7 +2613,7 @@ export default function Home() {
                   <path d="M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
               </button>
-              <button className="ribbon-btn" title="Graph view" onClick={() => setShowGraphView(true)}>
+              <button className="ribbon-btn" title="Graph view" onClick={() => { setGraphStartsLocal(false); setShowGraphView(true); }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
                   <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.2" />
@@ -2695,6 +2703,7 @@ export default function Home() {
             onToggleBookmark={(path, isDirectory) =>
               setBookmarks((b) => toggleBookmarkItem(b, isDirectory ? "folder" : "file", path))
             }
+            deletedFiles={settings.deletedFiles}
             fileSort={settings.fileSort}
             onFileSortChange={(fileSort) => handleSettingsChange({ ...settings, fileSort })}
             reveal={revealFile}

@@ -7,6 +7,7 @@ import {
   hasBookmark,
   moveBookmark,
   parseBookmarks,
+  removeBookmarkPaths,
   removeBookmark,
   removeGroup,
   renameBookmarkPaths,
@@ -129,5 +130,36 @@ describe("bookmark paths in the vault's file", () => {
   it("keeps full paths from an older file and drops a path that leaves the vault", () => {
     const old = '{"items":[{"kind":"file","target":"/home/me/vault/A.md"},{"kind":"file","target":"../outside.md"}]}';
     expect(parseBookmarks(old, "/home/me/vault").items).toEqual([{ kind: "file", target: "/home/me/vault/A.md" }]);
+  });
+});
+
+describe("removeBookmarkPaths", () => {
+  const store = {
+    items: [
+      { kind: "file" as const, target: "/v/Projects/Alpha.md" },
+      { kind: "heading" as const, target: "/v/Projects/Alpha.md#Goals" },
+      { kind: "folder" as const, target: "/v/Projects" },
+      { kind: "file" as const, target: "/v/Projects2/Other.md" },
+      { kind: "search" as const, target: "path:/v/Projects" },
+    ],
+    groups: ["Work"],
+  };
+
+  it("drops the bookmarks on a deleted note, its headings included", () => {
+    expect(removeBookmarkPaths(store, "/v/Projects/Alpha.md").items.map((b) => b.target)).toEqual([
+      "/v/Projects",
+      "/v/Projects2/Other.md",
+      "path:/v/Projects",
+    ]);
+  });
+
+  it("drops everything inside a deleted folder, and nothing that only starts with its name", () => {
+    const left = removeBookmarkPaths(store, "/v/Projects");
+    expect(left.items.map((b) => b.target)).toEqual(["/v/Projects2/Other.md", "path:/v/Projects"]);
+    expect(left.groups).toEqual(["Work"]);
+  });
+
+  it("gives back the same store when nothing was bookmarked there", () => {
+    expect(removeBookmarkPaths(store, "/v/Nothing.md")).toBe(store);
   });
 });

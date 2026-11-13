@@ -21,6 +21,7 @@ import {
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 import { setEditorViewForImages } from "./markdown/renderers/images";
 import { folding, multipleCursors } from "@/lib/editor-extensions";
+import { attachmentFolderName } from "@/lib/vault-prefs";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"]);
 
@@ -156,7 +157,9 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
 
       (async () => {
         const api = window.electronAPI!;
-        const attachDir = `${vp}/.imgs`;
+        // The folder chosen under "Attachment folder" in the settings.
+        const attachFolder = attachmentFolderName();
+        const attachDir = `${vp}/${attachFolder}`;
         await api.createDir(attachDir);
 
         let insertText = "";
@@ -197,7 +200,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
           }
 
           if (success) {
-            insertText += `![](.imgs/${destName})\n`;
+            insertText += `![](${attachFolder}/${destName})\n`;
           }
         }
 

@@ -157,6 +157,18 @@ export function renameBookmarkPaths(store: BookmarkStore, oldPath: string, newPa
   return changed ? { ...store, items } : store;
 }
 
+/** The bookmarks left after a file or folder is deleted: the ones on it, or on anything inside it, go. */
+export function removeBookmarkPaths(store: BookmarkStore, deletedPath: string): BookmarkStore {
+  const gone = (path: string) =>
+    path === deletedPath || path.startsWith(deletedPath + "/") || path.startsWith(deletedPath + "\\");
+  const items = store.items.filter((b) => {
+    if (b.kind === "search") return true;
+    const hash = b.kind === "heading" ? b.target.indexOf("#") : -1;
+    return !gone(hash >= 0 ? b.target.slice(0, hash) : b.target);
+  });
+  return items.length === store.items.length ? store : { ...store, items };
+}
+
 /** The bookmarks as the panel shows them: ungrouped first, then each group in order. */
 export function groupedBookmarks(store: BookmarkStore): { group: string | null; items: Bookmark[] }[] {
   const sections: { group: string | null; items: Bookmark[] }[] = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import "../styles/bookmarks.css";
 import {
   addGroup,
@@ -33,6 +33,7 @@ const ICONS: Record<Bookmark["kind"], string> = {
 export default function BookmarksPanel({ store, vaultPath, currentFile, onOpen, onChange, visible }: BookmarksPanelProps) {
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState(false);
+  const cancelledRef = useRef(false);
   const [newGroup, setNewGroup] = useState("");
 
   if (!visible) return null;
@@ -47,6 +48,11 @@ export default function BookmarksPanel({ store, vaultPath, currentFile, onOpen, 
     });
 
   const submitGroup = () => {
+    // Escape has already closed the box by the time it loses the cursor.
+    if (!naming || cancelledRef.current) {
+      cancelledRef.current = false;
+      return;
+    }
     onChange(addGroup(store, newGroup));
     setNewGroup("");
     setNaming(false);
@@ -131,7 +137,11 @@ export default function BookmarksPanel({ store, vaultPath, currentFile, onOpen, 
             onChange={(e) => setNewGroup(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") submitGroup();
-              if (e.key === "Escape") setNaming(false);
+              if (e.key === "Escape") {
+                cancelledRef.current = true;
+                setNewGroup("");
+                setNaming(false);
+              }
             }}
             onBlur={submitGroup}
           />
@@ -142,7 +152,7 @@ export default function BookmarksPanel({ store, vaultPath, currentFile, onOpen, 
         {store.items.length === 0 && store.groups.length === 0 ? (
           <div className="bm-empty">
             <p>No bookmarks yet.</p>
-            <p className="bm-empty-hint">Use Ctrl+B to bookmark the open note. Folders, searches and headings can be bookmarked too.</p>
+            <p className="bm-empty-hint">Use Ctrl+Shift+B to bookmark the open note. Folders, searches and headings can be bookmarked too.</p>
           </div>
         ) : (
           sections.map((section) =>

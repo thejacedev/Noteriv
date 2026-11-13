@@ -1,5 +1,6 @@
 import { registerCodeBlockProcessor } from "@/lib/markdown-code-block-registry";
 import { highlightPieces, type VaultSearchResult } from "@/lib/vault-search";
+import { excludedPatterns } from "@/lib/vault-prefs";
 
 /** How many notes an embedded search shows before it says there are more. */
 const MAX_NOTES = 50;
@@ -70,7 +71,7 @@ export function registerQueryBlock(): void {
     if (!query || !vaultPath || !window.electronAPI?.searchVault) return;
     let cancelled = false;
     window.electronAPI
-      .searchVault(vaultPath, query, { sort: "modifiedNew" })
+      .searchVault(vaultPath, query, { sort: "modifiedNew", exclude: excludedPatterns() })
       .then((result) => {
         if (!cancelled) renderResult(body, result);
       })

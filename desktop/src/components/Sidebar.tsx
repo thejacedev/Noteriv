@@ -32,6 +32,8 @@ interface SidebarProps {
   onFileOrderChange: (order: Record<string, string[]>) => void;
   refreshTrigger?: number;
   onTrashFile?: (filePath: string) => void;
+  /** Where a deleted file goes: the app's own trash, or the system's. */
+  deletedFiles?: "noteriv" | "system";
   onAnalyzeNote?: (filePath: string) => void;
   /** Adds or removes a bookmark for a note or a folder. */
   onToggleBookmark?: (path: string, isDirectory: boolean) => void;
@@ -335,6 +337,7 @@ export default function Sidebar({
   onFileOrderChange,
   refreshTrigger,
   onTrashFile,
+  deletedFiles = "noteriv",
   onAnalyzeNote,
   onToggleBookmark,
   fileSort = "manual",
@@ -653,8 +656,19 @@ export default function Sidebar({
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
     if (!window.electronAPI) return;
-    const toTrash = !entry.isDirectory && !!onTrashFile;
-    const confirmed = await confirmDialog(toTrash
+    // The system's trash takes folders too; the app's own trash holds files only.
+    const system = deletedFiles === "system" && !!onTrashFile;
+    const toTrash = !!onTrashFile && (system || !entry.isDirectory);
+    const confirmed = await confirmDialog(system
+      ? {
+          title: `Move "${entry.name}" to the system trash?`,
+          message: entry.isDirectory
+            ? "The folder and everything in it go to your system's trash. You can put them back from there."
+            : "You can put it back from your system's trash.",
+          confirmLabel: "Move to Trash",
+          danger: true,
+        }
+      : toTrash
       ? {
           title: `Move "${entry.name}" to Trash?`,
           message: "You can restore it from the Trash for 30 days.",
@@ -680,15 +694,18 @@ export default function Sidebar({
       ? await window.electronAPI.deleteDir(entry.path)
       : await window.electronAPI.deleteFile(entry.path);
     if (success) { onFileDelete(entry.path); await refreshEntries(); setRefreshKey((k) => k + 1); }
-  }, [onFileDelete, refreshEntries, onTrashFile]);
+  }, [onFileDelete, refreshEntries, onTrashFile, deletedFiles]);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!window.electronAPI || selectedFiles.size === 0) return;
     const count = selectedFiles.size;
     const confirmed = await confirmDialog(onTrashFile
       ? {
-          title: `Move ${count} files to Trash?`,
-          message: "You can restore them from the Trash for 30 days.",
+          title: deletedFiles === "system" ? `Move ${count} files to the system trash?` : `Move ${count} files to Trash?`,
+          message:
+            deletedFiles === "system"
+              ? "You can put them back from your system's trash."
+              : "You can restore them from the Trash for 30 days.",
           confirmLabel: "Move to Trash",
           danger: true,
         }
@@ -710,7 +727,7 @@ export default function Sidebar({
     setSelectedFiles(new Set());
     await refreshEntries();
     setRefreshKey((k) => k + 1);
-  }, [selectedFiles, onTrashFile, onFileDelete, refreshEntries]);
+  }, [selectedFiles, onTrashFile, onFileDelete, refreshEntries, deletedFiles]);
 
   const handleNewFileIn = useCallback(async (dirPath: string) => {
     if (!window.electronAPI) return;

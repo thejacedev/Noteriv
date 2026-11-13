@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { lintMarkdown, type LintWarning } from "@/lib/markdown-lint";
+import { loadVaultIndex } from "@/lib/vault-index";
 
 interface LintPanelProps {
   content: string;
@@ -18,6 +19,7 @@ export default function LintPanel({
 }: LintPanelProps) {
   const [warnings, setWarnings] = useState<LintWarning[]>([]);
   const [fileList, setFileList] = useState<string[]>([]);
+  const [aliases, setAliases] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load file list for broken wiki-link detection
@@ -29,6 +31,9 @@ export default function LintPanel({
         const files = await window.electronAPI.listAllFiles(vaultPath);
         if (!cancelled) {
           setFileList(files.map((f) => f.fileName));
+          // A link to a note's alias opens that note, so it is not a broken link.
+          const notes = await loadVaultIndex(vaultPath);
+          if (!cancelled) setAliases(notes.flatMap((n) => n.aliases));
         }
       } catch {}
     }
@@ -40,13 +45,13 @@ export default function LintPanel({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const results = lintMarkdown(content, vaultPath, fileList);
+      const results = lintMarkdown(content, vaultPath, fileList, aliases);
       setWarnings(results);
     }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, vaultPath, fileList]);
+  }, [content, vaultPath, fileList, aliases]);
 
   // Group by severity
   const grouped = useMemo(() => {

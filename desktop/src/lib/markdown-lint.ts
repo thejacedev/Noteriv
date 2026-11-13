@@ -15,11 +15,13 @@ export interface LintWarning {
  * @param content - The markdown text to lint
  * @param vaultPath - The vault path (used for checking wiki-link targets)
  * @param fileList - Optional list of file names in the vault (without extension)
+ * @param aliases - Other names notes go by (their `aliases` property); a link to one is not broken
  */
 export function lintMarkdown(
   content: string,
   vaultPath: string,
-  fileList?: string[]
+  fileList?: string[],
+  aliases: string[] = []
 ): LintWarning[] {
   const warnings: LintWarning[] = [];
   const lines = content.split("\n");
@@ -86,9 +88,9 @@ export function lintMarkdown(
         // [[Note#Heading]] points at Note; [[#Heading]] stays in this note.
         const target = splitWikiTarget(wlMatch[1]).file.toLowerCase();
         if (!target) continue;
-        const exists = fileList.some(
-          (f) => f.toLowerCase() === target
-        );
+        const exists =
+          fileList.some((f) => f.toLowerCase() === target) ||
+          aliases.some((a) => a.toLowerCase() === target);
         if (!exists) {
           warnings.push({
             line: lineNum,

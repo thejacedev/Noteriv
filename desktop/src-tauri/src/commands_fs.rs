@@ -1011,6 +1011,14 @@ pub async fn fs_trash_system(app: tauri::AppHandle, path: String) -> Result<(), 
     if !allowed(&app, &path) {
         return Err("Refusing to delete outside the permitted scope".into());
     }
+    // A whole vault is never what the file list means to throw away.
+    let target = dunce::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
+    let is_vault = crate::store::get_vaults().iter().any(|vault| {
+        dunce::canonicalize(&vault.path).unwrap_or_else(|_| PathBuf::from(&vault.path)) == target
+    });
+    if is_vault {
+        return Err("A vault cannot be moved to the trash from here.".into());
+    }
     let _guard = lock_file_mutations();
     trash::delete(&path).map_err(|e| format!("It could not be moved to the system trash: {e}"))
 }

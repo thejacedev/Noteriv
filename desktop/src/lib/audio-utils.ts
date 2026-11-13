@@ -1,3 +1,5 @@
+import { attachmentFolderName } from "./vault-prefs";
+
 /**
  * Audio recording utilities for Noteriv.
  *
@@ -47,7 +49,7 @@ export function generateRecordingFilename(): string {
  * Get the attachments directory path for a vault.
  */
 export function getAttachmentsDir(vaultPath: string): string {
-  return `${vaultPath}/attachments`;
+  return `${vaultPath}/${attachmentFolderName()}`;
 }
 
 /**
@@ -104,5 +106,5 @@ export async function saveAudioToVault(
     throw new Error(`Failed to save audio file: ${filePath}`);
   }
 
-  return `attachments/${filename}`;
+  return `${attachmentFolderName()}/${filename}`;
 }

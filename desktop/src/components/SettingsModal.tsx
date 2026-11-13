@@ -218,7 +218,7 @@ export default function SettingsModal({
           />
         </Row>
       )}
-      <Row label="Attachment folder" desc="The folder inside the vault that pasted and dropped files are saved to.">
+      <Row label="Attachment folder" desc="The folder inside the vault that dropped images, recordings and files added in the attachment manager are saved to.">
         <input
           className="st-text-input"
           type="text"
