@@ -100,6 +100,16 @@ interface ElectronAPI {
     message?: string;
   }>;
   readDir: (dirPath: string) => Promise<FileEntry[]>;
+  /**
+   * Rename or move a file or folder and rewrite the links to it across the
+   * vault. `open` lists the notes open in the app, with their unsaved text.
+   */
+  renameUpdatingLinks: (
+    vaultPath: string,
+    oldPath: string,
+    newPath: string,
+    open: { path: string; unsaved: string | null }[]
+  ) => Promise<import("@/lib/link-updates").RenameLinksResult>;
   createFile: (filePath: string) => Promise<boolean>;
   deleteFile: (filePath: string) => Promise<boolean>;
   deleteDir: (dirPath: string) => Promise<boolean>;

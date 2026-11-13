@@ -17,6 +17,8 @@ export interface AppSettings {
   autoUpdate: boolean; // check for and install updates automatically
   autoCollapseSidebar: boolean;
   sidebarCollapseWidth: number;
+  /** Rewrite links across the vault when a note, attachment or folder is renamed or moved. */
+  updateLinksOnRename: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoUpdate: true,
   autoCollapseSidebar: true,
   sidebarCollapseWidth: 800,
+  updateLinksOnRename: true,
 };
 
 export const ACCENT_COLORS = [

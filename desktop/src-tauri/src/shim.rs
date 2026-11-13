@@ -71,6 +71,9 @@ pub const SHIM_JS: &str = r#"
       createFile: function (filePath) { return invoke("fs_create_file", { filePath: filePath }); },
       deleteFile: function (filePath) { return invoke("fs_delete_file", { filePath: filePath }); },
       deleteDir: function (dirPath) { return invoke("fs_delete_dir", { dirPath: dirPath }); },
+      renameUpdatingLinks: function (vaultPath, oldPath, newPath, open) {
+        return invoke("fs_rename_update_links", { args: { vaultPath: vaultPath, oldPath: oldPath, newPath: newPath, open: open || [] } });
+      },
       rename: function (oldPath, newPath) { return invoke("fs_rename", { args: { oldPath: oldPath, newPath: newPath } }); },
       createDir: function (dirPath) { return invoke("fs_create_dir", { dirPath: dirPath }); },
       copyFile: function (src, dest) { return invoke("fs_copy_file", { args: { src: src, dest: dest } }); },

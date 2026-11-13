@@ -1,0 +1,42 @@
+{
+  "about": "Which note a wiki link's note part points at. Read by the frontend test (wiki-link-utils.test.ts) and the Rust test (links.rs), so the resolver that opens a link and the one that rewrites links on rename cannot drift apart. Notes are listed as vault-relative paths; both sides sort them the way fs_list_all_files does before resolving.",
+  "notes": [
+    "Projects/Plan.md",
+    "Inbox.md",
+    "Archive/Plan.md",
+    "Archive/2025/Plan.md",
+    "Notes/C# basics.md",
+    "Notes/v1.2 plan.md",
+    "Daily Notes/2026-11-13.md",
+    "Notes/Old Style.markdown",
+    "Projects/Deep/Spec.md",
+    "plan/Readme.md",
+    "Ünïcode/Café.md"
+  ],
+  "cases": [
+    { "target": "Inbox", "expect": "Inbox.md" },
+    { "target": "inbox", "expect": "Inbox.md" },
+    { "target": "Inbox.md", "expect": "Inbox.md" },
+    { "target": "INBOX.MD", "expect": "Inbox.md" },
+    { "target": "Plan", "expect": "Archive/2025/Plan.md", "why": "three notes share the name; the first in listing order wins" },
+    { "target": "Projects/Plan", "expect": "Projects/Plan.md" },
+    { "target": "projects/plan.md", "expect": "Projects/Plan.md" },
+    { "target": "Archive/Plan", "expect": "Archive/Plan.md" },
+    { "target": "2025/Plan", "expect": null, "why": "a path must be the whole path inside the vault, not the end of one" },
+    { "target": "Deep/Spec", "expect": null },
+    { "target": "Spec", "expect": "Projects/Deep/Spec.md" },
+    { "target": "Projects/Deep/Spec", "expect": "Projects/Deep/Spec.md" },
+    { "target": "Projects\\Deep\\Spec", "expect": "Projects/Deep/Spec.md", "why": "backslashes are read as path separators" },
+    { "target": "C# basics", "expect": "Notes/C# basics.md" },
+    { "target": "v1.2 plan", "expect": "Notes/v1.2 plan.md" },
+    { "target": "Old Style", "expect": "Notes/Old Style.markdown" },
+    { "target": "Old Style.markdown", "expect": "Notes/Old Style.markdown" },
+    { "target": "2026-11-13", "expect": "Daily Notes/2026-11-13.md" },
+    { "target": "Readme", "expect": "plan/Readme.md" },
+    { "target": "plan/Readme", "expect": "plan/Readme.md" },
+    { "target": "Café", "expect": "Ünïcode/Café.md" },
+    { "target": "ünïcode/café", "expect": "Ünïcode/Café.md" },
+    { "target": "Missing", "expect": null },
+    { "target": "", "expect": null }
+  ]
+}

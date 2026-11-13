@@ -41,7 +41,8 @@ import LintPanel from "@/components/LintPanel";
 import ConfirmDialogHost, { confirmDialog } from "@/components/ConfirmDialog";
 import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
-import { splitWikiTarget, findAnchorLine, type WikiAnchor } from "@/lib/wiki-link-utils";
+import { splitWikiTarget, findAnchorLine, findLinkedNote, linkKey, type WikiAnchor } from "@/lib/wiki-link-utils";
+import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
 import { insertAtCursor } from "@/lib/editor-commands";
 import {
   HotkeyBinding,
@@ -257,6 +258,14 @@ export default function Home() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
+  // A short message in the status bar, such as how many links a rename updated.
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const statusNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showStatusNote = useCallback((message: string) => {
+    if (statusNoteTimerRef.current) clearTimeout(statusNoteTimerRef.current);
+    setStatusNote(message);
+    statusNoteTimerRef.current = setTimeout(() => setStatusNote(null), 8000);
+  }, []);
   // Notes that sync kept two versions of, until the notice is dismissed.
   const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
   const [gitChanges, setGitChanges] = useState(0);
@@ -635,8 +644,13 @@ export default function Home() {
               )
             );
           } else if (result.status === "conflict") {
+            // Only if the tab still has the base this write was checked
+            // against: a rename may have rewritten the note's links, and the
+            // tab's base with them, while the write was on its way.
             setTabs((prev) => prev.map((t) =>
-              t.filePath === tab.filePath ? { ...t, externalConflict: true } : t
+              t.filePath === tab.filePath && t.savedContent === tab.savedContent
+                ? { ...t, externalConflict: true }
+                : t
             ));
           }
         }
@@ -665,8 +679,13 @@ export default function Home() {
               )
             );
           } else if (result.status === "conflict") {
+            // Only if the tab still has the base this write was checked
+            // against: a rename may have rewritten the note's links, and the
+            // tab's base with them, while the write was on its way.
             setTabs((prev) => prev.map((t) =>
-              t.filePath === tab.filePath ? { ...t, externalConflict: true } : t
+              t.filePath === tab.filePath && t.savedContent === tab.savedContent
+                ? { ...t, externalConflict: true }
+                : t
             ));
           }
         }
@@ -693,6 +712,10 @@ export default function Home() {
             setTabs((tabs) =>
               tabs.map((t) => {
                 if (pathIdentity(t.filePath, platform) !== changedIdentity) return t;
+                // The file holds what the tab was last saved as or loaded
+                // from: nothing outside changed it. This is the case after a
+                // rename has rewritten the note's links and the tab with them.
+                if (newContent === t.savedContent) return t;
                 // Preserve a local edit that arrived after an external write began.
                 return t.content === t.savedContent
                   ? { ...t, content: newContent, savedContent: newContent, externalConflict: false }
@@ -1084,6 +1107,64 @@ export default function Home() {
     }
   }, [activeTab]);
 
+  // Renames and moves run one at a time: each reads the open tabs and scans
+  // the vault, and dragging several files to a folder starts one per file.
+  const renameQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  // Rename or move a file or folder. With "Update links on rename" on, the
+  // links to it are rewritten in every note, and the open tabs are brought
+  // in step: their unsaved edits are kept and get the same link changes.
+  const renamePath = useCallback((oldPath: string, newPath: string): Promise<boolean> => {
+    const run = async (): Promise<boolean> => {
+      if (!window.electronAPI) return false;
+      const vaultPath = activeVault?.path;
+      if (!settings.updateLinksOnRename || !vaultPath) {
+        return window.electronAPI.rename(oldPath, newPath);
+      }
+
+      // The tabs as they are now, after any rename that ran before this one.
+      const openTabs = await new Promise<TabState[]>((resolve) => {
+        setTabs((prev) => {
+          resolve(prev);
+          return prev;
+        });
+      });
+      const sent = new Map<string, string | undefined>();
+      const open = openTabs
+        .filter((t) => !t.kind)
+        .map((t) => {
+          const unsaved = t.content !== t.savedContent ? t.content : null;
+          sent.set(t.filePath, unsaved ?? undefined);
+          return { path: t.filePath, unsaved };
+        });
+
+      const result = await window.electronAPI.renameUpdatingLinks(vaultPath, oldPath, newPath, open);
+      if (!result.ok) {
+        if (result.error) showStatusNote(result.error);
+        return false;
+      }
+
+      // Keyed by the paths the tabs had when they were sent; the caller
+      // moves the renamed tab to its new path after this.
+      const updates = new Map(result.open.map((u) => [u.path, u]));
+      if (updates.size > 0) {
+        setTabs((prev) =>
+          prev.map((t) => {
+            const update = updates.get(t.filePath);
+            if (!update || t.kind) return t;
+            return { ...t, ...updateOpenNote(t, update, sent.get(t.filePath)), externalConflict: false };
+          })
+        );
+      }
+      const message = linkUpdateMessage(result);
+      if (message) showStatusNote(message);
+      return true;
+    };
+    const next = renameQueueRef.current.then(run, run);
+    renameQueueRef.current = next.catch(() => undefined);
+    return next;
+  }, [activeVault, settings.updateLinksOnRename, showStatusNote]);
+
   const handleRenameCurrentFile = useCallback(async (newName: string) => {
     if (!window.electronAPI || !currentTab) return;
     const oldPath = currentTab.filePath;
@@ -1093,7 +1174,7 @@ export default function Home() {
     const newFileName = newName + ext;
     const newPath = `${dir}/${newFileName}`;
     if (newPath === oldPath) return;
-    const success = await window.electronAPI.rename(oldPath, newPath);
+    const success = await renamePath(oldPath, newPath);
     if (success) {
       handleFileRename(oldPath, newPath);
       // Update file order
@@ -1104,18 +1185,18 @@ export default function Home() {
       });
       setSidebarRefresh((k) => k + 1);
     }
-  }, [currentTab, handleFileRename]);
+  }, [currentTab, handleFileRename, renamePath]);
 
   const handleMoveFile = useCallback(async (sourcePath: string, destDir: string) => {
     if (!window.electronAPI) return;
     const name = sourcePath.split("/").pop() || "";
     const newPath = `${destDir}/${name}`;
     if (newPath === sourcePath) return;
-    const success = await window.electronAPI.rename(sourcePath, newPath);
+    const success = await renamePath(sourcePath, newPath);
     if (success) {
       handleFileRename(sourcePath, newPath);
     }
-  }, [handleFileRename]);
+  }, [handleFileRename, renamePath]);
 
   const handleContentChange = useCallback((newContent: string) => {
     if (!activeTab) return;
@@ -1385,7 +1466,9 @@ export default function Home() {
       }
     } else if (result.status === "conflict") {
       setTabs((prev) => prev.map((t) =>
-        t.filePath === currentTab.filePath ? { ...t, externalConflict: true } : t
+        t.filePath === currentTab.filePath && t.savedContent === currentTab.savedContent
+          ? { ...t, externalConflict: true }
+          : t
       ));
     }
   }, [currentTab, settings.syncOnSave, settings.extraSyncProvider, activeVault, performSync]);
@@ -1541,16 +1624,12 @@ export default function Home() {
       e.preventDefault();
 
       window.electronAPI.listAllFiles(activeVault.path).then((files) => {
-        const findNote = (name: string) => {
-          const normalized = name.replace(/\.(md|markdown)$/i, "").toLowerCase();
-          return files.find((f) => {
-            const rel = f.relativePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
-            const base = (f.filePath.split("/").pop() || "").replace(/\.(md|markdown)$/i, "").toLowerCase();
-            // Dataview results link by the note's full path.
-            const full = f.filePath.replace(/\.(md|markdown)$/i, "").toLowerCase();
-            return base === normalized || rel === normalized || full === normalized;
-          });
-        };
+        // By name or by path inside the vault. Renaming a note rewrites the
+        // links to it by the same rule, so the two stay in one place.
+        const findNote = (name: string) =>
+          findLinkedNote(files, name) ??
+          // Dataview results link by the note's full path.
+          files.find((f) => linkKey(f.filePath) === linkKey(name));
 
         // The whole target first, so a note whose name contains "#" still opens.
         let filePath = findNote(linkTarget)?.filePath ?? null;
@@ -2302,6 +2381,7 @@ export default function Home() {
             refreshTrigger={sidebarRefresh}
             onTrashFile={handleTrashFileFromSidebar}
             onAnalyzeNote={handleAnalyzeSidebarNote}
+            renamePath={renamePath}
           />
         )}
 
@@ -2469,6 +2549,11 @@ export default function Home() {
             {activeTab && (
               <span className="truncate max-w-md">
                 {activeVault ? activeTab.replace(activeVault.path, "~") : activeTab}
+              </span>
+            )}
+            {statusNote && (
+              <span className="text-[var(--text-secondary)]" role="status" aria-live="polite">
+                {statusNote}
               </span>
             )}
           </div>

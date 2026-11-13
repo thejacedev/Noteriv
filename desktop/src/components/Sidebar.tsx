@@ -17,6 +17,8 @@ interface SidebarProps {
   onFileDelete: (filePath: string) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
   onMoveFile: (sourcePath: string, destDir: string) => void;
+  /** Renames a file or folder, updating links to it. Falls back to a plain rename when absent. */
+  renamePath?: (oldPath: string, newPath: string) => Promise<boolean>;
   onNewFile: () => void;
   onNewFolder: () => void;
   collapsed: boolean;
@@ -317,6 +319,7 @@ export default function Sidebar({
   onFileDelete,
   onFileRename,
   onMoveFile,
+  renamePath,
   onNewFile,
   onNewFolder,
   collapsed,
@@ -588,7 +591,9 @@ export default function Sidebar({
     const newFileName = renameValue.trim() + ext;
     const newPath = `${dir}/${newFileName}`;
     if (newPath !== renamingPath) {
-      const success = await window.electronAPI.rename(renamingPath, newPath);
+      const success = renamePath
+        ? await renamePath(renamingPath, newPath)
+        : await window.electronAPI.rename(renamingPath, newPath);
       if (success) {
         onFileRename(renamingPath, newPath);
         if (fileOrder[dir]) {
@@ -599,7 +604,7 @@ export default function Sidebar({
       }
     }
     setRenamingPath(null);
-  }, [renamingPath, renameValue, onFileRename, refreshEntries, fileOrder, onFileOrderChange]);
+  }, [renamingPath, renameValue, onFileRename, refreshEntries, fileOrder, onFileOrderChange, renamePath]);
 
   const cancelRename = useCallback(() => { setRenamingPath(null); }, []);
 

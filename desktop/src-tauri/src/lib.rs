@@ -9,6 +9,7 @@ mod commands_sync;
 mod commands_vault;
 mod commands_window;
 mod commands_workspace;
+mod links;
 mod menu;
 mod paths;
 mod scope;
@@ -93,6 +94,7 @@ pub fn run() {
             commands_fs::fs_delete_file,
             commands_fs::fs_delete_dir,
             commands_fs::fs_rename,
+            commands_fs::fs_rename_update_links,
             commands_fs::fs_create_dir,
             commands_fs::fs_copy_file,
             commands_fs::fs_write_binary_file,

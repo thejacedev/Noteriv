@@ -712,6 +712,120 @@ pub async fn fs_rename(app: tauri::AppHandle, args: RenameInput) -> bool {
     fs::rename(&args.old_path, &args.new_path).is_ok()
 }
 
+/// A note that is open in the app while something is renamed.
+#[derive(Debug, Deserialize)]
+pub struct OpenNoteInput {
+    pub path: String,
+    /// Its text in the editor, when that differs from what is on disk.
+    #[serde(default)]
+    pub unsaved: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RenameUpdateLinksInput {
+    #[serde(rename = "vaultPath")]
+    pub vault_path: String,
+    #[serde(rename = "oldPath")]
+    pub old_path: String,
+    #[serde(rename = "newPath")]
+    pub new_path: String,
+    #[serde(default)]
+    pub open: Vec<OpenNoteInput>,
+}
+
+/// One link as it was written and as it is now, brackets included.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct LinkChange {
+    from: String,
+    to: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OpenNoteOutput {
+    /// The path the app gave for the note, from before the rename.
+    path: String,
+    /// The note's text on disk now, when the rename changed it.
+    saved: Option<String>,
+    /// The unsaved text with the same links rewritten, when it had any.
+    unsaved: Option<String>,
+    changes: Vec<LinkChange>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct RenameUpdateLinksResult {
+    /// Whether the rename itself was done. Nothing is changed when it was not.
+    ok: bool,
+    error: Option<String>,
+    /// Notes whose links were rewritten on disk, and how many links.
+    notes: usize,
+    links: usize,
+    /// Notes that needed a change and could not be written.
+    failed: usize,
+    open: Vec<OpenNoteOutput>,
+}
+
+/// Rename or move a file or folder and rewrite the links to it. See `links`.
+fn rename_update_links(args: RenameUpdateLinksInput) -> RenameUpdateLinksResult {
+    let open = args
+        .open
+        .into_iter()
+        .map(|note| crate::links::OpenNote {
+            path: note.path,
+            unsaved: note.unsaved,
+        })
+        .collect();
+    let _guard = lock_file_mutations();
+    match crate::links::rename_and_update(
+        Path::new(&args.vault_path),
+        Path::new(&args.old_path),
+        Path::new(&args.new_path),
+        open,
+    ) {
+        Ok(report) => RenameUpdateLinksResult {
+            ok: true,
+            error: None,
+            notes: report.notes,
+            links: report.links,
+            failed: report.failed,
+            open: report
+                .open
+                .into_iter()
+                .map(|note| OpenNoteOutput {
+                    path: note.path,
+                    saved: note.saved,
+                    unsaved: note.unsaved,
+                    changes: note
+                        .changes
+                        .into_iter()
+                        .map(|(from, to)| LinkChange { from, to })
+                        .collect(),
+                })
+                .collect(),
+        },
+        Err(error) => RenameUpdateLinksResult {
+            error: Some(error),
+            ..RenameUpdateLinksResult::default()
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn fs_rename_update_links(
+    app: tauri::AppHandle,
+    args: RenameUpdateLinksInput,
+) -> RenameUpdateLinksResult {
+    if !allowed(&app, &args.vault_path)
+        || !allowed(&app, &args.old_path)
+        || !allowed(&app, &args.new_path)
+    {
+        return RenameUpdateLinksResult {
+            error: Some("Refusing to rename outside the permitted scope".into()),
+            ..RenameUpdateLinksResult::default()
+        };
+    }
+    rename_update_links(args)
+}
+
 #[tauri::command]
 pub async fn fs_create_dir(app: tauri::AppHandle, dir_path: String) -> bool {
     if !allowed(&app, &dir_path) {
@@ -1329,5 +1443,75 @@ mod knowledge_tests {
         assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
+    }
+}
+
+#[cfg(test)]
+mod rename_links_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "noteriv-rename-links-{}-{name}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dunce::canonicalize(dir).unwrap()
+    }
+
+    #[test]
+    fn the_rename_command_reads_the_frontends_arguments_and_answers_in_its_field_names() {
+        let vault = scratch("command");
+        fs::write(vault.join("Inbox.md"), "inbox\n").unwrap();
+        fs::write(vault.join("Plan.md"), "see [[Inbox]]\n").unwrap();
+        let path = |name: &str| vault.join(name).to_string_lossy().into_owned();
+
+        // The arguments exactly as the frontend sends them.
+        let args: RenameUpdateLinksInput = serde_json::from_value(json!({
+            "vaultPath": vault.to_string_lossy(),
+            "oldPath": path("Inbox.md"),
+            "newPath": path("Home.md"),
+            "open": [
+                { "path": path("Plan.md"), "unsaved": "see [[Inbox]] and [[Inbox|more]]\n" },
+                { "path": path("Inbox.md"), "unsaved": null },
+            ],
+        }))
+        .expect("the arguments are read");
+        let result = rename_update_links(args);
+
+        assert!(result.ok, "{:?}", result.error);
+        assert_eq!((result.notes, result.links, result.failed), (1, 1, 0));
+        assert_eq!(fs::read_to_string(vault.join("Plan.md")).unwrap(), "see [[Home]]\n");
+
+        let value = serde_json::to_value(&result).unwrap();
+        let keys = |v: &serde_json::Value| {
+            let mut keys: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(keys(&value), ["error", "failed", "links", "notes", "ok", "open"]);
+        assert_eq!(value["error"], serde_json::Value::Null);
+        let open = &value["open"][0];
+        assert_eq!(keys(open), ["changes", "path", "saved", "unsaved"]);
+        assert_eq!(open["path"], json!(path("Plan.md")));
+        assert_eq!(open["saved"], json!("see [[Home]]\n"));
+        assert_eq!(open["unsaved"], json!("see [[Home]] and [[Home|more]]\n"));
+        assert_eq!(keys(&open["changes"][0]), ["from", "to"]);
+        assert_eq!(open["changes"][0], json!({ "from": "[[Inbox]]", "to": "[[Home]]" }));
+
+        // The `open` list may be left out, and a refused rename says why.
+        let refused = rename_update_links(
+            serde_json::from_value(json!({
+                "vaultPath": vault.to_string_lossy(),
+                "oldPath": path("Plan.md"),
+                "newPath": path("Home.md"),
+            }))
+            .unwrap(),
+        );
+        assert!(!refused.ok);
+        assert!(refused.error.as_deref().unwrap_or("").contains("already exists"));
+        assert!(vault.join("Plan.md").exists());
     }
 }

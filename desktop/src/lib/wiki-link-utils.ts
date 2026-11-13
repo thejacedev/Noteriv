@@ -139,6 +139,34 @@ export function parseWikiLink(text: string): ParsedWikiLink {
   };
 }
 
+/** How a link's note part is compared: `\\` read as `/`, extension dropped, lower case. */
+export function linkKey(text: string): string {
+  return text.replace(/\\/g, "/").replace(/\.(md|markdown)$/i, "").toLowerCase();
+}
+
+/**
+ * The note a wiki link's note part points at: the first note, in listing
+ * order, whose name or whole path inside the vault matches. This is where a
+ * click on the link goes.
+ *
+ * The backend has a second copy of this rule (`src-tauri/src/links.rs`),
+ * which it uses to rewrite links when a note is renamed. Both are tested
+ * against `__fixtures__/link-resolution.json`; change them together.
+ */
+export function findLinkedNote<T extends { filePath: string; relativePath?: string }>(
+  files: T[],
+  target: string
+): T | null {
+  const wanted = linkKey(target.trim());
+  if (!wanted) return null;
+  return (
+    files.find((f) => {
+      const name = linkKey(f.filePath.replace(/\\/g, "/").split("/").pop() || "");
+      return name === wanted || linkKey(f.relativePath ?? "") === wanted;
+    }) ?? null
+  );
+}
+
 /**
  * Resolve a wiki link filename to a full file path.
  * Searches for `filename.md` (case-insensitive basename match) in the list of all files.

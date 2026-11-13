@@ -193,6 +193,9 @@ export default function SettingsModal({
       <Row label="Spell check" desc="Underline misspelled words in the editor.">
         <Toggle checked={settings.spellCheck} onChange={(v) => update({ spellCheck: v })} />
       </Row>
+      <Row label="Update links on rename" desc="When a note, attachment or folder is renamed or moved, rewrite the links that point to it in every note.">
+        <Toggle checked={settings.updateLinksOnRename} onChange={(v) => update({ updateLinksOnRename: v })} />
+      </Row>
       <Row label="Responsive sidebar" desc="Collapse the file navigator when the window becomes narrow.">
         <Toggle checked={settings.autoCollapseSidebar} onChange={(v) => update({ autoCollapseSidebar: v })} />
       </Row>
