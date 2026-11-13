@@ -306,6 +306,18 @@ export const markdownRenderTheme = EditorView.baseTheme({
     color: "var(--accent)",
     fontSize: "0.85em",
   },
+  // Sound and video embedded from the vault
+  "& .md-embed-media": {
+    display: "block",
+    maxWidth: "100%",
+    margin: "4px 0",
+  },
+  "& .md-embed-video-player": {
+    width: "480px",
+    background: "#000",
+    borderRadius: "8px",
+  },
+  "& .md-embed-pdf": { cursor: "pointer" },
   // Embedded search results
   "& .md-query": {
     display: "block",

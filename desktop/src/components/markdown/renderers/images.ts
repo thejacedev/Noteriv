@@ -66,10 +66,79 @@ function loadPendingImages() {
   });
 }
 
+// Sound and video files from the vault, as blob URLs. A recording can be
+// large, so the file is only read when the player is first used.
+const mediaUrls = new Map<string, string>();
+
+const MEDIA_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", ogg: "audio/ogg", flac: "audio/flac", "3gp": "audio/3gpp",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska", ogv: "video/ogg",
+};
+
+async function loadLocalMedia(absPath: string): Promise<string | null> {
+  const cached = mediaUrls.get(absPath);
+  if (cached) return cached;
+  try {
+    const base64 = await window.electronAPI?.readBinaryFile(absPath);
+    if (!base64) return null;
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const ext = absPath.split(".").pop()?.toLowerCase() || "";
+    const url = URL.createObjectURL(new Blob([bytes], { type: MEDIA_TYPES[ext] || "application/octet-stream" }));
+    mediaUrls.set(absPath, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Players for files in the vault start without a source. The first time one
+ * is played, or clicked, the file is read and playback starts.
+ */
+function armPendingMedia() {
+  const players = document.querySelectorAll<HTMLMediaElement>("[data-local-media]:not([data-armed])");
+  players.forEach((player) => {
+    const absPath = player.getAttribute("data-local-media");
+    if (!absPath) return;
+    player.setAttribute("data-armed", "true");
+    const cached = mediaUrls.get(absPath);
+    if (cached) {
+      player.src = cached;
+      return;
+    }
+    let loading = false;
+    const load = async () => {
+      if (loading || player.getAttribute("src")) return;
+      loading = true;
+      const url = await loadLocalMedia(absPath);
+      if (url && player.isConnected) {
+        player.src = url;
+        player.play().catch(() => {});
+      }
+    };
+    player.addEventListener("play", load);
+    player.addEventListener("click", load);
+  });
+}
+
+/** A player for a sound or video file inside the vault. */
+export function localMediaTag(absPath: string, kind: "audio" | "video", label: string): string {
+  const tag = kind === "audio" ? "audio" : "video";
+  return (
+    `<${tag} controls preload="none" class="md-embed-media md-embed-${kind}-player" ` +
+    `data-local-media="${escapeAttr(absPath)}" title="${escapeAttr(label)}"></${tag}>`
+  );
+}
+
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 function ensurePolling() {
   if (pollInterval) return;
-  pollInterval = setInterval(loadPendingImages, 300);
+  pollInterval = setInterval(() => {
+    loadPendingImages();
+    armPendingMedia();
+  }, 300);
 }
 ensurePolling();
 

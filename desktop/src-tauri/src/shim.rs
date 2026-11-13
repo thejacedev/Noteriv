@@ -157,6 +157,7 @@ pub const SHIM_JS: &str = r#"
       searchInFiles: function (dir, query) { return invoke("fs_search_in_files", { args: { dir: dir, query: query } }); },
       listAllFiles: function (dir) { return invoke("fs_list_all_files", { dir: dir }); },
       vaultIndex: function (dir) { return invoke("fs_vault_index", { dir: dir }); },
+      listVaultFiles: function (dir) { return invoke("fs_list_vault_files", { dir: dir }); },
       searchVault: function (dir, query, options) {
         var o = options || {};
         return invoke("fs_search_vault", { args: { dir: dir, query: query, caseSensitive: !!o.caseSensitive, sort: o.sort || "nameAsc" } });

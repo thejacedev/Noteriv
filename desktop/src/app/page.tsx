@@ -41,7 +41,8 @@ import LintPanel from "@/components/LintPanel";
 import ConfirmDialogHost, { confirmDialog } from "@/components/ConfirmDialog";
 import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
-import { splitWikiTarget, findAnchorLine, findLinkedNote, linkKey, type WikiAnchor } from "@/lib/wiki-link-utils";
+import { splitWikiTarget, findAnchorLine, findLinkedFile, findLinkedNote, linkKey, type WikiAnchor } from "@/lib/wiki-link-utils";
+import { pdfPage } from "@/lib/embed-utils";
 import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
 import { countWords, plural } from "@/lib/text-stats";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex } from "@/lib/vault-index";
@@ -199,6 +200,8 @@ export default function Home() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showGraphView, setShowGraphView] = useState(false);
+  // A page a link asked a PDF to open at.
+  const [pdfPageRequest, setPdfPageRequest] = useState<{ filePath: string; page: number; tick: number } | null>(null);
   // Whether the graph opens on the current note's neighbourhood.
   const [graphStartsLocal, setGraphStartsLocal] = useState(false);
   const [showBacklinks, setShowBacklinks] = useState(false);
@@ -1666,7 +1669,18 @@ export default function Home() {
           anchor = split.anchor;
           filePath = split.file ? findNote(split.file)?.filePath ?? null : activeTab;
         }
-        if (!filePath) return;
+        if (!filePath) {
+          // Not a note: a link to a file such as [[paper.pdf#page=3]].
+          const filePart = (linkTarget.split("#")[0] || linkTarget).trim();
+          if (!/\.[a-z0-9]{1,8}$/i.test(filePart) || /\.(md|markdown)$/i.test(filePart)) return;
+          const rel = findLinkedFile(await window.electronAPI.listVaultFiles(vaultPath), filePart);
+          if (!rel) return;
+          const target = `${vaultPath}/${rel}`;
+          const page = pdfPage(linkTarget);
+          if (page) setPdfPageRequest({ filePath: target, page, tick: Date.now() });
+          openFile(target);
+          return;
+        }
 
         pendingJumpRef.current = anchor
           ? { filePath, anchor, expires: Date.now() + 3000 }
@@ -2422,6 +2436,8 @@ export default function Home() {
               vaultPath={activeVault.path}
               onExportedNote={(mdPath) => { openFile(mdPath); setSidebarRefresh((k) => k + 1); }}
               onClose={() => closeTab(currentTab.filePath)}
+              initialPage={pdfPageRequest?.filePath === currentTab.filePath ? pdfPageRequest.page : undefined}
+              pageRequest={pdfPageRequest?.tick}
             />
           ) : null}
         </div>

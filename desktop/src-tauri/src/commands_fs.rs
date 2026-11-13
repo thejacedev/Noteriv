@@ -990,6 +990,16 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
     list_markdown_files(&dir, None)
 }
 
+/// Every file in the vault, notes and attachments alike, as paths inside it
+/// with `/` between folders.
+#[tauri::command]
+pub async fn fs_list_vault_files(app: tauri::AppHandle, dir: String) -> Vec<String> {
+    if dir.is_empty() || !allowed(&app, &dir) {
+        return Vec::new();
+    }
+    crate::links::list_vault(Path::new(&dir))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SearchVaultInput {
     pub dir: String,

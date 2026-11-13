@@ -11,7 +11,7 @@ import {
   type WikiAnchor,
 } from "./wiki-link-utils";
 
-export type EmbedKind = "note" | "image" | "other";
+export type EmbedKind = "note" | "image" | "audio" | "video" | "pdf" | "other";
 
 export interface ParsedEmbed {
   /** The target as written, without any `|size` or `|alias` part. */
@@ -23,10 +23,22 @@ export interface ParsedEmbed {
   /** Display size for an image, from `![[image.png|160]]` or `|160x90`. */
   width?: number;
   height?: number;
+  /** The page of a PDF, from `![[paper.pdf#page=3]]`. */
+  page?: number;
 }
 
 const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
 const NOTE_EXTENSION = /\.(md|markdown)$/i;
+const AUDIO_EXTENSION = /\.(mp3|wav|m4a|ogg|flac|3gp)$/i;
+const VIDEO_EXTENSION = /\.(mp4|webm|mov|mkv|ogv)$/i;
+const PDF_EXTENSION = /\.pdf$/i;
+
+/** The page a link to a PDF names: "paper.pdf#page=3" gives 3. */
+export function pdfPage(target: string): number | undefined {
+  const match = target.match(/#(?:.*&)?page=(\d+)/i);
+  const page = match ? Number(match[1]) : NaN;
+  return Number.isFinite(page) && page >= 1 ? page : undefined;
+}
 // Files that open in their own view; an embed of one stays a link.
 const OTHER_EXTENSION = /\.(drawing|canvas|board|pdf|mp3|wav|m4a|ogg|flac|mp4|webm|mov|mkv|zip|csv|json|txt)$/i;
 
@@ -39,9 +51,13 @@ export function parseEmbed(inner: string): ParsedEmbed {
 
   let kind: EmbedKind = "note";
   if (IMAGE_EXTENSION.test(file)) kind = "image";
+  else if (AUDIO_EXTENSION.test(file)) kind = "audio";
+  else if (VIDEO_EXTENSION.test(file)) kind = "video";
+  else if (PDF_EXTENSION.test(file)) kind = "pdf";
   else if (!NOTE_EXTENSION.test(file) && OTHER_EXTENSION.test(file)) kind = "other";
 
   const parsed: ParsedEmbed = { target, file, anchor, kind };
+  if (kind === "pdf") parsed.page = pdfPage(target);
   const size = option.match(/^(\d+)(?:x(\d+))?$/);
   if (kind === "image" && size) {
     parsed.width = Number(size[1]);

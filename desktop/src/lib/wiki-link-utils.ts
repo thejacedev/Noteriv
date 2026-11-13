@@ -168,6 +168,30 @@ export function findLinkedNote<T extends { filePath: string; relativePath?: stri
 }
 
 /**
+ * The file a link to something other than a note points at, such as
+ * `[[paper.pdf]]`: by its path inside the vault, or failing that by its
+ * name, with the shallowest file winning a shared name. `files` are paths
+ * inside the vault with "/". The backend's `links.rs` resolves these the
+ * same way when a file is renamed.
+ */
+export function findLinkedFile(files: string[], target: string): string | null {
+  const wanted = target.trim().replace(/\\/g, "/").toLowerCase();
+  if (!wanted) return null;
+  const exact = files.find((f) => f.toLowerCase() === wanted);
+  if (exact) return exact;
+  const name = wanted.split("/").pop() || wanted;
+  let best: string | null = null;
+  for (const file of files) {
+    if ((file.split("/").pop() || file).toLowerCase() !== name) continue;
+    const depth = file.split("/").length;
+    if (best === null || depth < best.split("/").length || (depth === best.split("/").length && file < best)) {
+      best = file;
+    }
+  }
+  return best;
+}
+
+/**
  * Resolve a wiki link filename to a full file path.
  * Searches for `filename.md` (case-insensitive basename match) in the list of all files.
  * Returns the full file path, or null if not found.

@@ -7,7 +7,7 @@ import {
   truncateEmbed,
   type ParsedEmbed,
 } from "@/lib/embed-utils";
-import { localImageTag } from "./images";
+import { localImageTag, localMediaTag } from "./images";
 
 /**
  * Obsidian-style embeds: `![[Note]]`, `![[Note#Heading]]`, `![[image.png|160]]`.
@@ -285,6 +285,39 @@ export const embedRenderer: InlineRenderer = {
         continue;
       }
 
+      // Sound and video play in place; a PDF is a card that opens it at its page.
+      if ((embed.kind === "audio" || embed.kind === "video" || embed.kind === "pdf") && vaultPath) {
+        const files = getAttachments(vaultPath);
+        const wanted = forwardSlashes(embed.file).toLowerCase();
+        const path = files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
+        if (!path) {
+          results.push({
+            from,
+            to,
+            html: chip(match[1], files ? "md-embed-missing" : ""),
+            className: "md-embed-wrapper",
+          });
+        } else if (embed.kind === "pdf") {
+          const label = embed.page ? `${embed.file}, page ${embed.page}` : embed.file;
+          results.push({
+            from,
+            to,
+            html:
+              `<span class="md-embed md-embed-pdf md-wikilink" data-target="${escapeHtml(embed.target)}">` +
+              `<span class="md-embed-icon">&#128196;</span> ${escapeHtml(label)}</span>`,
+            className: "md-embed-wrapper",
+          });
+        } else {
+          results.push({
+            from,
+            to,
+            html: localMediaTag(path, embed.kind, embed.file),
+            className: `md-embed-wrapper md-embed-${embed.kind}`,
+          });
+        }
+        continue;
+      }
+
       // A note is shown inline only when the embed is the whole line; in the
       // middle of a sentence it stays a link.
       const wholeLine = text.trim() === match[0];
@@ -315,7 +348,13 @@ export const embedRenderer: InlineRenderer = {
       }
 
       // Not loaded yet, a file with its own viewer, or an embed inside a line.
-      results.push({ from, to, html: chip(match[1]), className: "md-embed-wrapper" });
+      // It is a link all the same: a click opens what it points at.
+      results.push({
+        from,
+        to,
+        html: `<span class="md-wikilink" data-target="${escapeHtml(embed.target)}">${chip(match[1])}</span>`,
+        className: "md-embed-wrapper",
+      });
     }
 
     return results;

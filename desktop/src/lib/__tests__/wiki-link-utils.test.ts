@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findAnchorLine, findBacklinks, splitWikiTarget } from "../wiki-link-utils";
+import { findAnchorLine, findBacklinks, findLinkedFile, splitWikiTarget } from "../wiki-link-utils";
 import { lintMarkdown } from "../markdown-lint";
 
 describe("splitWikiTarget", () => {
@@ -99,5 +99,25 @@ describe("links with a heading or block part", () => {
     const content = "[[Project Alpha#Goals]] [[#Local heading]] [[Missing Note#Part]]";
     const broken = lintMarkdown(content, "/v", ["project alpha"]).filter((w) => w.rule === "broken-wikilink");
     expect(broken.map((w) => w.message)).toEqual(["Broken wiki-link: [[Missing Note#Part]]"]);
+  });
+});
+
+describe("findLinkedFile", () => {
+  const files = ["attachments/deep/photo.png", "img/photo.png", "img/Diagram.SVG", "paper.pdf", "z/paper.pdf", "Notes/Plan.md"];
+
+  it("finds a file by its path, or by its name with the shallowest winning", () => {
+    expect(findLinkedFile(files, "img/photo.png")).toBe("img/photo.png");
+    expect(findLinkedFile(files, "attachments/deep/photo.png")).toBe("attachments/deep/photo.png");
+    expect(findLinkedFile(files, "photo.png")).toBe("img/photo.png");
+    expect(findLinkedFile(files, "PHOTO.PNG")).toBe("img/photo.png");
+    expect(findLinkedFile(files, "diagram.svg")).toBe("img/Diagram.SVG");
+    expect(findLinkedFile(files, "paper.pdf")).toBe("paper.pdf");
+  });
+
+  it("falls back to the name when the path is not there, and finds nothing for a missing file", () => {
+    expect(findLinkedFile(files, "old/place/photo.png")).toBe("img/photo.png");
+    expect(findLinkedFile(files, "img\\photo.png")).toBe("img/photo.png");
+    expect(findLinkedFile(files, "missing.png")).toBeNull();
+    expect(findLinkedFile(files, "")).toBeNull();
   });
 });

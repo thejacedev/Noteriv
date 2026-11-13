@@ -110,6 +110,8 @@ interface ElectronAPI {
     newPath: string,
     open: { path: string; unsaved: string | null }[]
   ) => Promise<import("@/lib/link-updates").RenameLinksResult>;
+  /** Every file in the vault, as paths inside it with "/" between folders. */
+  listVaultFiles: (dir: string) => Promise<string[]>;
   /** Search the vault. The query language is described in `src-tauri/src/search.rs`. */
   searchVault: (
     dir: string,

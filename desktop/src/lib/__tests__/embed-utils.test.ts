@@ -31,8 +31,19 @@ describe("parseEmbed", () => {
 
   it("leaves files with their own viewer as links", () => {
     expect(parseEmbed("sketch.drawing").kind).toBe("other");
-    expect(parseEmbed("paper.pdf").kind).toBe("other");
     expect(parseEmbed("Board.canvas").kind).toBe("other");
+  });
+
+  it("knows sound, video and PDF files, and the page a PDF embed names", () => {
+    expect(parseEmbed("memo.mp3").kind).toBe("audio");
+    expect(parseEmbed("Recordings/talk.M4A").kind).toBe("audio");
+    expect(parseEmbed("clip.mp4").kind).toBe("video");
+    expect(parseEmbed("clip.webm|320").kind).toBe("video");
+    expect(parseEmbed("paper.pdf").kind).toBe("pdf");
+    expect(parseEmbed("paper.pdf").page).toBeUndefined();
+    expect(parseEmbed("paper.pdf#page=3")).toMatchObject({ kind: "pdf", file: "paper.pdf", page: 3 });
+    expect(parseEmbed("paper.pdf#page=0").page).toBeUndefined();
+    expect(parseEmbed("docs/paper.pdf#height=400&page=12").page).toBe(12);
   });
 
   it("ignores an alias on a note embed", () => {

@@ -15,6 +15,10 @@ interface PDFViewerProps {
   vaultPath: string;
   onExportedNote?: (mdPath: string) => void;
   onClose: () => void;
+  /** A page to show, from a link such as [[paper.pdf#page=3]]. */
+  initialPage?: number;
+  /** Changes each time a page is asked for, so asking for the same page twice works. */
+  pageRequest?: number;
 }
 
 type AnnotationTool = "select" | "highlight" | "note" | "underline";
@@ -56,7 +60,7 @@ interface PageRenderState {
   viewport: { width: number; height: number; scale: number };
 }
 
-export default function PDFViewer({ filePath, vaultPath, onExportedNote, onClose }: PDFViewerProps) {
+export default function PDFViewer({ filePath, vaultPath, onExportedNote, onClose, initialPage, pageRequest }: PDFViewerProps) {
   // Theme colors, read live from the active theme's CSS variables so the
   // viewer follows the selected Noteriv theme (concrete hex values so they
   // work in both inline styles and SVG attributes). Re-read on theme switch.
@@ -389,6 +393,13 @@ export default function PDFViewer({ filePath, vaultPath, onExportedNote, onClose
     const el = container.querySelector(`[data-page-container="${clamped}"]`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [numPages]);
+
+  // Jump to the page a link asked for, once the pages have been laid out.
+  useEffect(() => {
+    if (!initialPage || loading || numPages === 0) return;
+    const timer = setTimeout(() => goToPage(initialPage), 150);
+    return () => clearTimeout(timer);
+  }, [initialPage, pageRequest, loading, numPages, goToPage]);
 
   // Zoom
   const zoomIn = useCallback(() => setZoom((z) => Math.min(z + 0.25, 4)), []);
