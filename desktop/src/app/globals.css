@@ -1885,6 +1885,14 @@ body {
   cursor: pointer;
 }
 
+/* The system draws a select in its own colours unless told not to. */
+.vs-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-primary);
+  padding-right: 18px;
+}
+
 .vs-toggle:hover,
 .vs-select:hover {
   color: var(--text-primary);
@@ -1974,7 +1982,7 @@ body {
   text-align: right;
 }
 
-.vs-error {
+.palette-empty.vs-error {
   color: var(--red);
 }
 
