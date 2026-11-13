@@ -990,6 +990,18 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
     list_markdown_files(&dir, None)
 }
 
+/// Every note's properties, tags, links and file details, in one call.
+#[tauri::command]
+pub async fn fs_vault_index(
+    app: tauri::AppHandle,
+    dir: String,
+) -> Vec<crate::vault_index::NoteMeta> {
+    if dir.is_empty() || !allowed(&app, &dir) {
+        return Vec::new();
+    }
+    crate::vault_index::index_vault(Path::new(&dir))
+}
+
 #[tauri::command]
 pub async fn fs_list_knowledge_files(app: tauri::AppHandle, dir: String) -> Vec<ListedFile> {
     if !allowed(&app, &dir) {

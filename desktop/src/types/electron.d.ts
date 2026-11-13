@@ -110,6 +110,8 @@ interface ElectronAPI {
     newPath: string,
     open: { path: string; unsaved: string | null }[]
   ) => Promise<import("@/lib/link-updates").RenameLinksResult>;
+  /** Every note's frontmatter, tags, links and file details, in listing order. */
+  vaultIndex: (dir: string) => Promise<import("@/lib/vault-index").RawNoteMeta[]>;
   createFile: (filePath: string) => Promise<boolean>;
   deleteFile: (filePath: string) => Promise<boolean>;
   deleteDir: (dirPath: string) => Promise<boolean>;
