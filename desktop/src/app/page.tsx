@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import TitleBar from "@/components/TitleBar";
@@ -22,6 +22,9 @@ import PropertiesEditor from "@/components/PropertiesEditor";
 import AllPropertiesPanel from "@/components/AllPropertiesPanel";
 import WorkspacesModal from "@/components/WorkspacesModal";
 import BaseView from "@/components/BaseView";
+import { addText, freeNoteName, headingLine, linkWriteQuestion, type AppRequest } from "@/lib/app-requests";
+import { fromVaultRelative, toVaultRelative } from "@/lib/vault-paths";
+import ImportModal from "@/components/ImportModal";
 import { NEW_BASE, isBaseFile } from "@/lib/bases-data";
 import {
   EMPTY_LAYOUTS,
@@ -123,6 +126,8 @@ import type { KnowledgeSourcePreset } from "@/components/KnowledgeIngest";
 import type { EditorView } from "@codemirror/view";
 
 const Editor = dynamic(() => import("@/components/Editor"), { ssr: false });
+// The pop-out holds an editor, which cannot be loaded where there is no page to draw on.
+const PopoutNote = dynamic(() => import("@/components/PopoutNote"), { ssr: false });
 const SourceEditor = dynamic(() => import("@/components/SourceEditor"), { ssr: false });
 const ReadOnlyView = dynamic(() => import("@/components/ReadOnlyView"), { ssr: false });
 const GraphView = dynamic(() => import("@/components/GraphView"), { ssr: false });
@@ -182,7 +187,24 @@ function confirmDiscardUnsaved(closing: TabState[]): Promise<boolean> {
       });
 }
 
-export default function Home() {
+const neverChanges = () => () => {};
+
+/**
+ * The page is the whole app in the main window, and one note in a pop-out
+ * window. Which it is cannot be known until the page is running, so nothing
+ * is drawn before then.
+ */
+export default function Page() {
+  const popout = useSyncExternalStore<string | null | undefined>(
+    neverChanges,
+    () => window.__NOTERIV_POPOUT__?.path ?? null,
+    () => undefined
+  );
+  if (popout === undefined) return null;
+  return popout ? <PopoutNote initialPath={popout} /> : <Home />;
+}
+
+function Home() {
   const [appState, setAppState] = useState<AppState>("loading");
   const [showSetupWizard, setShowSetupWizard] = useState(false);
 
@@ -262,6 +284,7 @@ export default function Home() {
   const [layoutStore, setLayoutStore] = useState<LayoutStore>(EMPTY_LAYOUTS);
   const layoutsLoadedFor = useRef<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Ecosystem
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -1803,6 +1826,20 @@ export default function Home() {
     [createNote]
   );
 
+  // The open note in a window of its own. Moving it there closes its tab here.
+  const openPopout = useCallback(async (move: boolean) => {
+    if (!currentTab || currentTab.kind || !window.electronAPI) return;
+    const filePath = currentTab.filePath;
+    // The new window reads the file, so what is typed here has to be in it first.
+    if (currentTab.content !== currentTab.savedContent && !await saveDirtyTabs()) return;
+    try {
+      await window.electronAPI.openPopout(filePath);
+      if (move) removeTab(filePath);
+    } catch (err) {
+      showStatusNote(typeof err === "string" ? err : "The window could not be opened.");
+    }
+  }, [currentTab, saveDirtyTabs, removeTab, showStatusNote]);
+
   // A base that lists every note, as somewhere to start from.
   const handleNewBase = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
@@ -2224,6 +2261,138 @@ export default function Home() {
     );
   }, []);
 
+  // What a command line, a second launch or a noteriv:// link asked for.
+  // The backend has already checked it; see lib/app-requests.ts.
+  const handleAppRequestRef = useRef<(request: AppRequest) => Promise<void>>(async () => {});
+  const handleAppRequest = useCallback(async (request: AppRequest) => {
+    const api = window.electronAPI;
+    if (!api || request.action === "focus") return;
+    if (request.action === "error") {
+      showStatusNote(request.message || "That could not be done.");
+      return;
+    }
+    // A link can come from anywhere, so it asks before it changes anything.
+    if (request.fromLink && request.writes) {
+      const question = linkWriteQuestion(request);
+      if (!await confirmDialog({ title: question.title, message: question.message, confirmLabel: "Go ahead" })) return;
+    }
+    if (request.vaultId && request.vaultId !== activeVault?.id) {
+      if (!await handleSwitchVault(request.vaultId)) {
+        showStatusNote("That vault could not be opened.");
+        return;
+      }
+      // The rest is done once the page has caught up with the new vault.
+      const rest = { ...request, vaultId: null, fromLink: false };
+      setTimeout(() => { void handleAppRequestRef.current(rest); }, 300);
+      return;
+    }
+
+    if (request.action === "open") {
+      if (!request.filePath) return;
+      let line = request.line ?? undefined;
+      if (line === undefined && request.heading) {
+        const text = await api.readFile(request.filePath);
+        line = (text !== null && headingLine(text, request.heading)) || undefined;
+      }
+      openFileAtLine(request.filePath, line);
+      return;
+    }
+    if (request.action === "search") {
+      setVaultSearchQuery(request.query ?? "");
+      setShowVaultSearch(true);
+      return;
+    }
+    if (request.action === "daily") {
+      handleDailyNote();
+      return;
+    }
+
+    // "new" and "unique": a note to create, or text to add to one.
+    const vaultPath = request.vaultPath ?? activeVault?.path;
+    if (!vaultPath) return;
+    const namesIn = async (folder: string) => {
+      try {
+        return new Set((await api.readDir(folder)).map((e) => e.name.toLowerCase()));
+      } catch {
+        return new Set<string>();
+      }
+    };
+    let relative = request.action === "new" ? request.name ?? null : null;
+    if (!relative) {
+      const folder = newNoteFolder(vaultPath, settings.newNoteLocation, settings.newNoteFolder, null);
+      const existing = await namesIn(folder);
+      const base =
+        request.action === "unique"
+          ? nextTimestampName(new Date(), (name) => existing.has(`${name}.md`.toLowerCase()))
+          : freeNoteName("Untitled.md", (name) => existing.has(name.toLowerCase())).replace(/\.md$/, "");
+      const inFolder = toVaultRelative(folder, vaultPath);
+      relative = `${inFolder ? `${inFolder}/` : ""}${base}.md`;
+    }
+    let full = fromVaultRelative(relative, vaultPath);
+    if (!full) {
+      showStatusNote("That is not a place inside the vault.");
+      return;
+    }
+    const mode = request.action === "unique" ? "create" : request.mode ?? "create";
+    const text = request.content ?? "";
+    const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
+    const openTab = tabs.find((t) => t.filePath === full && !t.kind);
+    const existingText = openTab ? openTab.content : await api.readFile(full);
+
+    let next: string;
+    if (existingText !== null && (mode === "append" || mode === "prepend")) {
+      next = addText(existingText, text, mode);
+    } else {
+      if (existingText !== null && mode === "create") {
+        // Creating never replaces: the new note takes the next free name.
+        const taken = await namesIn(parentOf(full));
+        const fileName = full.slice(parentOf(full).length + 1);
+        full = `${parentOf(full)}/${freeNoteName(fileName, (name) => taken.has(name.toLowerCase()))}`;
+      }
+      next = text;
+    }
+    const target = full;
+    const tab = tabs.find((t) => t.filePath === target && !t.kind);
+    if (tab && tab.content !== tab.savedContent) {
+      // The note is open with changes not saved yet: the text joins them.
+      setTabs((prev) => prev.map((t) => (t.filePath === target ? { ...t, content: next } : t)));
+    } else {
+      await api.createDir(parentOf(target));
+      if (!await api.writeFile(target, next)) {
+        showStatusNote("The note could not be written.");
+        return;
+      }
+      if (tab) setTabs((prev) => prev.map((t) => (t.filePath === target ? { ...t, content: next, savedContent: next } : t)));
+    }
+    invalidateVaultIndex();
+    setSidebarRefresh((k) => k + 1);
+    if (!request.silent) void openFile(target);
+  }, [activeVault, handleSwitchVault, openFileAtLine, openFile, handleDailyNote, showStatusNote, settings.newNoteLocation, settings.newNoteFolder, tabs]);
+  useEffect(() => {
+    handleAppRequestRef.current = handleAppRequest;
+  }, [handleAppRequest]);
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (appState !== "app" || !api?.takeAppRequests) return;
+    let busy = false;
+    const pull = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        // Until none are left: one may arrive while another is being carried out.
+        for (;;) {
+          const requests = await api.takeAppRequests();
+          if (requests.length === 0) break;
+          for (const request of requests) await handleAppRequestRef.current(request);
+        }
+      } finally {
+        busy = false;
+      }
+    };
+    void pull();
+    return api.onAppRequest(() => { void pull(); });
+  }, [appState]);
+
   const handleCommandExecute = useCallback((action: HotkeyAction) => {
     const view = editorViewRef.current;
     // The editor on screen: the reading view has its own.
@@ -2338,6 +2507,9 @@ export default function Home() {
       },
       toggleAllProperties: () => setShowAllProperties((p) => !p),
       newBase: () => { void handleNewBase(); },
+      importNotes: () => setShowImport(true),
+      openInNewWindow: () => { void openPopout(false); },
+      moveToNewWindow: () => { void openPopout(true); },
       manageWorkspaces: () => setShowWorkspaces(true),
       saveWorkspaceLayout: () => {
         // With a layout in use, this saves over it; otherwise it asks for a name.
@@ -2997,6 +3169,24 @@ export default function Home() {
       )}
 
       {/* Vault search (Ctrl+Shift+F) */}
+      {showImport && activeVault && (
+        <ImportModal
+          vaultPath={activeVault.path}
+          onImported={(folder) => {
+            // New notes: the file list, the index and anything drawn from them start afresh.
+            invalidateVaultIndex();
+            setSidebarRefresh((k) => k + 1);
+            if (folder) {
+              const first = folder.split("/")[0];
+              setExpandedFolders((open) => {
+                const path = `${activeVault.path}/${first}`;
+                return open.includes(path) ? open : [...open, path];
+              });
+            }
+          }}
+          onClose={() => setShowImport(false)}
+        />
+      )}
       {showWorkspaces && activeVault && (
         <WorkspacesModal
           store={layoutStore}

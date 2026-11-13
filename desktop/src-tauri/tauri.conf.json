@@ -24,7 +24,10 @@
         "backgroundColor": "#1e1e2e",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": -100, "y": -100 }
+        "trafficLightPosition": {
+          "x": -100,
+          "y": -100
+        }
       }
     ],
     "security": {
@@ -53,6 +56,13 @@
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ1RTEyQzI5QUQ4NDVGRUYKUldUdlg0U3RLU3poUmZDemVuY29MRXZJS2pibEVNMXA2QU14MlpkU0prTFNqWVBLWmc5L0hxbS8K",
       "dialog": false
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "noteriv"
+        ]
+      }
     }
   }
 }

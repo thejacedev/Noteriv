@@ -74,6 +74,12 @@ interface ElectronAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;
+  /** What a command line, a second launch or a noteriv:// link asked for since the last call. */
+  takeAppRequests: () => Promise<import("@/lib/app-requests").AppRequest[]>;
+  /** Called when a request is waiting to be taken. */
+  onAppRequest: (callback: () => void) => () => void;
+  /** Open a note in a window of its own. Rejects with a sentence when it cannot. */
+  openPopout: (path: string) => Promise<void>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetTitle: (title: string) => Promise<void>;
   getPlatform: () => Promise<string>;
@@ -123,6 +129,8 @@ interface ElectronAPI {
     query: string,
     options?: { caseSensitive?: boolean; sort?: import("@/lib/vault-search").SearchSort; exclude?: string[] }
   ) => Promise<import("@/lib/vault-search").VaultSearchResult>;
+  /** Import notes exported from another app. The source must have been picked with showOpenDialog. */
+  importNotes: (args: import("@/lib/importers").ImportRequest) => Promise<import("@/lib/importers").ImportOutcome>;
   /** Every note's frontmatter, tags, links and file details, in listing order. */
   vaultIndex: (dir: string) => Promise<import("@/lib/vault-index").RawNoteMeta[]>;
   createFile: (filePath: string) => Promise<boolean>;
@@ -270,4 +278,6 @@ interface ElectronAPI {
 // Extend Window with electronAPI
 interface Window {
   electronAPI: ElectronAPI;
+  /** Set by the backend in a pop-out window: the note that window shows. */
+  __NOTERIV_POPOUT__?: { path: string };
 }

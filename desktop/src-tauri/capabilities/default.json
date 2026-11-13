@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for Noteriv main window",
-  "windows": ["main"],
+  "description": "Default permissions for the Noteriv main window and the pop-out windows it opens",
+  "windows": ["main", "popout-*"],
   "permissions": [
     "core:default",
     "core:window:default",
@@ -14,6 +14,7 @@
     "core:window:allow-unmaximize",
     "core:window:allow-is-maximized",
     "core:window:allow-close",
+    "core:window:allow-set-title",
     "core:webview:default",
     "core:event:default",
     "core:app:default",
@@ -29,6 +30,7 @@
     "opener:allow-open-url",
     "opener:allow-open-path",
     "updater:default",
-    "process:default"
+    "process:default",
+    "deep-link:default"
   ]
 }

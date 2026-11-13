@@ -219,6 +219,7 @@ impl Source {
         self.files.keys().cloned().collect()
     }
 
+    #[cfg(test)]
     pub(crate) fn contains(&self, rel: &str) -> bool {
         self.files.contains_key(rel)
     }

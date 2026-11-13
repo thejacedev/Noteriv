@@ -1611,7 +1611,7 @@ fn notes_in(root: &Path) -> Vec<String> {
 /// The note a name means, found as the app finds the note a `[[link]]`
 /// points at: by its name without `.md`, in any capitals, or by its whole
 /// path inside the vault. The answer is always one of the vault's own notes.
-fn find_note(root: &Path, note: &str) -> Result<String, String> {
+pub fn find_note(root: &Path, note: &str) -> Result<String, String> {
     let files = crate::links::list_vault(root);
     let index = crate::links::Index::new(&files);
     index

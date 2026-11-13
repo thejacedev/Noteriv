@@ -354,8 +354,11 @@ pub(crate) trait Resolver {
     }
 }
 
-/// Keeps every link and image as it is written.
+/// Keeps every link and image as it is written. Only the tests convert a
+/// page without anything to resolve its links against.
+#[cfg(test)]
 pub(crate) struct KeepLinks;
+#[cfg(test)]
 impl Resolver for KeepLinks {}
 
 // ============================================================

@@ -32,9 +32,8 @@
 // the import goes on. An import fails as a whole only when there is nothing
 // to import: the file is not what it was said to be, or holds no notes.
 
-// The Tauri command that calls `import_notes` is added separately, with the
-// dialog that uses it. Until then only the tests call into this module.
-#![allow(dead_code)]
+// The app reaches this through the `fs_import_notes` command in
+// `commands_fs.rs`, which checks the paths before anything here runs.
 
 mod csv;
 mod evernote;

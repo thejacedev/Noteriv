@@ -1,5 +1,5 @@
 mod auth;
-#[allow(dead_code)]
+mod app_requests;
 mod cli;
 mod clipper;
 mod commands_dialog;
@@ -42,11 +42,17 @@ pub struct AppState {
     pub watcher: Mutex<watcher::WatcherState>,
     /// Paths the webview is permitted to reach. See `scope`.
     pub scope: scope::PathScope,
+    /// What a command line or a link asked for, waiting for the window. See `app_requests`.
+    pub requests: app_requests::Pending,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    // A command that only prints (`noteriv search ...`) is done here and the
+    // process ends, before any window or plugin is set up.
+    let startup = app_requests::at_startup();
 
     // One-time legacy token migration (Electron safeStorage → Tauri keyring).
     auth::migrate_legacy_tokens();
@@ -55,10 +61,30 @@ pub fn run() {
         clipper: Mutex::new(clipper::ClipperState::default()),
         watcher: Mutex::new(watcher::WatcherState::default()),
         scope: scope::PathScope::default(),
+        requests: app_requests::Pending::default(),
     };
 
-    let mut builder = tauri::Builder::default()
-        .manage(app_state)
+    let mut builder = tauri::Builder::default().manage(app_state);
+
+    // One running copy of the app. A later launch hands its arguments to the
+    // first and ends: that is how a clicked noteriv:// link, a note opened
+    // from the file manager, or `noteriv open ...` reaches the open window.
+    // This plugin has to be registered before every other.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let args = argv.get(1..).unwrap_or_default();
+            match cli::parse_args_in(args, std::path::Path::new(&cwd)) {
+                // A command that prints was carried out by the process that was
+                // asked, before it got this far. It is never run from here.
+                Ok(invocation) => app_requests::deliver(app, invocation, true),
+                Err(_) => app_requests::deliver(app, cli::Invocation::App(None), true),
+            }
+        }));
+    }
+
+    let mut builder = builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
@@ -78,6 +104,8 @@ pub fn run() {
             commands_window::window_is_maximized,
             commands_window::window_set_title,
             commands_window::window_platform,
+            commands_window::window_open_popout,
+            app_requests::app_take_requests,
             // workspace
             commands_workspace::workspace_load,
             commands_workspace::workspace_save,
@@ -104,6 +132,7 @@ pub fn run() {
             commands_fs::fs_rename_update_links,
             commands_fs::fs_vault_index,
             commands_fs::fs_search_vault,
+            commands_fs::fs_import_notes,
             commands_fs::fs_list_vault_files,
             commands_fs::fs_trash_system,
             commands_fs::fs_create_dir,
@@ -160,7 +189,34 @@ pub fn run() {
             updater_cmds::updater_get_version,
             updater_cmds::updater_is_managed,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            // What this launch was started to do, for the window to pick up.
+            app_requests::deliver(app.handle(), startup, false);
+
+            // On macOS a clicked link arrives as an event rather than as an
+            // argument. Elsewhere it is an argument, read above or handed
+            // over by a second launch.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        app_requests::deliver(&handle, cli::Invocation::Link(cli::parse_url(url.as_str())), true);
+                    }
+                });
+            }
+            // An AppImage is not installed, so nothing told the system that
+            // noteriv:// links are for it. Say so now. Installed packages do
+            // this through their desktop file or installer instead.
+            #[cfg(target_os = "linux")]
+            if std::env::var_os("APPIMAGE").is_some() {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    log::warn!("could not register noteriv:// links: {e}");
+                }
+            }
+
             // Inject the window.electronAPI shim so unmodified renderer code works.
             let main_win = app.get_webview_window("main").expect("main window");
             let _ = main_win.eval(shim::SHIM_JS);
@@ -220,8 +276,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Only the main window owns the watcher and the clipper: closing
+            // a pop-out must leave them running.
+            if window.label() != "main" {
+                return;
+            }
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 let app_handle = window.app_handle();
+                commands_window::close_popouts(app_handle);
                 let state: tauri::State<AppState> = app_handle.state();
                 let clipper_lock = state.clipper.lock();
                 if let Ok(mut c) = clipper_lock {

@@ -1033,6 +1033,34 @@ pub async fn fs_list_vault_files(app: tauri::AppHandle, dir: String) -> Vec<Stri
     crate::links::list_vault(Path::new(&dir))
 }
 
+/// Import notes exported from another app into the vault. The source has to
+/// be a file or folder the user picked in a file dialog, and the vault one
+/// that is registered: both are checked the way every other path is.
+#[tauri::command]
+pub async fn fs_import_notes(
+    app: tauri::AppHandle,
+    args: crate::importers::ImportInput,
+) -> crate::importers::ImportResult {
+    let refused = |error: &str| crate::importers::ImportResult {
+        ok: false,
+        error: Some(error.to_string()),
+        notes: 0,
+        attachments: 0,
+        skipped: Vec::new(),
+        folder: String::new(),
+    };
+    if args.vault_path.is_empty() || !allowed(&app, &args.vault_path) {
+        return refused("The vault to import into is not open.");
+    }
+    if args.source_path.is_empty() || !allowed(&app, &args.source_path) {
+        return refused("Choose the file or folder to import with the Choose button.");
+    }
+    // An import reads and writes many files: it must not hold up the rest of the app.
+    tauri::async_runtime::spawn_blocking(move || crate::importers::import_notes(args))
+        .await
+        .unwrap_or_else(|_| refused("The import stopped unexpectedly. Nothing more was written."))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SearchVaultInput {
     pub dir: String,

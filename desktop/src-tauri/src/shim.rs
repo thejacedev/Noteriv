@@ -46,6 +46,10 @@ pub const SHIM_JS: &str = r#"
       windowMinimize: function () { return invoke("window_minimize"); },
       windowMaximize: function () { return invoke("window_maximize"); },
       windowClose: function () { return invoke("window_close"); },
+      openPopout: function (path) { return invoke("window_open_popout", { path: path }); },
+      // ---- requests from a command line, a second launch or a noteriv:// link
+      takeAppRequests: function () { return invoke("app_take_requests"); },
+      onAppRequest: function (cb) { return on("app:request", cb); },
       windowIsMaximized: function () { return invoke("window_is_maximized"); },
       windowSetTitle: function (title) { return invoke("window_set_title", { title: title }); },
       getPlatform: function () { return invoke("window_platform"); },
@@ -159,6 +163,7 @@ pub const SHIM_JS: &str = r#"
       vaultIndex: function (dir) { return invoke("fs_vault_index", { dir: dir }); },
       listVaultFiles: function (dir) { return invoke("fs_list_vault_files", { dir: dir }); },
       trashSystem: function (path) { return invoke("fs_trash_system", { path: path }); },
+      importNotes: function (args) { return invoke("fs_import_notes", { args: args }); },
       searchVault: function (dir, query, options) {
         var o = options || {};
         return invoke("fs_search_vault", { args: { dir: dir, query: query, caseSensitive: !!o.caseSensitive, sort: o.sort || "nameAsc", exclude: o.exclude || [] } });
