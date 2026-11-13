@@ -38,3 +38,35 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.popout-stuck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.popout-warning {
+  color: #d9a441;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popout-btn {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.popout-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
