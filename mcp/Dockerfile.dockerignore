@@ -1,0 +1,7 @@
+# Only what the server image needs; the rest of the repository is the desktop
+# app and would make every build send gigabytes.
+*
+!mcp/package.json
+!mcp/package-lock.json
+!mcp/index.js
+!mcp/server.json
