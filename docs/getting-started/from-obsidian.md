@@ -36,6 +36,7 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | `==Highlights==`, task lists, tables, footnotes | Work |
 | LaTeX math and Mermaid diagrams | Work |
 | `.canvas` files | Open in the canvas view with their text cards and labelled connections |
+| Links updated when a note is renamed or moved | Done for notes, attachments and folders renamed in the desktop app (after 2.4.13). See [Renaming and Moving Notes](/features/wiki-links#renaming-and-moving-notes) |
 
 ## What does not carry over yet
 

@@ -66,7 +66,7 @@ When Noteriv resolves a wiki-link, it follows a two-pass strategy:
 
 1. **Basename match.** It compares the link target (lowercased, `.md` stripped) against the basename of every file in the vault. The first case-insensitive match wins. This means a link like `[[notes]]` will resolve to `Notes.md` regardless of which folder it lives in.
 
-2. **Path match.** If the link target contains a `/` character -- for example, `[[projects/alpha]]` -- Noteriv looks for a file whose relative path ends with `projects/alpha.md`. This lets you disambiguate when two files in different folders share the same basename.
+2. **Path match.** If the link target contains a `/` character -- for example, `[[projects/alpha]]` -- Noteriv looks for the file at that path inside the vault, `projects/alpha.md`. This lets you disambiguate when two files in different folders share the same basename. The path has to be the whole path from the top of the vault: `[[alpha/notes]]` does not find `projects/alpha/notes.md`.
 
 If no file matches, the link is rendered as an unresolved link, styled differently so you can see at a glance that the target does not exist yet. Clicking an unresolved link will create the file for you.
 
@@ -103,6 +103,35 @@ A few things to know:
 - Long notes are cut off after 150 lines, and the box scrolls.
 - Embedded content is shown with basic formatting. Callouts, math and diagrams inside the embedded note are not drawn the way they are in the note itself.
 - Files that open in their own view, such as drawings, canvases and PDFs, stay links.
+
+## Renaming and Moving Notes
+
+When you rename or move a note, an attachment or a folder in Noteriv, the links that point to it are rewritten in every note, so they keep working. Versions up to 2.4.13 do not do this.
+
+The rule is that every link points at the same file after the rename as it did before:
+
+| Before | You do | After |
+|---|---|---|
+| `[[Inbox]]`, `[[Inbox#Today\|today]]`, `![[Inbox]]` | Rename `Inbox` to `Home` | `[[Home]]`, `[[Home#Today\|today]]`, `![[Home]]` |
+| `[[Projects/Plan]]` | Rename the folder `Projects` to `Work` | `[[Work/Plan]]` |
+| `[[Plan]]` | Move `Plan` to another folder | Unchanged: a link by name still finds it |
+| `![[photo.png]]` | Rename `photo.png` to `team.png` | `![[team.png]]` |
+| `![photo](attachments/photo.png)` | Rename the folder `attachments` to `files` | `![photo](files/photo.png)` |
+
+Headings, block references, display text and image sizes in a link are kept. A link that still works is left exactly as you wrote it. If two notes share a name and a rename would make a link by name point at the other one, the link is written out with its path, such as `[[Archive/Plan]]`.
+
+The status bar says how many links were updated. Notes that are open are updated too, and unsaved edits in them are kept.
+
+A few things are deliberately left alone:
+
+- Links inside code blocks and inline code.
+- Links that did not point at anything before the rename.
+- Links written relative to the note's own folder, such as `[text](../Other.md)`. Noteriv reads a `[text](path)` link as a path from the top of the vault, and that is the form it updates.
+- File references inside `.canvas` files and folder names in `dataview` queries.
+
+Links are only updated when the rename is done in the desktop app. Renaming a file in your file manager, on mobile or through the MCP server does not update them. A rename can now change many notes at once, so if you sync, let the other devices sync before you edit the same notes there.
+
+To turn this off, go to Settings > General and switch off **Update links on rename**.
 
 ## Backlinks Panel
 
