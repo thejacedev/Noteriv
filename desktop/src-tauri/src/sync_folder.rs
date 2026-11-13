@@ -502,10 +502,21 @@ pub(crate) fn sync(
     Ok(run.outcome)
 }
 
-/// Check that the target folder can be created and written to.
-pub(crate) fn test_connection(cfg: &FolderConfig) -> Result<(), String> {
+/// Check that the target folder can be created and written to, and that sync
+/// would accept it for this vault.
+///
+/// The vault is checked first, before anything is created: a folder inside
+/// the vault passes every other test here, and sync then refuses it.
+pub(crate) fn test_connection(cfg: &FolderConfig, vault_path: Option<&str>) -> Result<(), String> {
     parse_direction(&cfg.direction)?;
     let target = resolve_target(&cfg.target_path)?;
+    // With no vault open, or one that cannot be found, only the folder is tested.
+    let vault = vault_path
+        .and_then(|path| dunce::canonicalize(path).ok())
+        .filter(|path| path.is_dir());
+    if let Some(vault) = vault {
+        check_separate(&vault, &target)?;
+    }
     fs::create_dir_all(&target)
         .map_err(|e| format!("The target folder could not be created: {e}"))?;
     let probe = target.join(".noteriv-test");
@@ -1180,7 +1191,7 @@ mod tests {
             target_path: target.to_string_lossy().into_owned(),
             direction: "both".into(),
         };
-        test_connection(&cfg).expect("a writable folder passes");
+        test_connection(&cfg, None).expect("a writable folder passes");
         assert!(target.is_dir());
         assert_eq!(fs::read_dir(&target).unwrap().count(), 0);
 
@@ -1188,7 +1199,55 @@ mod tests {
             target_path: "relative/path".into(),
             direction: "both".into(),
         };
-        assert!(test_connection(&bad).is_err());
+        assert!(test_connection(&bad, None).is_err());
+    }
+
+    #[test]
+    fn the_connection_test_refuses_a_folder_that_sync_would_refuse() {
+        let a = Device::new("connection-nested");
+        write(&a.vault, "Note.md", b"note");
+        let vault = a.vault.to_str().unwrap();
+        let config = |target: &Path| FolderConfig {
+            target_path: target.to_string_lossy().into_owned(),
+            direction: "both".into(),
+        };
+
+        let inside = a.vault.join("Backup").join("Deep");
+        let err = test_connection(&config(&inside), Some(vault)).unwrap_err();
+        assert!(err.contains("inside the vault"), "{err}");
+        assert!(
+            !a.vault.join("Backup").exists(),
+            "the refused folder was created anyway"
+        );
+
+        let err = test_connection(&config(&a.vault), Some(vault)).unwrap_err();
+        assert!(err.contains("the vault itself"), "{err}");
+
+        let around = a.vault.parent().unwrap().to_path_buf();
+        let err = test_connection(&config(&around), Some(vault)).unwrap_err();
+        assert!(err.contains("vault is inside the target"), "{err}");
+        assert!(
+            !around.join(".noteriv-test").exists(),
+            "the test wrote into a refused folder"
+        );
+        assert_eq!(tree(&a.vault), ["Note.md"]);
+
+        // The same answer sync gives.
+        for target in [&inside, &a.vault, &around] {
+            assert_eq!(
+                test_connection(&config(target), Some(vault)).unwrap_err(),
+                a.try_sync(target, "both").unwrap_err()
+            );
+        }
+
+        // A folder of its own passes, with the vault known or not.
+        let outside = scratch("connection-nested-target").join("Noteriv");
+        test_connection(&config(&outside), Some(vault)).expect("a separate folder passes");
+        assert!(outside.is_dir());
+        let gone = a.vault.join("no-such-vault");
+        test_connection(&config(&outside), Some(gone.to_str().unwrap()))
+            .expect("a vault that cannot be found does not fail the folder");
+        test_connection(&config(&outside), None).expect("no vault, no check");
     }
 
     #[test]

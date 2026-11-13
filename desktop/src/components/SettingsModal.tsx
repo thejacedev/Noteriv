@@ -642,7 +642,8 @@ export default function SettingsModal({
         provider === "folder" ? settings.folderSync :
         provider === "webdav" ? settings.webdavSync : null;
       if (!config) return;
-      const result = await window.electronAPI.syncProviderTest(provider, config);
+      // The vault lets the folder test refuse a target that sync would refuse.
+      const result = await window.electronAPI.syncProviderTest(provider, config, vault?.path);
       setTestResult(result);
     } catch (e: unknown) {
       setTestResult({ ok: false, error: e instanceof Error ? e.message : "Unknown error" });

@@ -96,13 +96,20 @@ pub struct SyncTestInput {
     #[serde(rename = "providerType")]
     pub provider_type: String,
     pub config: Value,
+    /// The open vault, when there is one. The folder provider uses it to
+    /// refuse a target that sync would refuse for this vault.
+    #[serde(rename = "vaultPath", default)]
+    pub vault_path: Option<String>,
 }
 
 #[tauri::command]
 pub async fn sync_test(args: SyncTestInput) -> ConnectionResult {
     match args.provider_type.as_str() {
         "folder" => match serde_json::from_value::<crate::sync_folder::FolderConfig>(args.config) {
-            Ok(cfg) => ConnectionResult::from(crate::sync_folder::test_connection(&cfg)),
+            Ok(cfg) => ConnectionResult::from(crate::sync_folder::test_connection(
+                &cfg,
+                args.vault_path.as_deref(),
+            )),
             Err(e) => ConnectionResult::from(Err(e.to_string())),
         },
         "webdav" => match serde_json::from_value::<crate::sync_webdav::WebDavConfig>(args.config) {
@@ -110,5 +117,61 @@ pub async fn sync_test(args: SyncTestInput) -> ConnectionResult {
             Err(e) => ConnectionResult::from(Err(e.to_string())),
         },
         other => ConnectionResult::from(Err(format!("Unknown provider: {other}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::fs;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "noteriv-sync-commands-{}-{name}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dunce::canonicalize(dir).unwrap()
+    }
+
+    /// The arguments exactly as the frontend sends them.
+    fn folder_test(vault: Option<&std::path::Path>, target: &std::path::Path) -> ConnectionResult {
+        let mut args = json!({
+            "providerType": "folder",
+            "config": { "targetPath": target.to_string_lossy(), "direction": "both" },
+        });
+        if let Some(vault) = vault {
+            args["vaultPath"] = json!(vault.to_string_lossy());
+        }
+        let input: SyncTestInput = serde_json::from_value(args).expect("the arguments are read");
+        tauri::async_runtime::block_on(sync_test(input))
+    }
+
+    #[test]
+    fn the_folder_test_is_told_which_vault_is_open() {
+        let base = scratch("vault-path");
+        let vault = base.join("vault");
+        fs::create_dir_all(&vault).unwrap();
+
+        let inside = vault.join("Backup");
+        let refused = folder_test(Some(&vault), &inside);
+        assert!(!refused.ok);
+        assert!(
+            refused.error.as_deref().unwrap_or("").contains("inside the vault"),
+            "{:?}",
+            refused.error
+        );
+        assert!(!inside.exists(), "the refused folder was created anyway");
+
+        let outside = base.join("cloud").join("Noteriv");
+        let accepted = folder_test(Some(&vault), &outside);
+        assert!(accepted.ok, "{:?}", accepted.error);
+        assert!(outside.is_dir());
+
+        // An older frontend, or no vault open: only the folder is tested.
+        let no_vault = folder_test(None, &base.join("cloud").join("Other"));
+        assert!(no_vault.ok, "{:?}", no_vault.error);
     }
 }

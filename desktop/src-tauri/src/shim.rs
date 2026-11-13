@@ -146,8 +146,8 @@ pub const SHIM_JS: &str = r#"
       syncProviderSync: function (vaultPath, providerType, config) {
         return invoke("sync_run", { args: { vaultPath: vaultPath, providerType: providerType, config: config } });
       },
-      syncProviderTest: function (providerType, config) {
-        return invoke("sync_test", { args: { providerType: providerType, config: config } });
+      syncProviderTest: function (providerType, config, vaultPath) {
+        return invoke("sync_test", { args: { providerType: providerType, config: config, vaultPath: vaultPath || null } });
       },
 
       // ---- search/listing

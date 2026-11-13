@@ -202,7 +202,7 @@ interface ElectronAPI {
 
   // Sync providers (folder, webdav, s3)
   syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{ pushed: number; pulled: number; deleted: number; conflicts: number }>;
-  syncProviderTest: (providerType: string, config: Record<string, any>) => Promise<{ ok: boolean; error?: string }>;
+  syncProviderTest: (providerType: string, config: Record<string, any>, vaultPath?: string) => Promise<{ ok: boolean; error?: string }>;
 
   // Search / file listing
   searchInFiles: (dir: string, query: string) => Promise<{
