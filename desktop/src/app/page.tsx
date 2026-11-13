@@ -3088,7 +3088,11 @@ function Home() {
               filePath={currentTab.filePath}
               vaultPath={activeVault.path}
               onSave={async (c) => { if (window.electronAPI) await window.electronAPI.writeFile(currentTab.filePath, c); }}
-              onFileSelect={(f) => openFile(f)}
+              onFileSelect={(f, page) => {
+                // A PDF card that shows a page opens the PDF at that page.
+                if (page) setPdfPageRequest({ filePath: f, page, tick: Date.now() });
+                void openFile(f);
+              }}
               onClose={() => closeTab(currentTab.filePath)}
             />
           ) : currentTab.kind === "base" && activeVault ? (
