@@ -35,4 +35,13 @@ describe("importSummary", () => {
       "Imported 2 notes into the vault. 2 items were left out."
     );
   });
+
+  it("says so when there was nothing to import", () => {
+    expect(importSummary({ ...base, notes: 0, attachments: 0 })).toBe(
+      "Nothing was imported: no notes were found in what you chose."
+    );
+    expect(importSummary({ ...base, notes: 0, attachments: 0, skipped: [{ name: "a", reason: "x" }] })).toBe(
+      "Nothing was imported. 1 item was left out."
+    );
+  });
 });

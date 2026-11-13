@@ -31,7 +31,9 @@ const NOTE_EXTS: &[&str] = &[
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"];
 const PDF_EXTS: &[&str] = &["pdf"];
 const AUDIO_EXTS: &[&str] = &["mp3", "wav", "m4a", "ogg", "flac"];
-const VIDEO_EXTS: &[&str] = &["mp4", "webm", "mov", "mkv"];
+const VIDEO_EXTS: &[&str] = &["mp4", "mov", "mkv"];
+/// Sound or video: the app's own recordings are sound in a `.webm` file.
+const EITHER_EXTS: &[&str] = &["webm"];
 
 /// Folders that are never synced, on either side.
 pub(crate) const SKIP_DIRS: &[&str] = &[".git", ".noteriv", "node_modules", ".obsidian", ".trash"];
@@ -115,6 +117,7 @@ impl SyncFilter {
             || (self.pdfs && is(PDF_EXTS))
             || (self.audio && is(AUDIO_EXTS))
             || (self.video && is(VIDEO_EXTS))
+            || ((self.audio || self.video) && is(EITHER_EXTS))
     }
 
     /// Whether a folder is looked into at all. `rel` is its path inside the
@@ -1206,7 +1209,13 @@ impl Run<'_> {
             // The key file is checked before a run starts, so this is a
             // folder whose key file went missing. Its contents must not be
             // written into a vault as if they were notes.
-            if crate::sync_crypto::is_encrypted(&bytes) {
+            // A file this app encrypted: its mark, the format version, and at
+            // least a full header. A note that merely begins with the same
+            // four letters is a note.
+            let sealed = crate::sync_crypto::is_encrypted(&bytes)
+                && bytes.get(4) == Some(&1)
+                && bytes.len() >= 45;
+            if sealed {
                 return Err("The copy on the server is encrypted, and this vault is not set up to read it, so it was left alone.".into());
             }
             return Ok(bytes);
@@ -1675,6 +1684,11 @@ mod tests {
             ..SyncFilter::default()
         };
         assert!(!lean.allows("pic.png") && !lean.allows("paper.pdf") && lean.allows("Note.md"));
+        // A recording made in the app is a .webm: it travels with sound or with video.
+        let sound = SyncFilter { audio: true, ..SyncFilter::default() };
+        let film = SyncFilter { video: true, ..SyncFilter::default() };
+        assert!(sound.allows("recording.webm") && film.allows("recording.webm"));
+        assert!(!plain.allows("recording.webm") && !sound.allows("clip.mp4") && film.allows("clip.mp4"));
         assert!(!lean.allows("Archive/Old.md") && !lean.allows("Work/Private/x.md"));
         // A name that only starts the same way is another folder, or a file.
         assert!(lean.allows("Archive2/Note.md") && lean.allows("Work/Public/x.md"));

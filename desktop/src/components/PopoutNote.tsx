@@ -29,9 +29,11 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
   const saved = doc?.path === path ? doc.saved : "";
   const contentRef = useRef<string | null>(null);
   const savedRef = useRef("");
+  const stuckRef = useRef(false);
   useEffect(() => {
     contentRef.current = content;
     savedRef.current = saved;
+    stuckRef.current = stuck?.path === path;
   });
   const setContent = useCallback(
     (text: string) => setDoc((d) => (d && d.path === path ? { ...d, content: text } : d)),
@@ -120,6 +122,27 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
     return () => clearInterval(timer);
   }, [path]);
 
+  // The save waits a moment after typing stops. When the window loses the
+  // user (they switch away, or close it) there may be no later moment, so
+  // what is pending is saved at once, with the same check as any other save.
+  useEffect(() => {
+    const flush = () => {
+      const text = contentRef.current;
+      const before = savedRef.current;
+      if (text === null || text === before || stuckRef.current) return;
+      void (async () => {
+        const result = await window.electronAPI?.writeFileGuarded(path, text, await hashContent(before));
+        if (result?.status === "written") setDoc((d) => (d && d.path === path ? { ...d, saved: text } : d));
+      })();
+    };
+    window.addEventListener("blur", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("blur", flush);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [path]);
+
   /** After a refused save: take the file as it is now, giving up what was typed here. */
   const loadAgain = useCallback(async () => {
     const text = await window.electronAPI?.readFile(path);
@@ -151,7 +174,11 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
       if (!target || !vaultPath || !window.electronAPI) return;
       const wanted = target.split("#")[0].replace(NOTE, "").replace(/\\/g, "/").toLowerCase();
       if (!wanted) return;
+      // On the press, and kept from the editor: it would move the cursor
+      // onto the link's line, which shows the line as written and takes the
+      // link away before a click could reach it.
       event.preventDefault();
+      event.stopPropagation();
       const files = await window.electronAPI.listAllFiles(vaultPath);
       const strip = (text: string) => text.replace(NOTE, "").replace(/\\/g, "/").toLowerCase();
       const found = files.find((f) => strip(f.fileName) === wanted || strip(f.relativePath) === wanted);
@@ -174,7 +201,7 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
 
   const name = path.split(/[\\/]/).pop()?.replace(NOTE, "") || "Note";
   return (
-    <div className="popout" data-vault-path={vaultPath ?? ""} data-open-file={path} onClick={followLink}>
+    <div className="popout" data-vault-path={vaultPath ?? ""} data-open-file={path} onMouseDownCapture={followLink}>
       <div className="popout-bar">
         <span className="popout-name" title={path}>
           {name}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mountBase, type MountedBase } from "@/components/bases/mount-base";
 import { parseBase } from "@/lib/bases";
 import { fromVaultRelative, toVaultRelative } from "@/lib/vault-paths";
+import { loadLinkIndex } from "@/lib/vault-links";
 import "@/styles/bases.css";
 
 interface BaseViewProps {
@@ -48,13 +49,22 @@ export default function BaseView({ filePath, vaultPath, onOpenFile }: BaseViewPr
   useEffect(() => {
     const holder = holderRef.current;
     if (!holder || !ready) return;
+    const self = toVaultRelative(filePath, vaultPath);
     const mounted = mountBase(holder, "", {
       vaultPath,
-      thisFile: toVaultRelative(filePath, vaultPath) ?? undefined,
+      thisFile: self ?? undefined,
       onOpen: (relative) => {
-        // A link may name a heading too; the file is what opens.
-        const full = fromVaultRelative(relative.split("#")[0], vaultPath);
-        if (full) openRef.current(/\.[^./\\]+$/.test(full) ? full : `${full}.md`);
+        // A link may name a heading too; the file is what opens. A link in a
+        // property is often just a note's name, so it is looked up the way
+        // a link in a note is before it is taken for a path.
+        const target = relative.split("#")[0];
+        void loadLinkIndex(vaultPath)
+          .then((files) => files.wiki(self ?? "", target) ?? files.note(target))
+          .catch(() => null)
+          .then((found) => {
+            const full = fromVaultRelative(found ?? target, vaultPath);
+            if (full) openRef.current(/\.[^./\\]+$/.test(full) ? full : `${full}.md`);
+          });
       },
     });
     mountedRef.current = mounted;
@@ -71,6 +81,26 @@ export default function BaseView({ filePath, vaultPath, onOpenFile }: BaseViewPr
     if (text === null || text === saved) return;
     if (await window.electronAPI?.writeFile(filePath, text)) setSaved(text);
   }, [filePath, text, saved]);
+
+  // A base that reads correctly is saved a moment after typing stops. One
+  // that does not is left until it does, or until the tab is left: then
+  // it is written as it is, so that changing tabs never loses what was typed.
+  const latest = useRef({ filePath, text, saved });
+  useEffect(() => {
+    latest.current = { filePath, text, saved };
+  });
+  useEffect(() => {
+    if (text === null || text === saved || !parseBase(text).ok) return;
+    const timer = setTimeout(() => void save(), 800);
+    return () => clearTimeout(timer);
+  }, [text, saved, save]);
+  useEffect(
+    () => () => {
+      const last = latest.current;
+      if (last.text !== null && last.text !== last.saved) void window.electronAPI?.writeFile(last.filePath, last.text);
+    },
+    [filePath]
+  );
 
   if (missing) return <div className="base-page base-page-empty">This base is no longer there.</div>;
 

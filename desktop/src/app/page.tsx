@@ -273,6 +273,8 @@ function Home() {
   const [bookmarks, setBookmarks] = useState<BookmarkStore>(EMPTY_BOOKMARKS);
   // The vault whose bookmarks are loaded: nothing is written back before then.
   const bookmarksLoadedFor = useRef<string | null>(null);
+  // The bookmarks file as it is on disk (null when there is none yet).
+  const bookmarksOnDisk = useRef<string | null>(null);
   // A search to open the search panel with, from a bookmarked search.
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
@@ -1153,16 +1155,27 @@ function Home() {
     let cancelled = false;
     window.electronAPI.readFile(`${bookmarksVault}/.noteriv/bookmarks.json`).then((text) => {
       if (cancelled) return;
-      setBookmarks(parseBookmarks(text, bookmarksVault));
+      const loaded = parseBookmarks(text, bookmarksVault);
+      // What the file holds, written the way the app writes it, to tell a real change from none.
+      bookmarksOnDisk.current = text === null ? null : serializeBookmarks(loaded, bookmarksVault);
+      setBookmarks(loaded);
       bookmarksLoadedFor.current = bookmarksVault;
     });
     return () => { cancelled = true; };
   }, [bookmarksVault, vaultFilesTick]);
   useEffect(() => {
     if (!bookmarksVault || bookmarksLoadedFor.current !== bookmarksVault || !window.electronAPI) return;
+    const next = serializeBookmarks(bookmarks, bookmarksVault);
+    // Only a change is written. Writing the file again on every start would
+    // give it a new date each time, and a file with a new date looks like the
+    // newer one to sync, which would then replace another device's bookmarks.
+    if (next === bookmarksOnDisk.current) return;
+    if (bookmarksOnDisk.current === null && bookmarks.items.length === 0 && bookmarks.groups.length === 0) return;
     const timer = setTimeout(async () => {
       await window.electronAPI.createDir(`${bookmarksVault}/.noteriv`);
-      await window.electronAPI.writeFile(`${bookmarksVault}/.noteriv/bookmarks.json`, serializeBookmarks(bookmarks, bookmarksVault));
+      if (await window.electronAPI.writeFile(`${bookmarksVault}/.noteriv/bookmarks.json`, next)) {
+        bookmarksOnDisk.current = next;
+      }
     }, 400);
     return () => clearTimeout(timer);
   }, [bookmarks, bookmarksVault]);
@@ -2394,15 +2407,20 @@ function Home() {
       }
     };
     let relative = request.action === "new" ? request.name ?? null : null;
+    // A name with no folder goes where the settings put new notes; "beside
+    // the open note" needs that note to be in the vault the request is for.
+    const beside = activeVault?.path === vaultPath ? activeTab : null;
+    const folder = newNoteFolder(vaultPath, settings.newNoteLocation, settings.newNoteFolder, beside);
+    const inFolder = toVaultRelative(folder, vaultPath);
     if (!relative) {
-      const folder = newNoteFolder(vaultPath, settings.newNoteLocation, settings.newNoteFolder, null);
       const existing = await namesIn(folder);
       const base =
         request.action === "unique"
           ? nextTimestampName(new Date(), (name) => existing.has(`${name}.md`.toLowerCase()))
           : freeNoteName("Untitled.md", (name) => existing.has(name.toLowerCase())).replace(/\.md$/, "");
-      const inFolder = toVaultRelative(folder, vaultPath);
       relative = `${inFolder ? `${inFolder}/` : ""}${base}.md`;
+    } else if (!relative.includes("/") && inFolder) {
+      relative = `${inFolder}/${relative}`;
     }
     let full = fromVaultRelative(relative, vaultPath);
     if (!full) {
@@ -2443,7 +2461,7 @@ function Home() {
     invalidateVaultIndex();
     setSidebarRefresh((k) => k + 1);
     if (!request.silent) void openFile(target);
-  }, [activeVault, handleSwitchVault, openFileAtLine, openFile, handleDailyNote, showStatusNote, settings.newNoteLocation, settings.newNoteFolder, tabs]);
+  }, [activeVault, activeTab, handleSwitchVault, openFileAtLine, openFile, handleDailyNote, showStatusNote, settings.newNoteLocation, settings.newNoteFolder, tabs]);
   useEffect(() => {
     handleAppRequestRef.current = handleAppRequest;
   }, [handleAppRequest]);
@@ -2599,7 +2617,7 @@ function Home() {
       unfoldAll: () => { const v = shownView(); if (v) unfoldAll(v); },
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit, openKnowledgeIngest, viewMode]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit, openKnowledgeIngest, viewMode, layoutStore, saveLayoutAs, handleNewBase, handleUniqueNote, openPopout, webReaderUrl, setWebReaderUrl]);
 
   // ============================================================
   // Recent commands handler

@@ -1008,7 +1008,7 @@ export default function SettingsModal({
           <Row label="PDFs" desc="Sync PDF files.">
             <Toggle checked={settings.syncFilter.pdfs} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, pdfs: v } })} />
           </Row>
-          <Row label="Audio" desc="Sync sound files (mp3, wav, m4a, ogg, flac). Off unless you turn it on: they are large.">
+          <Row label="Audio" desc="Sync sound files (mp3, wav, m4a, ogg, flac) and recordings made in the app. Off unless you turn it on: they are large.">
             <Toggle checked={settings.syncFilter.audio} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, audio: v } })} />
           </Row>
           <Row label="Video" desc="Sync video files (mp4, webm, mov, mkv). Off unless you turn it on.">

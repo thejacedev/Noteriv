@@ -123,6 +123,11 @@ export function defaultImportFolder(format: ImportFormat): string {
 /** A sentence for what an import did. */
 export function importSummary(outcome: ImportOutcome): string {
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (outcome.notes === 0 && outcome.attachments === 0) {
+    return outcome.skipped.length > 0
+      ? `Nothing was imported. ${count(outcome.skipped.length, "item was", "items were")} left out.`
+      : "Nothing was imported: no notes were found in what you chose.";
+  }
   const parts = [count(outcome.notes, "note", "notes")];
   if (outcome.attachments > 0) parts.push(count(outcome.attachments, "attachment", "attachments"));
   const made = `Imported ${parts.join(" and ")} into ${outcome.folder || "the vault"}.`;

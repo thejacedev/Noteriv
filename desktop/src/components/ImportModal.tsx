@@ -72,7 +72,8 @@ export default function ImportModal({ vaultPath, onImported, onClose }: ImportMo
         },
       });
       setOutcome(result);
-      if (result.ok) onImported(result.folder);
+      // Nothing written, nothing to show in the file list.
+      if (result.ok && result.notes + result.attachments > 0) onImported(result.folder);
     } catch {
       setOutcome({ ok: false, error: "The import could not be started.", notes: 0, attachments: 0, skipped: [], folder: "" });
     } finally {
@@ -183,10 +184,10 @@ export default function ImportModal({ vaultPath, onImported, onClose }: ImportMo
 
         <div className="im-actions">
           <button className="ws-btn" disabled={running} onClick={onClose}>
-            {outcome?.ok ? "Done" : "Cancel"}
+            {outcome?.ok && outcome.notes > 0 ? "Done" : "Cancel"}
           </button>
           <button className="ws-btn ws-btn-primary" disabled={!source || running} onClick={() => void run()}>
-            {running ? "Importing…" : outcome?.ok ? "Import again" : "Import"}
+            {running ? "Importing…" : outcome?.ok && outcome.notes > 0 ? "Import again" : "Import"}
           </button>
         </div>
       </div>
