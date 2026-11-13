@@ -21,6 +21,10 @@ export interface AppSettings {
   sidebarCollapseWidth: number;
   /** Rewrite links across the vault when a note, attachment or folder is renamed or moved. */
   updateLinksOnRename: boolean;
+  /** How the path in a link the app writes is chosen: see `link-format.ts`. */
+  linkFormat: import("./link-format").LinkFormat;
+  /** Write `[[Note]]` links. When off, `[Note](Note.md)`. */
+  useWikilinks: boolean;
   /** Where a new note is created: the top of the vault, beside the open note, or in `newNoteFolder`. */
   newNoteLocation: "root" | "current" | "folder";
   newNoteFolder: string;
@@ -57,6 +61,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoCollapseSidebar: true,
   sidebarCollapseWidth: 800,
   updateLinksOnRename: true,
+  linkFormat: "shortest",
+  useWikilinks: true,
   newNoteLocation: "root",
   newNoteFolder: "",
   attachmentFolder: "attachments",

@@ -8,7 +8,7 @@
 // that keeps it on its file: the new name where a name is enough, and the
 // path inside the vault where it is not.
 //
-// Three kinds of link are understood, each resolved the way the app resolves
+// Two kinds of link are understood, each resolved the way the app resolves
 // it when it is clicked or drawn:
 //
 //   [[Note]]  ![[Note#Heading|alias]]   a note, by name or by its whole path
@@ -16,16 +16,33 @@
 //                                       listing order wins a shared name)
 //   ![[photo.png]]  [[paper.pdf]]       any other file, by its path, or by
 //                                       name with the shallowest file winning
-//   ![alt](attachments/photo.png)       a path from the top of the vault,
-//   [text](Folder/Note.md)              which is what the app inserts for an
-//                                       attachment
+//   [[./Note]]  ![[../img/photo.png]]   a path from the folder of the note
+//                                       the link is written in
+//
+//   [text](/Folder/Note.md)             a path from the top of the vault
+//   [text](./Note.md)  ![](../a.png)    a path from the linking note's folder
+//   [text](Folder/Note.md)              a path from the top of the vault if a
+//                                       file is there, otherwise from the
+//                                       linking note's folder, otherwise,
+//                                       for a bare name, the way a wiki link
+//                                       finds it
+//
+// A markdown link's path may be percent-encoded, may leave off a note's
+// ".md", and may be followed by a `#heading` and a `"title"`.
+//
+// Because a link can depend on where its own note is, a note that moves has
+// its own links looked at as well as the links to it: a path from its old
+// folder is rewritten to lead to the same file from its new one. A link that
+// is rewritten stays in the style it was written in: a path from the note
+// stays one, a path from the top stays one, a bare name stays a bare name
+// while the name is enough, and an encoded path stays encoded.
 //
 // Links inside fenced code blocks and inline code are examples, not links,
 // and are never touched.
 //
-// The note resolver is a second copy of `findLinkedNote` in
-// `src/lib/wiki-link-utils.ts`. Both are tested against
-// `src/lib/__fixtures__/link-resolution.json`; change them together.
+// The resolver is a second copy of the one in `src/lib/link-resolve.ts`
+// (and of `findLinkedNote` in `src/lib/wiki-link-utils.ts`). All are tested
+// against `src/lib/__fixtures__/link-resolution.json`; change them together.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -54,6 +71,179 @@ fn strip_note_ext(name: &str) -> &str {
 
 fn file_name(rel: &str) -> &str {
     rel.rsplit('/').next().unwrap_or(rel)
+}
+
+/// The folder a file is in, as a path inside the vault: "" at the top.
+fn folder(rel: &str) -> &str {
+    rel.rsplit_once('/').map_or("", |(folder, _)| folder)
+}
+
+/// `path` as read from `folder`, with "." and ".." worked out. `None` when
+/// it climbs out of the vault.
+fn join(folder: &str, path: &str) -> Option<String> {
+    let mut parts: Vec<&str> = folder.split('/').filter(|part| !part.is_empty()).collect();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            _ => parts.push(part),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// The way from `folder` to the file `target`: "x.md", "sub/x.md" or
+/// "../other/x.md".
+fn relative_path(folder: &str, target: &str) -> String {
+    let from: Vec<&str> = folder.split('/').filter(|part| !part.is_empty()).collect();
+    let to: Vec<&str> = target.split('/').collect();
+    let mut shared = 0;
+    while shared < from.len() && shared + 1 < to.len() && from[shared] == to[shared] {
+        shared += 1;
+    }
+    let mut parts = vec![".."; from.len() - shared];
+    parts.extend(&to[shared..]);
+    parts.join("/")
+}
+
+/// Whether a path says outright that it starts at the linking note's folder.
+fn starts_relative(path: &str) -> bool {
+    path.starts_with("./") || path.starts_with("../")
+}
+
+/// A path with each of its parts percent-encoded and the `/` between them
+/// kept. The frontend's `encodePath` writes the same.
+fn encode_path(path: &str) -> String {
+    path.split('/')
+        .map(|part| urlencoding::encode(part).into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+// ============================================================
+// A markdown link's destination
+// ============================================================
+
+fn is_blank(byte: u8) -> bool {
+    byte == b' ' || byte == b'\t'
+}
+
+/// `text` is a title on its own: blank space, then a quoted string, then
+/// nothing.
+fn is_title(text: &str) -> bool {
+    let body = text.trim_matches([' ', '\t']);
+    if body.is_empty() {
+        return true;
+    }
+    if !text.as_bytes().first().is_some_and(|b| is_blank(*b)) || body.len() < 2 {
+        return false;
+    }
+    let quote = body.as_bytes()[0];
+    (quote == b'"' || quote == b'\'')
+        && body.as_bytes()[body.len() - 1] == quote
+        && body[1..].find(quote as char) == Some(body.len() - 2)
+}
+
+/// Where the file part of a destination is: still percent-encoded, without
+/// `<>`, a `#fragment` or a title.
+struct Destination {
+    from: usize,
+    to: usize,
+}
+
+/// Split the text between `](` and `)`:
+///
+///   path            path#fragment            path "title"
+///   <path with spaces>                       <path> 'title'
+///
+/// A title is only a quoted string at the very end with a space before it.
+/// Everything else is the path, spaces included, because the app has always
+/// read `![](my photo.png)` that way. Mirrors `parseDestination` in the
+/// frontend.
+fn parse_destination(dest: &str) -> Destination {
+    let bytes = dest.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() && is_blank(bytes[start]) {
+        start += 1;
+    }
+    let mut end = bytes.len();
+    while end > start && is_blank(bytes[end - 1]) {
+        end -= 1;
+    }
+
+    let (mut from, mut to) = (start, end);
+    let close = if bytes.get(start) == Some(&b'<') {
+        dest[start + 1..].find('>').map(|k| start + 1 + k)
+    } else {
+        None
+    };
+    match close {
+        Some(close) if is_title(&dest[close + 1..]) => {
+            from = start + 1;
+            to = close;
+        }
+        _ => {
+            let quote = if end - start >= 2 { bytes[end - 1] } else { 0 };
+            if quote == b'"' || quote == b'\'' {
+                if let Some(open) = dest[..end - 1].rfind(quote as char) {
+                    if open > start && is_blank(bytes[open - 1]) {
+                        let mut path_end = open;
+                        while path_end > start && is_blank(bytes[path_end - 1]) {
+                            path_end -= 1;
+                        }
+                        if path_end > start {
+                            to = path_end;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(hash) = dest[from..to].find('#') {
+        to = from + hash;
+    }
+    Destination { from, to }
+}
+
+/// A web address, a mail address or inline data: never a file in the vault.
+fn is_external(path: &str) -> bool {
+    if path.contains("://") {
+        return true;
+    }
+    path.split_once(':').is_some_and(|(scheme, _)| {
+        ["mailto", "data", "tel", "sms", "file", "javascript", "blob", "about"]
+            .iter()
+            .any(|known| scheme.eq_ignore_ascii_case(known))
+    })
+}
+
+/// Where the destination that opens at `start`, just after `](`, closes.
+/// Parentheses inside it may pair up, as in `[x](My note (draft).md)`, and
+/// a `<path>` may hold a lone one.
+fn destination_end(line: &str, start: usize) -> Option<usize> {
+    let rest = &line[start..];
+    if rest.trim_start_matches([' ', '\t']).starts_with('<') {
+        if let Some(close) = rest.find('>') {
+            if let Some(end) = rest[close..].find(')') {
+                if is_title(&rest[close + 1..close + end]) {
+                    return Some(start + close + end);
+                }
+            }
+        }
+    }
+    let mut depth = 0usize;
+    for (i, byte) in rest.bytes().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' if depth == 0 => return Some(start + i),
+            b')' => depth -= 1,
+            _ => {}
+        }
+    }
+    // Unpaired: the first one closes it, as it always did.
+    rest.find(')').map(|k| start + k)
 }
 
 /// Every file in the vault as a path relative to it, with `/` between
@@ -200,9 +390,9 @@ impl Index {
             .map(String::as_str)
     }
 
-    /// What the file part of a `[[...]]` link points at. A target written
-    /// with a file extension that is not a note's is looked up among the
-    /// other files first, as an embed of it is.
+    /// What the file part of a `[[...]]` link points at, wherever the link
+    /// is written. A target written with a file extension that is not a
+    /// note's is looked up among the other files first, as an embed of it is.
     fn wiki(&self, target: &str) -> Option<&str> {
         let name = file_name(target.trim());
         let has_other_ext = !is_note(name)
@@ -229,13 +419,38 @@ impl Index {
             .map(String::as_str)
     }
 
+    /// The file a wiki link names by a path from the note `from` that it is
+    /// written in: a target that starts with "./" or "../". `None` for any
+    /// other target, and when nothing is at the end of the path.
+    fn wiki_beside(&self, from: &str, target: &str) -> Option<&str> {
+        let path = target.trim().replace('\\', "/");
+        if !starts_relative(&path) {
+            return None;
+        }
+        self.file_at(&join(folder(from), &path)?)
+    }
+
+    /// What the file part of a `[[...]]` link points at, from the note
+    /// `from` that it is written in. A path from that note's folder comes
+    /// first; anything else, and such a path with nothing at the end of it,
+    /// is found the way it always was.
+    fn wiki_from(&self, from: &str, target: &str) -> Option<&str> {
+        self.wiki_beside(from, target).or_else(|| self.wiki(target))
+    }
+
+    /// As `wiki_from`, but a target written as a path has to be that path.
+    fn wiki_exact_from(&self, from: &str, target: &str) -> Option<&str> {
+        self.wiki_beside(from, target)
+            .or_else(|| self.wiki_exact(target))
+    }
+
     /// Where the file part of a target ends and its `#heading` or `#^block`
     /// begins. The app tries the whole target, so a note with "#" in its name
     /// is found, and then the part before the first "#". A later "#" is
     /// tried after that, longest name first, for a heading link to a note
     /// with "#" in its name.
-    fn split_target<'t>(&self, target: &'t str) -> Option<(&'t str, &'t str)> {
-        if self.wiki(target).is_some() {
+    fn split_target<'t>(&self, from: &str, target: &'t str) -> Option<(&'t str, &'t str)> {
+        if self.wiki_from(from, target).is_some() {
             return Some((target, ""));
         }
         let hashes: Vec<usize> = target.match_indices('#').map(|(i, _)| i).collect();
@@ -243,16 +458,123 @@ impl Index {
         std::iter::once(first)
             .chain(later.iter().rev())
             .map(|i| target.split_at(*i))
-            .find(|(file, _)| self.wiki(file.trim()).is_some())
+            .find(|(file, _)| self.wiki_from(from, file.trim()).is_some())
     }
 
-    /// A file by its path from the top of the vault, as `![](path)` finds it.
+    /// A file by its path from the top of the vault, exactly or with the
+    /// letter case ignored.
     fn at(&self, rel: &str) -> Option<&str> {
         self.exact
             .get(rel)
             .or_else(|| self.exact_lower.get(&rel.to_lowercase()))
             .map(String::as_str)
     }
+
+    /// The file at a place in the vault. A note's ".md" may be left off.
+    fn file_at(&self, rel: &str) -> Option<&str> {
+        if rel.is_empty() {
+            return None;
+        }
+        self.at(rel)
+            .or_else(|| self.note_by_path.get(&key(rel)).map(String::as_str))
+    }
+
+    /// What the file part of a markdown link points at, once decoded, and
+    /// which reading of it found the file:
+    ///
+    ///   /path       from the top of the vault
+    ///   ./path      from the folder of the note the link is in ("../" too).
+    ///               "./path" with nothing there is read from the top of the
+    ///               vault, which is how the app read it before it knew
+    ///               relative paths.
+    ///   path        from the top of the vault if a file is there; otherwise
+    ///               from the note's folder; otherwise, when it is a bare
+    ///               name, the way a wiki link finds it.
+    fn markdown_path(&self, from: &str, path: &str) -> Option<(&str, Read)> {
+        if path.is_empty() {
+            return None;
+        }
+        let top = || join("", path).and_then(|rel| self.file_at(&rel));
+        if path.starts_with('/') {
+            return top().map(|file| (file, Read::Slash));
+        }
+        let beside = join(folder(from), path).and_then(|rel| self.file_at(&rel));
+        if starts_relative(path) {
+            return match beside {
+                Some(file) => Some((file, Read::FromNote)),
+                None if path.starts_with("./") => top().map(|file| (file, Read::DotFromTop)),
+                None => None,
+            };
+        }
+        top()
+            .map(|file| (file, Read::Top))
+            .or(beside.map(|file| (file, Read::Beside)))
+            .or_else(|| {
+                if path.contains('/') {
+                    return None;
+                }
+                self.wiki(path).map(|file| (file, Read::Name))
+            })
+    }
+
+    /// The file a markdown link's path points at, from the note `from` that
+    /// it is written in. `written` is the file part of the destination (see
+    /// `parse_destination`): it is read percent-decoded first, and then as
+    /// written, for a file whose name really holds a "%20".
+    fn markdown(&self, from: &str, written: &str) -> Option<MarkdownHit<'_>> {
+        if is_external(written) {
+            return None;
+        }
+        // Sequences that do not spell valid text leave only the second reading.
+        let decoded = urlencoding::decode(written).ok().map(|d| d.into_owned());
+        if let Some(decoded) = decoded.as_deref() {
+            if let Some((file, read)) = self.markdown_path(from, decoded) {
+                return Some(MarkdownHit {
+                    file,
+                    read,
+                    encoded: decoded != written,
+                    path: decoded.to_string(),
+                });
+            }
+            if decoded == written {
+                return None;
+            }
+        }
+        self.markdown_path(from, written)
+            .map(|(file, read)| MarkdownHit {
+                file,
+                read,
+                encoded: false,
+                path: written.to_string(),
+            })
+    }
+}
+
+/// Which reading of a markdown link's path found its file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Read {
+    /// "/path": from the top of the vault.
+    Slash,
+    /// "./path" or "../path": from the linking note's folder.
+    FromNote,
+    /// "./path" with nothing at that place, read from the top of the vault.
+    DotFromTop,
+    /// A plain path, found at the top of the vault.
+    Top,
+    /// A plain path, found from the linking note's folder.
+    Beside,
+    /// A bare name, found the way a wiki link finds it.
+    Name,
+}
+
+/// What a markdown link's path resolved to, and how.
+struct MarkdownHit<'a> {
+    file: &'a str,
+    read: Read,
+    /// The path that found the file: decoded, or as written.
+    path: String,
+    /// Whether it had to be decoded: `My%20note.md`.
+    encoded: bool,
 }
 
 // ============================================================
@@ -305,7 +627,7 @@ impl Rename {
     }
 
     /// The text between `[[` and `]]`, rewritten, or `None` to leave it.
-    fn wiki_inner(&self, inner: &str) -> Option<String> {
+    fn wiki_inner(&self, inner: &str, note: &Place) -> Option<String> {
         // "Note|alias", or "Note\|alias" inside a table.
         let (target, suffix) = match inner.find('|') {
             Some(i) if i > 0 && inner.as_bytes()[i - 1] == b'\\' => inner.split_at(i - 1),
@@ -319,24 +641,32 @@ impl Rename {
         let lead = &target[..target.len() - target.trim_start().len()];
         let trail = &target[target.trim_end().len()..];
 
-        let (file, fragment) = self.old.split_target(core)?;
+        let (file, fragment) = self.old.split_target(note.before, core)?;
         let file_trimmed = file.trim();
-        let before = self.old.wiki(file_trimmed)?;
+        let before = self.old.wiki_from(note.before, file_trimmed)?;
         let expected = self.after(before);
         let has_path = file_trimmed.contains('/') || file_trimmed.contains('\\');
-        // A path to a file that moved has to be its new path. Still being
+        // Written as a path from the linking note's folder, and found there.
+        let from_note = self.old.wiki_beside(note.before, file_trimmed) == Some(before);
+        // A link written as a path has to stay a path that leads to the
+        // file, if it was one before or the file has moved. Still being
         // found by name alone would leave a path that leads nowhere.
-        let still_right = if has_path && self.moved.contains_key(before) {
-            self.new.wiki_exact(file_trimmed) == Some(expected)
+        let must_be_exact = has_path
+            && (self.moved.contains_key(before)
+                || self.old.wiki_exact_from(note.before, file_trimmed) == Some(before));
+        let still_right = if must_be_exact {
+            self.new.wiki_exact_from(note.after, file_trimmed) == Some(expected)
         } else {
-            self.new.wiki(file_trimmed) == Some(expected)
+            self.new.wiki_from(note.after, file_trimmed) == Some(expected)
         };
         if still_right {
             return None;
         }
 
-        // The least change that lands on the file: its name if the link was
-        // a bare name and the name is enough, otherwise its path.
+        // The least change that lands on the file, in the style it was
+        // written in: a path from the note stays one, a path from the top of
+        // the vault stays one, and a bare name stays a bare name if the name
+        // is enough.
         let keep_ext = !is_note(expected) || is_note(file_trimmed);
         let shown = |rel: &str| -> String {
             if keep_ext {
@@ -345,73 +675,137 @@ impl Rename {
                 strip_note_ext(rel).to_string()
             }
         };
+        let beside = |rel: &str| -> String {
+            let path = relative_path(folder(note.after), rel);
+            if path.starts_with("../") {
+                path
+            } else {
+                format!("./{path}")
+            }
+        };
         let by_name = shown(file_name(expected));
         let by_path = shown(expected);
-        let candidates = if has_path {
-            vec![by_path]
+        let mut candidates = if from_note {
+            vec![beside(&by_path)]
+        } else if has_path {
+            vec![by_path.clone()]
         } else {
-            vec![by_name, by_path]
+            vec![by_name, by_path.clone()]
         };
-        // No candidate lands on the file when a note at the top of the vault
-        // shares its name with one that is listed earlier: nothing the app
-        // can resolve names it. The link is then left as it was, broken,
-        // rather than pointed at the wrong note.
-        let new_file = candidates
-            .into_iter()
-            .find(|c| self.new.wiki_exact(c) == Some(expected))?;
+        // When none of those lands on the file: its path with the extension,
+        // and last a path from the note, which is read exactly. That is the
+        // one way to name a note at the top of the vault that shares its name
+        // with a note listed before it.
+        candidates.extend([expected.to_string(), beside(&by_path), beside(expected)]);
 
         // Spaces between the name and a "#" are kept where they were.
         let gap = &file[file.trim_end().len()..];
+        let new_file = candidates.into_iter().find(|candidate| {
+            // "]" and "|" end a wiki link wherever they appear.
+            if candidate.contains([']', '|']) {
+                return false;
+            }
+            // Read back whole, the way the app will read it: the file, then
+            // the heading that was there.
+            let written = format!("{candidate}{gap}{fragment}");
+            self.new.wiki_exact_from(note.after, candidate) == Some(expected)
+                && self
+                    .new
+                    .split_target(note.after, &written)
+                    .is_some_and(|(file, rest)| file.trim() == candidate && rest == fragment)
+        })?;
+
         Some(format!("{lead}{new_file}{gap}{fragment}{trail}{suffix}"))
     }
 
     /// The text between `](` and `)`, rewritten, or `None` to leave it.
-    fn markdown_dest(&self, dest: &str) -> Option<String> {
-        // `path "title"`: only the path is a link.
-        let split = dest.find(char::is_whitespace).unwrap_or(dest.len());
-        let (path, rest) = dest.split_at(split);
-        if path.is_empty()
-            || path.starts_with('#')
-            || path.starts_with('<')
-            || path.starts_with('/')
-            || path.contains("://")
-            || path.starts_with("mailto:")
-            || path.starts_with("data:")
-        {
+    fn markdown_dest(&self, dest: &str, note: &Place) -> Option<String> {
+        let place = parse_destination(dest);
+        let written = &dest[place.from..place.to];
+        let hit = self.old.markdown(note.before, written)?;
+        let expected = self.after(hit.file);
+        let now = self.new.markdown(note.after, written);
+        if now.is_some_and(|now| now.file == expected) {
             return None;
         }
-        let (file, fragment) = match path.find('#') {
-            Some(i) => path.split_at(i),
-            None => (path, ""),
-        };
-        let decoded = urlencoding::decode(file).ok()?.into_owned();
-        let encoded = decoded != file;
-        let rel = decoded.strip_prefix("./").unwrap_or(&decoded);
 
-        let before = self.old.at(rel)?;
-        let expected = self.moved.get(before)?;
-        let new_path = if encoded {
-            // Written encoded, so kept encoded: each part of the path on its own.
-            expected
-                .split('/')
-                .map(|part| urlencoding::encode(part).into_owned())
-                .collect::<Vec<_>>()
-                .join("/")
+        // The path to the file's new place, in the style the link was
+        // written in. A note's ".md" is left off if it was left off.
+        let keep_ext = !is_note(expected) || is_note(&hit.path);
+        let top = if keep_ext {
+            expected.to_string()
         } else {
-            expected.clone()
+            strip_note_ext(expected).to_string()
         };
-        if new_path == file {
-            return None;
+        let beside = relative_path(folder(note.after), &top);
+        // From the note's folder. A path that goes up says so itself; one
+        // that does not is written bare when that is read as relative, and
+        // with "./" when the bare path would be found somewhere else first.
+        let from_note = |dotted: bool| -> Vec<String> {
+            if beside.starts_with("../") {
+                vec![beside.clone()]
+            } else if dotted {
+                vec![format!("./{beside}")]
+            } else {
+                vec![beside.clone(), format!("./{beside}")]
+            }
+        };
+        let mut candidates = match hit.read {
+            Read::Slash => vec![format!("/{top}")],
+            Read::FromNote => from_note(hit.path.starts_with("./")),
+            Read::DotFromTop => vec![format!("./{top}")],
+            Read::Top => Vec::new(),
+            Read::Beside => from_note(false),
+            Read::Name => vec![file_name(&top).to_string()],
+        };
+        // When none of those lands on the file: its path from the top of the
+        // vault, and last that path with a leading "/", which is read exactly.
+        candidates.extend([top.clone(), format!("/{top}"), format!("/{expected}")]);
+
+        for candidate in candidates {
+            // Written encoded, so kept encoded. A path written as it is
+            // stays so, unless the new name cannot stand in a link: a ")"
+            // or a "#" in it would cut the path short.
+            let forms = if hit.encoded {
+                vec![encode_path(&candidate)]
+            } else {
+                vec![candidate.clone(), encode_path(&candidate)]
+            };
+            for form in forms {
+                let new_dest = format!("{}{}{}", &dest[..place.from], form, &dest[place.to..]);
+                if self.reads_as(&new_dest, &form, note.after, expected) {
+                    return Some(new_dest);
+                }
+            }
         }
-        Some(format!("{new_path}{fragment}{rest}"))
+        None
+    }
+
+    /// Whether a rewritten destination, read back whole the way the app
+    /// will read it, has `path` for its file part and leads to `expected`.
+    fn reads_as(&self, dest: &str, path: &str, from: &str, expected: &str) -> bool {
+        let closed = format!("{dest})");
+        let place = parse_destination(dest);
+        destination_end(&closed, 0) == Some(dest.len())
+            && &dest[place.from..place.to] == path
+            && self
+                .new
+                .markdown(from, path)
+                .is_some_and(|hit| hit.file == expected)
     }
 
     /// A note's text with its links rewritten, or `None` when no link in it
-    /// needs to change.
-    pub(crate) fn rewrite(&self, content: &str) -> Option<Rewritten> {
+    /// needs to change. `note` is the note's path before the rename; where
+    /// it is afterwards follows from the rename. Its place matters because a
+    /// link can be a path from the folder of the note it is written in.
+    pub(crate) fn rewrite(&self, note: &str, content: &str) -> Option<Rewritten> {
         if !content.contains("[[") && !content.contains("](") {
             return None;
         }
+        let note = Place {
+            before: note,
+            after: self.after(note),
+        };
         let mut out = String::with_capacity(content.len() + 64);
         let mut changes: Vec<(String, String)> = Vec::new();
         let mut links = 0usize;
@@ -443,7 +837,7 @@ impl Rename {
                     continue;
                 }
             }
-            links += self.rewrite_line(line, &mut out, &mut changes);
+            links += self.rewrite_line(line, &note, &mut out, &mut changes);
         }
 
         if links == 0 {
@@ -460,7 +854,13 @@ impl Rename {
 
     /// Copy one line that is not inside a code block to `out`, rewriting its
     /// links. Returns how many changed.
-    fn rewrite_line(&self, line: &str, out: &mut String, changes: &mut Vec<(String, String)>) -> usize {
+    fn rewrite_line(
+        &self,
+        line: &str,
+        note: &Place,
+        out: &mut String,
+        changes: &mut Vec<(String, String)>,
+    ) -> usize {
         let bytes = line.as_bytes();
         let mut links = 0;
         let mut i = 0;
@@ -495,7 +895,7 @@ impl Rename {
                     match end {
                         Some(end) if end > start && bytes.get(end + 1) == Some(&b']') => {
                             let inner = &line[start..end];
-                            if let Some(new_inner) = self.wiki_inner(inner) {
+                            if let Some(new_inner) = self.wiki_inner(inner, note) {
                                 out.push_str(&line[copied..start]);
                                 out.push_str(&new_inner);
                                 copied = end;
@@ -509,17 +909,22 @@ impl Rename {
                 }
                 b']' if bytes.get(i + 1) == Some(&b'(') => {
                     let start = i + 2;
-                    match line[start..].find(')').map(|k| start + k) {
+                    match destination_end(line, start) {
                         Some(end) if end > start => {
                             let dest = &line[start..end];
-                            if let Some(new_dest) = self.markdown_dest(dest) {
+                            if let Some(new_dest) = self.markdown_dest(dest, note) {
                                 out.push_str(&line[copied..start]);
                                 out.push_str(&new_dest);
                                 copied = end;
                                 links += 1;
                                 changes.push((format!("]({dest})"), format!("]({new_dest})")));
+                                i = end + 1;
+                            } else {
+                                // Not a link to a file. Whatever follows its
+                                // first ")" is looked at on its own, as it
+                                // was before paired parentheses were read.
+                                i = line[start..].find(')').map_or(end, |k| start + k) + 1;
                             }
-                            i = end + 1;
                         }
                         _ => i += 2,
                     }
@@ -530,6 +935,12 @@ impl Rename {
         out.push_str(&line[copied..]);
         links
     }
+}
+
+/// Where the note being rewritten is, as paths inside the vault.
+struct Place<'a> {
+    before: &'a str,
+    after: &'a str,
 }
 
 /// A note's text after a rename.
@@ -658,14 +1069,20 @@ pub(crate) fn rename_and_update(
     }
 
     let mut report = Report::default();
-    for rel in files.iter().map(|rel| rename.after(rel)).filter(|rel| is_note(rel)) {
+    // Each note under the path it had and the path it has now: a link in it
+    // may be a path from its own folder.
+    let notes = files
+        .iter()
+        .map(|was| (was.as_str(), rename.after(was)))
+        .filter(|(_, rel)| is_note(rel));
+    for (was, rel) in notes {
         let path = to_abs(vault, rel);
         let open_note = open_by_rel.remove(rel);
         let Ok(content) = fs::read_to_string(&path) else {
             continue;
         };
 
-        let on_disk = rename.rewrite(&content);
+        let on_disk = rename.rewrite(was, &content);
         let mut saved = None;
         let mut changes = Vec::new();
         if let Some(rewritten) = on_disk {
@@ -687,7 +1104,7 @@ pub(crate) fn rename_and_update(
             let unsaved = note
                 .unsaved
                 .as_deref()
-                .and_then(|text| rename.rewrite(text))
+                .and_then(|text| rename.rewrite(was, text))
                 .map(|rewritten| {
                     changes.extend(rewritten.changes);
                     rewritten.text
@@ -735,10 +1152,34 @@ mod tests {
         out
     }
 
-    /// What a `[[target]]` resolves to.
-    fn resolves(index: &Index, target: &str) -> Option<String> {
-        let (file, _) = index.split_target(target)?;
-        index.wiki(file.trim()).map(str::to_string)
+    /// The text between `](` and each closing `)` in a text, in order, code
+    /// included.
+    fn markdown_dests(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for line in text.lines() {
+            let mut at = 0;
+            while let Some(found) = line[at..].find("](") {
+                let start = at + found + 2;
+                let Some(end) = destination_end(line, start) else { break };
+                out.push(line[start..end].to_string());
+                at = end + 1;
+            }
+        }
+        out
+    }
+
+    /// What a `[[target]]` written in the note `from` resolves to.
+    fn resolves(index: &Index, from: &str, target: &str) -> Option<String> {
+        let (file, _) = index.split_target(from, target)?;
+        index.wiki_from(from, file.trim()).map(str::to_string)
+    }
+
+    /// What a `](dest)` written in the note `from` resolves to.
+    fn leads_to(index: &Index, from: &str, dest: &str) -> Option<String> {
+        let place = parse_destination(dest);
+        index
+            .markdown(from, &dest[place.from..place.to])
+            .map(|hit| hit.file.to_string())
     }
 
     // ── The resolver ──
@@ -765,6 +1206,113 @@ mod tests {
                 "[[{target}]]"
             );
         }
+    }
+
+    #[test]
+    fn links_resolve_from_their_note_the_way_the_frontend_resolves_them() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/lib/__fixtures__/link-resolution.json"))
+                .expect("the fixture is JSON");
+        let vault: Vec<String> = fixture["vault"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n.as_str().unwrap().to_string())
+            .collect();
+        let index = Index::with_separator(&vault, '/');
+        let links = fixture["links"].as_array().unwrap();
+        assert!(links.len() > 60);
+        for link in links {
+            let from = link["from"].as_str().unwrap();
+            let expect = link["expect"].as_str();
+            if let Some(dest) = link["markdown"].as_str() {
+                let place = parse_destination(dest);
+                let path = &dest[place.from..place.to];
+                assert_eq!(
+                    is_external(path),
+                    link["external"].as_bool().unwrap_or(false),
+                    "]({dest})"
+                );
+                assert_eq!(
+                    index.markdown(from, path).map(|hit| hit.file),
+                    expect,
+                    "]({dest}) in {from}"
+                );
+                if let Some(fragment) = link["fragment"].as_str() {
+                    // The heading runs from the path to the title, if there is one.
+                    let rest = &dest[place.to..];
+                    assert!(rest.starts_with(fragment), "]({dest}): {rest:?}");
+                    assert!(is_title(&rest[fragment.len()..]) || rest[fragment.len()..].starts_with('>'));
+                }
+            } else {
+                let target = link["wiki"].as_str().expect("a markdown or a wiki link");
+                assert_eq!(index.wiki_from(from, target), expect, "[[{target}]] in {from}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_destination_is_split_into_its_path_its_heading_and_its_title() {
+        let path = |dest: &'static str| {
+            let place = parse_destination(dest);
+            &dest[place.from..place.to]
+        };
+        assert_eq!(path("a.png"), "a.png");
+        assert_eq!(path("  a.png  "), "a.png");
+        assert_eq!(path("my photo.png"), "my photo.png");
+        assert_eq!(path("my photo.png \"A title\""), "my photo.png");
+        assert_eq!(path("a.png 'x'"), "a.png");
+        assert_eq!(path("<my files/a b.png#x> \"A title\" "), "my files/a b.png");
+        assert_eq!(path("Note.md#Heading \"t\""), "Note.md");
+        assert_eq!(path("#Heading"), "");
+        // Only a quoted string at the very end is a title.
+        assert_eq!(path("my \"great\" photo.png"), "my \"great\" photo.png");
+        assert_eq!(path("a \"b\" c.png \"title\""), "a \"b\" c.png");
+        assert_eq!(path("\"title\""), "\"title\"");
+        assert_eq!(path("a.png 'it''s'"), "a.png 'it''s'");
+        // An unfinished <path is a plain path.
+        assert_eq!(path("<a.png"), "<a.png");
+        assert_eq!(path("<a>b.png"), "<a>b.png");
+
+        // Where a destination closes: parentheses inside it may pair up.
+        assert_eq!(destination_end("[x](a.md) (b)", 4), Some(8));
+        assert_eq!(destination_end("[x](My note (draft).md) c", 4), Some(22));
+        assert_eq!(destination_end("[x](<a) b.md>) c", 4), Some(13));
+        assert_eq!(destination_end("[x](a (b.md) c", 4), Some(11));
+        assert_eq!(destination_end("[x](a.md", 4), None);
+    }
+
+    #[test]
+    fn percent_sequences_are_read_the_way_the_frontend_reads_them() {
+        // The frontend has its own decoder and encoder; these are the cases
+        // its tests pin too.
+        let decode = |text: &str| urlencoding::decode(text).ok().map(|d| d.into_owned());
+        assert_eq!(decode("100%.md").as_deref(), Some("100%.md"));
+        assert_eq!(decode("100% done").as_deref(), Some("100% done"));
+        assert_eq!(decode("%4%41").as_deref(), Some("%4A"));
+        assert_eq!(decode("a%2").as_deref(), Some("a%2"));
+        assert_eq!(decode("%FF"), None);
+        assert_eq!(decode("%C3%zz%A9"), None);
+        assert_eq!(encode_path("My files/a b (1).png"), "My%20files/a%20b%20%281%29.png");
+        assert_eq!(encode_path("Notes/C# 100%.md"), "Notes/C%23%20100%25.md");
+        assert_eq!(encode_path("Café/it's~ok_-.md"), "Caf%C3%A9/it%27s~ok_-.md");
+    }
+
+    #[test]
+    fn paths_are_joined_and_walked_between_folders() {
+        assert_eq!(join("A/B", "c.md").as_deref(), Some("A/B/c.md"));
+        assert_eq!(join("A/B", "./c.md").as_deref(), Some("A/B/c.md"));
+        assert_eq!(join("A/B", "../../c.md").as_deref(), Some("c.md"));
+        assert_eq!(join("A/B", "../../../c.md"), None);
+        assert_eq!(join("", "/a//b/./c.md").as_deref(), Some("a/b/c.md"));
+        assert_eq!(relative_path("A/B", "A/B/c.md"), "c.md");
+        assert_eq!(relative_path("A/B", "A/B/C/d.md"), "C/d.md");
+        assert_eq!(relative_path("A/B", "A/c.md"), "../c.md");
+        assert_eq!(relative_path("A/B", "X/c.md"), "../../X/c.md");
+        assert_eq!(relative_path("", "X/c.md"), "X/c.md");
+        assert_eq!(relative_path("A", "c.md"), "../c.md");
+        // A folder and a file with the same name are different things.
+        assert_eq!(relative_path("A/B", "A/B"), "../B");
     }
 
     #[test]
@@ -823,10 +1371,19 @@ mod tests {
         "img/logo.svg",
     ];
 
+    /// The note most tests write their links in. It is at the top of the
+    /// vault, where a path from the note and a path from the top are the same.
+    const NOTE: &str = "Inbox.md";
+
     fn after(old: &str, new: &str, text: &str) -> String {
+        after_in(NOTE, old, new, text)
+    }
+
+    /// `text`, written in `note`, after renaming `old` to `new`.
+    fn after_in(note: &str, old: &str, new: &str, text: &str) -> String {
         let rename = Rename::new(&files(VAULT), old, new);
         rename
-            .rewrite(text)
+            .rewrite(note, text)
             .map(|r| r.text)
             .unwrap_or_else(|| text.to_string())
     }
@@ -850,7 +1407,7 @@ Untouched: [[Projects/Plan]], [[Missing]], [[#Top]], [[]].
         assert_eq!(after("Inbox.md", "Home.md", text), expected);
 
         let rename = Rename::new(&files(VAULT), "Inbox.md", "Home.md");
-        let rewritten = rename.rewrite(text).unwrap();
+        let rewritten = rename.rewrite(NOTE, text).unwrap();
         assert_eq!(rewritten.links, 10);
         assert!(rewritten
             .changes
@@ -867,7 +1424,7 @@ Untouched: [[Projects/Plan]], [[Missing]], [[#Top]], [[]].
         );
         // Nothing to do at all.
         let rename = Rename::new(&files(VAULT), "Projects/Deep/Spec.md", "Archive/Spec.md");
-        assert_eq!(rename.rewrite("[[Spec]] and [[Inbox]]"), None);
+        assert_eq!(rename.rewrite(NOTE, "[[Spec]] and [[Inbox]]"), None);
     }
 
     #[test]
@@ -912,9 +1469,14 @@ Untouched: [[Projects/Plan]], [[Missing]], [[#Top]], [[]].
             "[[Notes/Daily]] [[Daily]]"
         );
         // A note at the top of the vault that shares its name with a note
-        // listed before it cannot be named by any link the app resolves, so
-        // the link is left as written instead of being pointed at the wrong note.
-        assert_eq!(after("Projects/Plan.md", "Plan.md", "[[Projects/Plan]]"), "[[Projects/Plan]]");
+        // listed before it is not reached by its name or by a path from the
+        // top: "Plan" is Archive/Plan. A path from the linking note is read
+        // exactly, so the link becomes one instead of breaking.
+        assert_eq!(after("Projects/Plan.md", "Plan.md", "[[Projects/Plan]]"), "[[./Plan]]");
+        assert_eq!(
+            after_in("Notes/Daily.md", "Projects/Plan.md", "Plan.md", "[[Projects/Plan#Scope|p]]"),
+            "[[../Plan#Scope|p]]"
+        );
     }
 
     #[test]
@@ -942,7 +1504,7 @@ Untouched: [[Projects/Plan]], [[Missing]], [[#Top]], [[]].
     #[test]
     fn a_note_that_links_to_itself_follows_its_own_rename() {
         let rename = Rename::new(&files(VAULT), "Inbox.md", "Home.md");
-        let rewritten = rename.rewrite("Back to [[Inbox#Top]].").unwrap();
+        let rewritten = rename.rewrite("Inbox.md", "Back to [[Inbox#Top]].").unwrap();
         assert_eq!(rewritten.text, "Back to [[Home#Top]].");
     }
 
@@ -993,7 +1555,7 @@ An unclosed ` backtick does not hide [[Home]].
     #[test]
     fn a_change_of_letter_case_alone_rewrites_nothing() {
         let rename = Rename::new(&files(VAULT), "Inbox.md", "INBOX.md");
-        assert_eq!(rename.rewrite("[[Inbox]] [[inbox#x]] ![[Inbox]]"), None);
+        assert_eq!(rename.rewrite(NOTE, "[[Inbox]] [[inbox#x]] ![[Inbox]]"), None);
     }
 
     #[test]
@@ -1022,7 +1584,7 @@ An unclosed ` backtick does not hide [[Home]].
 ![alt text](attachments/photo.png \"A title\")
 [paper.pdf](attachments/paper.pdf)
 [the plan](Projects/Plan.md) and [a part](Projects/Plan.md#Scope)
-Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.c) [top](#heading) ![x](/attachments/photo.png) ![missing](attachments/none.png)
+Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.c) [top](#heading) ![missing](attachments/none.png)
 ";
         assert_eq!(
             after("attachments", "files", text),
@@ -1031,7 +1593,7 @@ Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.
 ![alt text](files/photo.png \"A title\")
 [paper.pdf](files/paper.pdf)
 [the plan](Projects/Plan.md) and [a part](Projects/Plan.md#Scope)
-Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.c) [top](#heading) ![x](/attachments/photo.png) ![missing](attachments/none.png)
+Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.c) [top](#heading) ![missing](attachments/none.png)
 "
         );
         assert_eq!(
@@ -1042,70 +1604,314 @@ Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.
         let vault = files(&["My files/team photo.png", "Inbox.md"]);
         let rename = Rename::new(&vault, "My files", "Shared files");
         assert_eq!(
-            rename.rewrite("![x](My%20files/team%20photo.png)").unwrap().text,
+            rename.rewrite(NOTE, "![x](My%20files/team%20photo.png)").unwrap().text,
             "![x](Shared%20files/team%20photo.png)"
+        );
+    }
+
+    #[test]
+    fn a_markdown_link_follows_its_file_in_the_form_it_was_written_in() {
+        // From Projects/Plan.md, every way of writing a link to the spec
+        // beside it and to the photo two folders away.
+        let note = "Projects/Plan.md";
+        let text = "\
+[top](/Projects/Deep/Spec.md) [from here](./Deep/Spec.md) [bare](Deep/Spec.md) [whole](Projects/Deep/Spec.md)
+[no ending](Deep/Spec) [by name](Spec.md) [name only](Spec) [heading](./Deep/Spec.md#Scope \"The scope\")
+![up](../attachments/photo.png) ![top](/attachments/photo.png) ![whole](attachments/photo.png) ![name](photo.png)
+";
+        // The file is renamed where it is.
+        assert_eq!(
+            after_in(note, "Projects/Deep/Spec.md", "Projects/Deep/Design doc.md", text),
+            "\
+[top](/Projects/Deep/Design doc.md) [from here](./Deep/Design doc.md) [bare](Deep/Design doc.md) [whole](Projects/Deep/Design doc.md)
+[no ending](Deep/Design doc) [by name](Design doc.md) [name only](Design doc) [heading](./Deep/Design doc.md#Scope \"The scope\")
+![up](../attachments/photo.png) ![top](/attachments/photo.png) ![whole](attachments/photo.png) ![name](photo.png)
+"
+        );
+        // It moves to another folder: a path from the note stays one, a path
+        // from the top stays one, and the name is still enough.
+        assert_eq!(
+            after_in(note, "Projects/Deep/Spec.md", "Archive/Spec.md", text),
+            "\
+[top](/Archive/Spec.md) [from here](../Archive/Spec.md) [bare](../Archive/Spec.md) [whole](Archive/Spec.md)
+[no ending](../Archive/Spec) [by name](Spec.md) [name only](Spec) [heading](../Archive/Spec.md#Scope \"The scope\")
+![up](../attachments/photo.png) ![top](/attachments/photo.png) ![whole](attachments/photo.png) ![name](photo.png)
+"
+        );
+        // A folder is renamed: only the links that named it change.
+        assert_eq!(
+            after_in(note, "attachments", "files", text),
+            "\
+[top](/Projects/Deep/Spec.md) [from here](./Deep/Spec.md) [bare](Deep/Spec.md) [whole](Projects/Deep/Spec.md)
+[no ending](Deep/Spec) [by name](Spec.md) [name only](Spec) [heading](./Deep/Spec.md#Scope \"The scope\")
+![up](../files/photo.png) ![top](/files/photo.png) ![whole](files/photo.png) ![name](photo.png)
+"
+        );
+        // A bare name that is no longer enough becomes a path from the top.
+        let vault = files(&["Inbox.md", "Notes/Daily.md", "Archive/Daily.md", "Projects/Plan.md"]);
+        let rename = Rename::new(&vault, "Archive/Daily.md", "Zebra/Daily.md");
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", "[d](Daily.md) [d](Daily)").unwrap().text,
+            "[d](Zebra/Daily.md) [d](Zebra/Daily)"
+        );
+    }
+
+    #[test]
+    fn a_note_that_moves_keeps_its_own_links_on_their_files() {
+        let text = "\
+[from here](./Deep/Spec.md) [bare](Deep/Spec.md) [up](../Inbox.md) ![up](../attachments/photo.png)
+[top](/Inbox.md) [whole](Projects/Deep/Spec.md) [by name](Daily.md) [[./Deep/Spec]] [[../Inbox|in]] [[Spec]]
+[self](./Plan.md#Scope) [self](Plan.md) [[./Plan]] [site](https://example.com/./Deep/Spec.md)
+";
+        // Projects/Plan.md goes one folder down, then to the top, then away.
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Plan.md", "Projects/Deep/Plan.md", text),
+            "\
+[from here](./Spec.md) [bare](Spec.md) [up](../../Inbox.md) ![up](../../attachments/photo.png)
+[top](/Inbox.md) [whole](Projects/Deep/Spec.md) [by name](Daily.md) [[./Spec]] [[../../Inbox|in]] [[Spec]]
+[self](./Plan.md#Scope) [self](Plan.md) [[./Plan]] [site](https://example.com/./Deep/Spec.md)
+"
+        );
+        // A path that went up and no longer has to is written bare when
+        // that is read as a path from the note, as a new link would be.
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Plan.md", "Plan.md", text),
+            "\
+[from here](./Projects/Deep/Spec.md) [bare](Projects/Deep/Spec.md) [up](Inbox.md) ![up](attachments/photo.png)
+[top](/Inbox.md) [whole](Projects/Deep/Spec.md) [by name](Daily.md) [[./Projects/Deep/Spec]] [[./Inbox|in]] [[Spec]]
+[self](./Plan.md#Scope) [self](Plan.md) [[./Plan]] [site](https://example.com/./Deep/Spec.md)
+"
+        );
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Plan.md", "Archive/Old/Roadmap.md", text),
+            "\
+[from here](../../Projects/Deep/Spec.md) [bare](../../Projects/Deep/Spec.md) [up](../../Inbox.md) ![up](../../attachments/photo.png)
+[top](/Inbox.md) [whole](Projects/Deep/Spec.md) [by name](Daily.md) [[../../Projects/Deep/Spec]] [[../../Inbox|in]] [[Spec]]
+[self](./Roadmap.md#Scope) [self](Roadmap.md) [[./Roadmap]] [site](https://example.com/./Deep/Spec.md)
+"
+        );
+        // The whole folder moves, and the links inside it still lead to each
+        // other: nothing in the note has to change.
+        let rename = Rename::new(&files(VAULT), "Projects", "Work/Projects");
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", "[a](./Deep/Spec.md) [b](Deep/Spec.md) [[./Deep/Spec]] [c](./Plan.md)"),
+            None
+        );
+        // But its links out of the folder do.
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", "[up](../Inbox.md) [[../Inbox]]").unwrap().text,
+            "[up](../../Inbox.md) [[../../Inbox]]"
+        );
+    }
+
+    #[test]
+    fn a_path_is_never_handed_to_another_file_by_a_rename() {
+        // "Deep/Spec.md" in Projects/Plan.md is the spec beside it, because
+        // nothing is at Deep/Spec.md at the top of the vault. A folder that
+        // arrives there would take the link, so the link says "./".
+        let vault = files(&["Projects/Plan.md", "Projects/Deep/Spec.md", "Old/Spec.md", "Inbox.md"]);
+        let rename = Rename::new(&vault, "Old", "Deep");
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", "[spec](Deep/Spec.md) [spec](./Deep/Spec.md)").unwrap().text,
+            "[spec](./Deep/Spec.md) [spec](./Deep/Spec.md)"
+        );
+        // The same for a note renamed onto the name a link beside it used.
+        let rename = Rename::new(&vault, "Inbox.md", "Spec.md");
+        assert_eq!(
+            rename.rewrite("Projects/Deep/Notes.md", "[s](Spec.md) [gone](Missing.md)").unwrap().text,
+            "[s](./Spec.md) [gone](Missing.md)"
+        );
+        // A link that led nowhere is not a link to keep, even when the
+        // rename puts a file where it points.
+        let rename = Rename::new(&vault, "Inbox.md", "Missing.md");
+        assert_eq!(rename.rewrite("Projects/Plan.md", "[gone](Missing.md) [[Missing]]"), None);
+        let rename = Rename::new(&vault, "Inbox.md", "Deep.md");
+        assert_eq!(rename.rewrite("Projects/Plan.md", "[spec](Deep/Spec.md)"), None);
+    }
+
+    #[test]
+    fn a_path_keeps_the_way_it_was_written() {
+        let vault = files(&[
+            "Inbox.md",
+            "My files/team photo.png",
+            "My files/notes (old).md",
+            "Projects/Plan.md",
+        ]);
+        let text = "\
+![a](My%20files/team%20photo.png) ![b](My files/team photo.png) ![c](<My files/team photo.png>)
+![d](<My files/team photo.png> \"The team\") ![e](../My%20files/team%20photo.png#x 'y')
+[f](My files/notes (old).md) [g](My%20files/notes%20%28old%29.md) [h](/My files/notes (old))
+";
+        let rename = Rename::new(&vault, "My files", "Shared files");
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", text).unwrap().text,
+            "\
+![a](Shared%20files/team%20photo.png) ![b](Shared files/team photo.png) ![c](<Shared files/team photo.png>)
+![d](<Shared files/team photo.png> \"The team\") ![e](../Shared%20files/team%20photo.png#x 'y')
+[f](Shared files/notes (old).md) [g](Shared%20files/notes%20%28old%29.md) [h](/Shared files/notes (old))
+"
+        );
+        // A new name that cannot stand in a link as it is gets encoded.
+        let rename = Rename::new(&vault, "Projects/Plan.md", "Projects/C# (v2).md");
+        assert_eq!(
+            rename.rewrite(NOTE, "[p](Projects/Plan.md) [p](Projects/Plan.md#Scope) [p](<Projects/Plan.md>)").unwrap().text,
+            "[p](Projects/C%23%20%28v2%29.md) [p](Projects/C%23%20%28v2%29.md#Scope) [p](<Projects/C%23%20%28v2%29.md>)"
+        );
+        let rename = Rename::new(&vault, "Projects/Plan.md", "Projects/Plan (v2).md");
+        assert_eq!(
+            rename.rewrite(NOTE, "[p](Projects/Plan.md)").unwrap().text,
+            "[p](Projects/Plan (v2).md)"
+        );
+        // "./" read from the top of the vault, as it was before relative
+        // paths were understood, is still followed and still written "./".
+        let rename = Rename::new(&vault, "My files", "Shared files");
+        assert_eq!(
+            rename.rewrite("Projects/Plan.md", "![x](./My files/team photo.png)").unwrap().text,
+            "![x](./Shared files/team photo.png)"
+        );
+    }
+
+    #[test]
+    fn a_wiki_link_written_from_its_note_follows_both_ends() {
+        let text = "[[./Deep/Spec]] [[./Deep/Spec.md#Scope|s]] ![[../attachments/photo.png|80]] [[../Inbox]]";
+        // The file moves.
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Deep/Spec.md", "Archive/Spec.md", text),
+            "[[../Archive/Spec]] [[../Archive/Spec.md#Scope|s]] ![[../attachments/photo.png|80]] [[../Inbox]]"
+        );
+        assert_eq!(
+            after_in("Projects/Plan.md", "attachments/photo.png", "Projects/img/photo.png", text),
+            "[[./Deep/Spec]] [[./Deep/Spec.md#Scope|s]] ![[./img/photo.png|80]] [[../Inbox]]"
+        );
+        // The note moves.
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Plan.md", "Plan.md", text),
+            "[[./Projects/Deep/Spec]] [[./Projects/Deep/Spec.md#Scope|s]] ![[./attachments/photo.png|80]] [[./Inbox]]"
+        );
+        // A picture that was found by name, behind a path that led nowhere,
+        // is left alone when nothing about it changes.
+        assert_eq!(
+            after_in("Projects/Plan.md", "Projects/Plan.md", "Plan.md", "![[./photo.png]]"),
+            "![[./photo.png]]"
         );
     }
 
     #[test]
     fn every_link_resolves_to_the_same_file_after_any_rename() {
         let vault = files(VAULT);
+        // Every form of link, written in every note in turn. What each one
+        // points at depends on the note, and so does which of them point at
+        // anything.
         let text = "\
 [[Inbox]] [[inbox#h]] [[Plan]] [[Projects/Plan|p]] [[Archive/Plan#^b]] [[Spec]]
 [[Projects/Deep/Spec]] [[C# basics]] [[C# basics#Types]] [[Daily]] [[Notes/Daily]]
 ![[photo.png]] ![[attachments/photo.png|80]] [[paper.pdf]] ![[logo.svg]] [[Missing]]
+[[./Plan]] [[./Deep/Spec#Scope]] [[../Inbox]] [[./Spec]] [[../Plan|up]] [[./Daily]]
+![[../attachments/photo.png]] [[../../Inbox]] ![[./photo.png]] [[./Missing]]
+[a](Inbox.md) [b](/Inbox.md) [c](./Inbox.md) [d](../Inbox.md) [e](../../Inbox.md#Today) [f](Inbox)
+[g](Projects/Plan.md) [h](Plan.md) [i](./Plan.md) [j](../Plan.md) [k](Deep/Spec.md) [l](./Deep/Spec.md \"t\")
+[m](Spec.md) [n](Spec) [o](Notes/C%23%20basics.md#Types) [p](C%23%20basics.md) [q](./C%23%20basics.md)
+[r](Daily.md) [s](<Notes/Daily.md>) [t](/Notes/Daily) [u](Projects/Deep/Spec) [v](../Deep/Spec.md)
+![w](attachments/photo.png) ![x](/attachments/photo.png) ![y](../attachments/photo.png) ![z](photo.png)
+![A](./attachments/photo.png) ![B](../img/logo.svg) [C](attachments/paper.pdf#page=2) [D](paper.pdf)
+[E](Missing.md) [F](https://example.com/Inbox.md) [G](#Top) [H](../../../Inbox.md) [I](mailto:inbox@example.com)
 ";
         let renames = [
             ("Inbox.md", "Home.md"),
             ("Inbox.md", "Notes/Inbox.md"),
             ("Inbox.md", "Archive/Daily.md"),
             ("Inbox.md", "Aaa/Plan.md"),
+            ("Inbox.md", "Spec.md"),
+            ("Inbox.md", "Plan.md"),
             ("Projects/Plan.md", "Projects/Roadmap.md"),
             ("Projects/Plan.md", "Plan.md"),
+            ("Projects/Plan.md", "Projects/Deep/Plan.md"),
+            ("Projects/Plan.md", "Archive/Old/Roadmap.md"),
             ("Archive/Plan.md", "Zebra/Plan.md"),
             ("Archive/Plan.md", "Archive/Spec.md"),
             ("Projects/Deep/Spec.md", "Spec.md"),
+            ("Projects/Deep/Spec.md", "Projects/Spec.md"),
             ("Notes/C# basics.md", "Notes/C.md"),
             ("Notes/Daily.md", "Notes/Inbox 2.md"),
+            ("Notes/Daily.md", "Daily.md"),
+            ("Notes/Daily.md", "Deep/Spec.md"),
+            ("Notes/Daily.md", "Notes/Daily (old) #2.md"),
             ("Projects", "Work"),
+            ("Projects", "Archive/Projects"),
             ("Projects/Deep", "Deep"),
             ("Archive", "Projects/Archive"),
+            ("Archive", "Deep"),
             ("Notes", "Zz"),
+            ("Notes", "Projects/Notes"),
             ("attachments", "files"),
+            ("attachments", "Projects/attachments"),
             ("attachments/photo.png", "img/photo.png"),
             ("attachments/photo.png", "attachments/logo.svg.png"),
+            ("attachments/photo.png", "Projects/team photo (1).png"),
             ("img/logo.svg", "attachments/logo.svg"),
             ("attachments/paper.pdf", "paper.pdf"),
         ];
-        let before_targets = wiki_targets(text);
+        let notes: Vec<&str> = VAULT.iter().copied().filter(|rel| is_note(rel)).collect();
+        let wiki_before = wiki_targets(text);
+        let markdown_before = markdown_dests(text);
+        let mut checked = 0;
+        let mut followed = 0;
         for (old, new) in renames {
             let rename = Rename::new(&vault, old, new);
-            let out = rename.rewrite(text).map(|r| r.text).unwrap_or_else(|| text.to_string());
-            let after_targets = wiki_targets(&out);
-            assert_eq!(before_targets.len(), after_targets.len(), "{old} -> {new}");
-            for (was, is) in before_targets.iter().zip(&after_targets) {
-                let pointed_at = resolves(&rename.old, was);
-                let expected = pointed_at.as_deref().map(|rel| rename.after(rel).to_string());
-                // The one file no link can name: see the shared-name test.
-                let unreachable = expected.as_deref().is_some_and(|rel| {
-                    rename.new.wiki_exact(rel) != Some(rel)
-                        && rename.new.wiki_exact(strip_note_ext(rel)) != Some(rel)
-                });
-                if unreachable {
-                    assert_eq!((old, new), ("Projects/Plan.md", "Plan.md"));
-                    assert_eq!(was, is, "{old} -> {new}");
-                } else if expected.is_some() {
-                    assert_eq!(
-                        resolves(&rename.new, is),
-                        expected,
-                        "{old} -> {new}: [[{was}]] became [[{is}]]"
-                    );
-                } else {
-                    // A link that pointed at nothing is not rewritten.
-                    assert_eq!(was, is, "{old} -> {new}");
+            for note in &notes {
+                let note_after = rename.after(note);
+                let out = rename
+                    .rewrite(note, text)
+                    .map(|r| r.text)
+                    .unwrap_or_else(|| text.to_string());
+                let place = format!("{old} -> {new}, in {note}");
+
+                let wiki_after = wiki_targets(&out);
+                assert_eq!(wiki_before.len(), wiki_after.len(), "{place}");
+                for (was, is) in wiki_before.iter().zip(&wiki_after) {
+                    let pointed_at = resolves(&rename.old, note, was);
+                    let expected = pointed_at.as_deref().map(|rel| rename.after(rel).to_string());
+                    if expected.is_some() {
+                        assert_eq!(
+                            resolves(&rename.new, note_after, is),
+                            expected,
+                            "{place}: [[{was}]] became [[{is}]]"
+                        );
+                        checked += 1;
+                    } else {
+                        // A link that pointed at nothing is not rewritten.
+                        assert_eq!(was, is, "{place}");
+                    }
+                }
+
+                let markdown_after = markdown_dests(&out);
+                assert_eq!(markdown_before.len(), markdown_after.len(), "{place}");
+                for (was, is) in markdown_before.iter().zip(&markdown_after) {
+                    let pointed_at = leads_to(&rename.old, note, was);
+                    let expected = pointed_at.as_deref().map(|rel| rename.after(rel).to_string());
+                    if expected.is_some() {
+                        assert_eq!(
+                            leads_to(&rename.new, note_after, is),
+                            expected,
+                            "{place}: ]({was}) became ]({is})"
+                        );
+                        // One that still leads there as written is left alone.
+                        if leads_to(&rename.new, note_after, was) == expected {
+                            assert_eq!(was, is, "{place}");
+                        } else {
+                            followed += 1;
+                        }
+                        checked += 1;
+                    } else {
+                        assert_eq!(was, is, "{place}");
+                    }
                 }
             }
         }
+        // The test is only worth something if most forms resolve somewhere
+        // and a good many of them had to be rewritten.
+        assert!(checked > 5000, "{checked}");
+        assert!(followed > 500, "{followed}");
     }
 
     #[test]
@@ -1114,26 +1920,59 @@ Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.
             "Inbox.md",
             "Projects/Roadmap.md",
             "Projects/Deep/Spec.md",
+            "Projects/img/chart.png",
             "attachments/photo.png",
         ]);
-        let text = "[[Inbox]] [[Inbox#Today|t]] ![[Inbox]] [[Projects/Roadmap]] [[Spec]] [[Projects/Deep/Spec]]\r\n![[photo.png|120]] ![p](attachments/photo.png) `[[Inbox]]`\n";
         let there_and_back = [
             ("Inbox.md", "Home.md"),
             ("Inbox.md", "Projects/Inbox.md"),
             ("Projects", "Work"),
             ("Projects/Deep", "Deep"),
             ("Projects/Deep/Spec.md", "Projects/Specification.md"),
+            ("Projects/img/chart.png", "Projects/img/graph (2).png"),
             ("attachments", "files"),
             ("attachments/photo.png", "attachments/team.png"),
         ];
-        for (old, new) in there_and_back {
-            let forth = Rename::new(&vault, old, new);
-            let moved: Vec<String> = vault.iter().map(|rel| forth.after(rel).to_string()).collect();
-            let changed = forth.rewrite(text).map(|r| r.text).unwrap_or_else(|| text.to_string());
-            let back = Rename::new(&moved, new, old);
-            let restored = back.rewrite(&changed).map(|r| r.text).unwrap_or(changed);
-            assert_eq!(restored, text, "{old} -> {new} and back");
-        }
+        // The note itself going to another folder.
+        let the_note_moves = [
+            ("Projects/Roadmap.md", "Projects/Deep/Roadmap.md"),
+            ("Projects/Roadmap.md", "Archive/Roadmap.md"),
+        ];
+        // Written at the top of the vault: names, and paths from the top.
+        let at_the_top = "[[Inbox]] [[Inbox#Today|t]] ![[Inbox]] [[Projects/Roadmap]] [[Spec]] [[Projects/Deep/Spec]]\r\n![[photo.png|120]] ![p](attachments/photo.png) `[[Inbox]]`\n[a](/Projects/Roadmap.md) [b](Projects/Deep/Spec) [c](Spec.md#Scope \"t\") ![d](<attachments/photo.png>)\r\n[e](./Projects/Roadmap.md) [f](Projects/Deep/Spec.md) [g](Projects/Deep/Spec.md#Scope) ![h](attachments/photo.png 'x')";
+        // Written in a folder: paths from the note, in each way of writing one.
+        let in_a_folder = "[a](Deep/Spec.md) ![b](../attachments/photo.png) [[./Deep/Spec|s]] [[../Inbox#Today]]\r\n![c](./img/chart.png) ![d](../attachments/photo.png \"A photo\") [e](/Inbox.md) [f](Roadmap.md) [[./Roadmap]]\n![g](img/chart.png) [[Spec]] `[x](Deep/Spec.md)`";
+        // Not every link comes back as it was, and those are left out. A
+        // link that still leads to its file is never touched, so one that
+        // was rewritten on the way out and happens to work on the way back
+        // stays as it is. And when the note moves away, `x.md` and `./x.md`
+        // both become `../Old/x.md`; on the way back that is written as a
+        // new link would be: bare, if that is read as a path from the note.
+        let leaving_the_folder = "![a](../attachments/photo.png) [[../attachments/photo.png|80]] [[../Inbox#Today]] [b](/Inbox.md)\r\n[c](Roadmap.md) [[./Roadmap]] [d](Spec.md) ![e](../attachments/photo.png 'x') [[Spec]] [f](/Projects/Deep/Spec)";
+
+        let there_and_back_again = |note: &str, text: &str, renames: &[(&str, &str)]| {
+            let mut changed_at_all = 0;
+            for (old, new) in renames {
+                let forth = Rename::new(&vault, old, new);
+                let moved: Vec<String> = vault.iter().map(|rel| forth.after(rel).to_string()).collect();
+                let changed = forth
+                    .rewrite(note, text)
+                    .map(|r| r.text)
+                    .unwrap_or_else(|| text.to_string());
+                changed_at_all += usize::from(changed != text);
+                let back = Rename::new(&moved, new, old);
+                let restored = back
+                    .rewrite(forth.after(note), &changed)
+                    .map(|r| r.text)
+                    .unwrap_or(changed);
+                assert_eq!(restored, text, "{old} -> {new} and back, in {note}");
+            }
+            // Most of the renames have to change something, or nothing is shown.
+            assert!(changed_at_all * 2 >= renames.len(), "{note}: {changed_at_all}");
+        };
+        there_and_back_again("Inbox.md", at_the_top, &there_and_back);
+        there_and_back_again("Projects/Roadmap.md", in_a_folder, &there_and_back);
+        there_and_back_again("Projects/Roadmap.md", leaving_the_folder, &the_note_moves);
     }
 
     // ── A real folder ──
@@ -1219,6 +2058,59 @@ Left alone: [site](https://example.com/attachments/photo.png) [mail](mailto:a@b.
         assert_eq!(read(&vault, "Work/Plan.md"), "[[Work/Deep/Spec]] ![p](Work/img/pic.png)\n");
         assert_eq!(read(&vault, "Work/Deep/Spec.md"), "up to [[Work/Plan]]\n");
         assert_eq!(read(&vault, "Inbox.md"), "[[Work/Plan|plan]] [[Spec]] ![[pic.png]]\n");
+    }
+
+    #[test]
+    fn moving_a_note_in_a_vault_rewrites_its_own_paths_and_the_paths_to_it() {
+        let vault = scratch("move-note");
+        write(
+            &vault,
+            "Projects/Plan.md",
+            "[spec](Deep/Spec.md) ![p](../attachments/pic.png) [[./Deep/Spec]] [in](/Inbox.md)\n",
+        );
+        write(&vault, "Projects/Deep/Spec.md", "back to [the plan](../Plan.md) and [[../Plan]]\n");
+        write(&vault, "Inbox.md", "[plan](Projects/Plan.md) [plan](./Projects/Plan.md#Scope) [[Plan]]\n");
+        write(&vault, "Archive/Other.md", "nothing here\n");
+        write(&vault, "attachments/pic.png", "png");
+        let path = |rel: &str| to_abs(&vault, rel).to_string_lossy().into_owned();
+
+        let report = rename_and_update(
+            &vault,
+            &to_abs(&vault, "Projects/Plan.md"),
+            &to_abs(&vault, "Archive/Plan.md"),
+            vec![OpenNote {
+                path: path("Projects/Plan.md"),
+                unsaved: Some("[spec](Deep/Spec.md)\ntyped since: [s](./Deep/Spec.md)\n".into()),
+            }],
+        )
+        .unwrap();
+
+        assert_eq!((report.notes, report.links, report.failed), (3, 6, 0));
+        // The note's own paths lead to the same files from its new folder.
+        // The picture is as far away as it was, so that path is untouched.
+        assert_eq!(
+            read(&vault, "Archive/Plan.md"),
+            "[spec](../Projects/Deep/Spec.md) ![p](../attachments/pic.png) [[../Projects/Deep/Spec]] [in](/Inbox.md)\n"
+        );
+        // And the paths to it lead to where it is now.
+        assert_eq!(
+            read(&vault, "Projects/Deep/Spec.md"),
+            "back to [the plan](../../Archive/Plan.md) and [[../../Archive/Plan]]\n"
+        );
+        assert_eq!(
+            read(&vault, "Inbox.md"),
+            "[plan](Archive/Plan.md) [plan](./Archive/Plan.md#Scope) [[Plan]]\n"
+        );
+        // The open tab's unsaved text is rewritten from the note's old folder too.
+        let open = &report.open[0];
+        assert_eq!(open.path, path("Projects/Plan.md"));
+        assert_eq!(
+            open.unsaved.as_deref(),
+            Some("[spec](../Projects/Deep/Spec.md)\ntyped since: [s](../Projects/Deep/Spec.md)\n")
+        );
+        assert!(open
+            .changes
+            .contains(&("](./Deep/Spec.md)".into(), "](../Projects/Deep/Spec.md)".into())));
     }
 
     #[test]

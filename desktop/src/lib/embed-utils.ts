@@ -27,11 +27,22 @@ export interface ParsedEmbed {
   page?: number;
 }
 
-const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
+// ".ico" and ".tiff" are here because the attachment list counts them as
+// pictures and inserts them as embeds.
+export const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico|tiff?)$/i;
 const NOTE_EXTENSION = /\.(md|markdown)$/i;
 const AUDIO_EXTENSION = /\.(mp3|wav|m4a|ogg|flac|3gp)$/i;
 const VIDEO_EXTENSION = /\.(mp4|webm|mov|mkv|ogv)$/i;
 const PDF_EXTENSION = /\.pdf$/i;
+
+/**
+ * Whether an embed of this file shows the file itself in the note: a
+ * picture, or a player for a recording or a video. Anything else is better
+ * written as a plain link.
+ */
+export function embedsInPlace(fileName: string): boolean {
+  return IMAGE_EXTENSION.test(fileName) || AUDIO_EXTENSION.test(fileName) || VIDEO_EXTENSION.test(fileName);
+}
 
 /** The page a link to a PDF names: "paper.pdf#page=3" gives 3. */
 export function pdfPage(target: string): number | undefined {

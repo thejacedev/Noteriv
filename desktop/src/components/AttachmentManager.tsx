@@ -8,13 +8,16 @@ import {
   importAttachment,
   getAttachmentType,
   formatFileSize,
-  markdownLinkForAttachment,
+  linkForAttachment,
   type Attachment,
 } from "@/lib/attachment-utils";
+import { loadLinkIndex } from "@/lib/vault-links";
 import "@/styles/attachments.css";
 
 interface AttachmentManagerProps {
   vaultPath: string;
+  /** The note the link goes into: a link can be a path from its folder. */
+  notePath?: string | null;
   onInsert: (markdownLink: string) => void;
   onClose: () => void;
 }
@@ -24,6 +27,7 @@ type SortField = "name" | "date";
 
 export default function AttachmentManager({
   vaultPath,
+  notePath,
   onInsert,
   onClose,
 }: AttachmentManagerProps) {
@@ -75,12 +79,13 @@ export default function AttachmentManager({
 
   // ── Insert link ──
   const handleInsert = useCallback(
-    (attachment: Attachment) => {
-      const link = markdownLinkForAttachment(attachment.name, attachment.type);
-      onInsert(link);
+    async (attachment: Attachment) => {
+      // Read now, so a file imported a moment ago is among them.
+      const files = await loadLinkIndex(vaultPath, 0);
+      onInsert(linkForAttachment(files, vaultPath, notePath, attachment));
       onClose();
     },
-    [onInsert, onClose],
+    [vaultPath, notePath, onInsert, onClose],
   );
 
   // ── Delete attachment ──

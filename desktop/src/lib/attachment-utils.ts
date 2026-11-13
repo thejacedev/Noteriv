@@ -6,6 +6,9 @@
  */
 
 import { attachmentFolderName } from "./vault-prefs";
+import { embedsInPlace } from "./embed-utils";
+import type { LinkIndex } from "./link-resolve";
+import { vaultRelative, writeLink } from "./vault-links";
 
 export interface Attachment {
   name: string;
@@ -163,23 +166,17 @@ export async function importAttachment(
 }
 
 /**
- * Build a markdown link for an attachment based on its type.
+ * A link to an attachment for the note at `notePath`, written in the link
+ * format chosen in Settings. A picture, a recording or a video is embedded,
+ * so that it shows in the note; a PDF or any other file is a plain link.
  */
-export function markdownLinkForAttachment(
-  name: string,
-  type: Attachment["type"],
+export function linkForAttachment(
+  files: LinkIndex,
+  vaultPath: string,
+  notePath: string | null | undefined,
+  attachment: Pick<Attachment, "name" | "path">,
 ): string {
-  const relativePath = `${attachmentFolderName()}/${name}`;
-  switch (type) {
-    case "image":
-      return `![${name}](${relativePath})`;
-    case "audio":
-      return `![Audio](${relativePath})`;
-    case "video":
-      return `![Video](${relativePath})`;
-    case "pdf":
-      return `[${name}](${relativePath})`;
-    default:
-      return `[${name}](${relativePath})`;
-  }
+  const target =
+    vaultRelative(vaultPath, attachment.path) ?? `${attachmentFolderName()}/${attachment.name}`;
+  return writeLink(files, vaultPath, notePath, target, { embed: embedsInPlace(attachment.name) });
 }

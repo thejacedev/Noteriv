@@ -6,10 +6,13 @@ import {
   formatDuration,
   saveAudioToVault,
 } from "@/lib/audio-utils";
+import { loadLinkIndex, writeLink } from "@/lib/vault-links";
 import "@/styles/audio-recorder.css";
 
 interface AudioRecorderProps {
   vaultPath: string;
+  /** The note the recording is put into: a link can be a path from its folder. */
+  notePath?: string | null;
   onInsert: (markdownLink: string) => void;
   onClose: () => void;
 }
@@ -18,6 +21,7 @@ type RecorderState = "idle" | "requesting" | "recording" | "recorded" | "saving"
 
 export default function AudioRecorder({
   vaultPath,
+  notePath,
   onInsert,
   onClose,
 }: AudioRecorderProps) {
@@ -295,14 +299,16 @@ export default function AudioRecorder({
     try {
       const filename = filenameRef.current || generateRecordingFilename();
       const relativePath = await saveAudioToVault(blobRef.current, vaultPath, filename);
-      onInsert(`![Audio](${relativePath})`);
+      // An embed, in the link format chosen in Settings, so it plays in the note.
+      const files = await loadLinkIndex(vaultPath, 0);
+      onInsert(writeLink(files, vaultPath, notePath, relativePath, { embed: true }));
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save recording";
       setError(msg);
       setState("recorded");
     }
-  }, [vaultPath, onInsert, onClose]);
+  }, [vaultPath, notePath, onInsert, onClose]);
 
   // ── Discard recording ──
   const handleDiscard = useCallback(() => {

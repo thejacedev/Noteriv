@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -13,6 +13,7 @@ import { isAppHotkey } from "@/lib/hotkeys";
 import { replaceDocument } from "@/lib/replace-document";
 import { tags } from "@lezer/highlight";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
+import { notePathSetting } from "@/lib/note-path";
 import { folding, multipleCursors } from "@/lib/editor-extensions";
 
 const sourceHighlight = HighlightStyle.define([
@@ -51,13 +52,16 @@ interface SourceEditorProps {
   onChange: (value: string) => void;
   onViewReady?: (view: EditorView) => void;
   vaultPath?: string;
+  /** The full path of the note being edited: a link in it can be a path from its folder. */
+  notePath?: string;
   className?: string;
 }
 
-export default function SourceEditor({ content, onChange, onViewReady, vaultPath, className = "" }: SourceEditorProps) {
+export default function SourceEditor({ content, onChange, onViewReady, vaultPath, notePath, className = "" }: SourceEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const historyConfig = useRef(new Compartment());
+  const [noteSetting] = useState(() => notePathSetting(notePath));
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -74,6 +78,7 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
         multipleCursors(),
         closeBrackets(),
         historyConfig.current.of(history()),
+        noteSetting.extension,
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         folding("gutter"),
@@ -108,5 +113,10 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
     }
   }, [content]);
 
-  return <div ref={editorRef} className={`h-full overflow-hidden ${className}`} />;
+  // The same editor shows whichever note's tab is in front.
+  useEffect(() => {
+    if (viewRef.current) noteSetting.set(viewRef.current, notePath);
+  }, [noteSetting, notePath]);
+
+  return <div ref={editorRef} data-note-path={notePath} className={`h-full overflow-hidden ${className}`} />;
 }

@@ -67,10 +67,20 @@ export function findMentions(line: string, name: string): TextRange[] {
  * The line with the mention at `[from, to)` turned into a link to
  * `noteName`. The text as written is kept as the display text when it
  * differs from the note's name, as with an alias.
+ *
+ * `write` builds the link, given the text to show when that is not the
+ * note's own name. The app passes one that follows the link format chosen
+ * in Settings; without it the link is a plain `[[wiki link]]` by name.
  */
-export function linkMention(line: string, range: TextRange, noteName: string): string {
+export function linkMention(
+  line: string,
+  range: TextRange,
+  noteName: string,
+  write: (shown: string | undefined) => string = (shown) =>
+    shown === undefined ? `[[${noteName}]]` : `[[${noteName}|${shown}]]`
+): string {
   const written = line.slice(range.from, range.to);
-  const link = written === noteName ? `[[${noteName}]]` : `[[${noteName}|${written}]]`;
+  const link = write(written === noteName ? undefined : written);
   return line.slice(0, range.from) + link + line.slice(range.to);
 }
 
@@ -128,6 +138,8 @@ export function outgoingLinks(content: string): OutgoingLink[] {
 export interface PossibleLink {
   /** The note the text could link to, by name. */
   noteName: string;
+  /** That note's path inside the vault, when the caller gave one. */
+  notePath?: string;
   /** 1-based line and the place on it. */
   line: number;
   range: TextRange;
@@ -137,24 +149,26 @@ export interface PossibleLink {
 /**
  * Text in a note that matches the name or an alias of another note and is
  * not linked. `names` pairs each name to look for with the note it belongs
- * to. Names shorter than three characters are skipped: they match everywhere.
+ * to, and may give that note's path so a link to it can be written as a
+ * path. Names shorter than three characters are skipped: they match
+ * everywhere.
  */
 export function possibleLinks(
   content: string,
-  names: { name: string; noteName: string }[],
+  names: { name: string; noteName: string; notePath?: string }[],
   limit = 100
 ): PossibleLink[] {
   const lines = content.split("\n");
   const inFence = fencedLines(lines);
   const lower = content.toLowerCase();
   const out: PossibleLink[] = [];
-  for (const { name, noteName } of names) {
+  for (const { name, noteName, notePath } of names) {
     const wanted = name.trim();
     if (wanted.length < 3 || !lower.includes(wanted.toLowerCase())) continue;
     for (let i = 0; i < lines.length && out.length < limit; i++) {
       if (inFence[i]) continue;
       for (const range of findMentions(lines[i], wanted)) {
-        out.push({ noteName, line: i + 1, range, text: lines[i] });
+        out.push({ noteName, ...(notePath === undefined ? {} : { notePath }), line: i + 1, range, text: lines[i] });
         if (out.length >= limit) break;
       }
     }

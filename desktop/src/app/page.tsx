@@ -65,9 +65,11 @@ import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } 
 import { splitWikiTarget, findAnchorLine, findLinkedFile, findLinkedNote, linkKey, type WikiAnchor } from "@/lib/wiki-link-utils";
 import { pdfPage } from "@/lib/embed-utils";
 import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
+import { linkPlace } from "@/lib/link-open";
+import { noteContaining } from "@/lib/note-path";
 import { countWords, plural } from "@/lib/text-stats";
 import { newNoteFolder, nextTimestampName } from "@/lib/file-list";
-import { setVaultPrefs } from "@/lib/vault-prefs";
+import { setLinkPrefs, setVaultPrefs } from "@/lib/vault-prefs";
 import FootnotesPanel from "@/components/FootnotesPanel";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex } from "@/lib/vault-index";
 import { unfoldAll } from "@codemirror/language";
@@ -1887,6 +1889,11 @@ function Home() {
     setVaultPrefs({ excludedFiles: settings.excludedFiles, attachmentFolder: settings.attachmentFolder });
   }, [settings.excludedFiles, settings.attachmentFolder]);
 
+  // How a new link is written, for the code that writes one: see link-format.ts.
+  useEffect(() => {
+    setLinkPrefs({ linkFormat: settings.linkFormat, useWikilinks: settings.useWikilinks });
+  }, [settings.linkFormat, settings.useWikilinks]);
+
   const handleNewFolder = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
     // Find a unique folder name
@@ -2000,17 +2007,36 @@ function Home() {
   useEffect(() => {
     const handleWikiClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const link = target.closest(".md-wikilink, .wl-link, [data-target]") as HTMLElement | null;
+      const link = target.closest(".md-wikilink, .wl-link, [data-target], [data-vault-link]") as HTMLElement | null;
       if (!link) return;
 
-      const linkTarget = link.getAttribute("data-target") || link.textContent?.trim();
+      const linkTarget = link.getAttribute("data-target") || link.getAttribute("data-vault-link") || link.textContent?.trim();
       if (!linkTarget || !window.electronAPI || !activeVault) return;
 
       e.stopImmediatePropagation();
       e.preventDefault();
 
       const vaultPath = activeVault.path;
+      // A markdown link to a note or file, [text](path.md), carries its
+      // destination here; a wiki link does not.
+      const markdownDest = link.getAttribute("data-vault-link");
+      // The note the link is written in: the split pane and an embedded note
+      // are not the active tab.
+      const linkNote = noteContaining(link) ?? activeTab;
       window.electronAPI.listAllFiles(vaultPath).then(async (files) => {
+        // A markdown link, and a wiki link written as a path from its own
+        // note ("./", "../"), lead somewhere that depends on that note.
+        const placed = await linkPlace(vaultPath, files, linkNote, markdownDest, linkTarget);
+        if (placed) {
+          if (placed.page) setPdfPageRequest({ filePath: placed.filePath, page: placed.page, tick: Date.now() });
+          pendingJumpRef.current = placed.anchor
+            ? { filePath: placed.filePath, anchor: placed.anchor, expires: Date.now() + 3000 }
+            : null;
+          openFile(placed.filePath);
+          if (placed.anchor) setJumpTick((t) => t + 1);
+        }
+        if (placed || markdownDest !== null) return;
+
         // By name or by path inside the vault. Renaming a note rewrites the
         // links to it by the same rule, so the two stay in one place.
         const byName = (name: string) =>
@@ -2918,11 +2944,11 @@ function Home() {
                     {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
                       <BoardView content={content} onChange={handleContentChange} />
                     ) : viewMode === "view" ? (
-                      <ReadOnlyView content={content} onChange={handleContentChange} onViewReady={handleReadViewReady} />
+                      <ReadOnlyView content={content} onChange={handleContentChange} onViewReady={handleReadViewReady} notePath={currentTab.filePath} />
                     ) : viewMode === "source" ? (
-                      <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} />
+                      <SourceEditor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} notePath={currentTab.filePath} />
                     ) : (
-                      <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} focusMode={focusMode} />
+                      <Editor content={content} onChange={handleContentChange} onViewReady={handleEditorViewReady} vaultPath={activeVault?.path} notePath={currentTab.filePath} focusMode={focusMode} />
                     )}
                   </div>
                 </div>
@@ -2948,11 +2974,11 @@ function Home() {
                       {(isBoardFile(splitTabState.filePath) || isBoardContent(splitContent)) && viewMode !== "source" ? (
                         <BoardView content={splitContent} onChange={handleSplitContentChange} />
                       ) : viewMode === "view" ? (
-                        <ReadOnlyView content={splitContent} onChange={handleSplitContentChange} />
+                        <ReadOnlyView content={splitContent} onChange={handleSplitContentChange} notePath={splitTabState.filePath} />
                       ) : viewMode === "source" ? (
-                        <SourceEditor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} />
+                        <SourceEditor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} notePath={splitTabState.filePath} />
                       ) : (
-                        <Editor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} focusMode={false} />
+                        <Editor content={splitContent} onChange={handleSplitContentChange} onViewReady={(view) => { splitEditorViewRef.current = view; }} vaultPath={activeVault?.path} notePath={splitTabState.filePath} focusMode={false} />
                       )}
                     </div>
                   </div>
@@ -3277,6 +3303,7 @@ function Home() {
       {showAudioRecorder && activeVault && (
         <AudioRecorder
           vaultPath={activeVault.path}
+          notePath={activeTab}
           onInsert={(link) => {
             if (editorViewRef.current) {
               const view = editorViewRef.current;
@@ -3293,6 +3320,7 @@ function Home() {
       {showAttachments && activeVault && (
         <AttachmentManager
           vaultPath={activeVault.path}
+          notePath={activeTab}
           onInsert={(link) => {
             if (editorViewRef.current) {
               const view = editorViewRef.current;

@@ -1,4 +1,4 @@
-import type { InlineRenderer, InlineReplacement } from "../types";
+import type { InlineContext, InlineRenderer, InlineReplacement } from "../types";
 import { markdownToHTML } from "@/lib/markdown-to-html";
 import {
   embedTitle,
@@ -7,9 +7,13 @@ import {
   truncateEmbed,
   type ParsedEmbed,
 } from "@/lib/embed-utils";
-import { localImageTag, localMediaTag } from "./images";
+import { localImageTag, localMediaTag, vaultImagePath } from "./images";
 import { baseEmbedTag, scheduleBaseEmbeds } from "./base-block";
 import { loadVaultIndex } from "@/lib/vault-index";
+import { linkOpenTag } from "./links";
+import { folderOf, joinPath } from "@/lib/link-resolve";
+import { NOTE_PATH_ATTRIBUTE } from "@/lib/note-path";
+import { onLinkIndexChange, peekLinkIndex, vaultRelative } from "@/lib/vault-links";
 
 /**
  * Obsidian-style embeds: `![[Note]]`, `![[Note#Heading]]`, `![[image.png|160]]`.
@@ -153,6 +157,23 @@ function findNote(notes: NoteEntry[], file: string, vaultPath?: string): NoteEnt
   return byAlias ? notes.find((n) => n.filePath === byAlias) ?? null : null;
 }
 
+/**
+ * The file an embed names by a path from its own note, `![[./photo.png]]`
+ * or `![[../Notes/Plan]]`, as a path inside the vault. Null for any other
+ * target, when nothing is at the end of the path, and until the vault's
+ * files are loaded; the embed is then found by name, as it always was.
+ */
+function fileBesideNote(vaultPath: string, notePath: string | undefined, file: string): string | null {
+  const target = forwardSlashes(file).trim();
+  if (!notePath || !(target.startsWith("./") || target.startsWith("../"))) return null;
+  const from = vaultRelative(vaultPath, notePath);
+  if (from === null) return null;
+  return peekLinkIndex(vaultPath)?.fileAt(joinPath(folderOf(from), target)) ?? null;
+}
+
+// The list of files arriving, or changing, can change where a link leads.
+onLinkIndexChange(notifyChanged);
+
 function getNoteText(filePath: string): string | null | undefined {
   const cached = noteText.get(filePath);
   if ((!cached || Date.now() - cached.loadedAt > NOTE_TEXT_TTL) && !noteTextLoading.has(filePath)) {
@@ -244,8 +265,22 @@ function chip(label: string, extraClass = ""): string {
   return `<span class="${cls}"><span class="md-embed-icon">&#8689;</span> ${escapeHtml(label)}</span>`;
 }
 
-/** Render a note's markdown for display inside an embed. */
-function renderEmbeddedMarkdown(markdown: string, vaultPath: string): string {
+/** Text the HTML converter escaped, as it was written. */
+function unescapeHtml(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * Render a note's markdown for display inside an embed. `notePath` is the
+ * embedded note: the paths in it start from its folder, not from the folder
+ * of the note it is shown in.
+ */
+function renderEmbeddedMarkdown(markdown: string, vaultPath: string, notePath: string): string {
   const { text, hiddenLines } = truncateEmbed(markdown);
   let html = markdownToHTML(text);
 
@@ -256,10 +291,14 @@ function renderEmbeddedMarkdown(markdown: string, vaultPath: string): string {
     return `<span class="md-wikilink" data-target="${target}">${label}</span>`;
   });
 
+  // Markdown links to notes and files open the way they do in the editor.
+  html = html.replace(/<a href="([^"]*)">/g, (_all, href: string) => linkOpenTag(unescapeHtml(href)));
+
   // Images given by a path inside the vault are loaded the way the editor loads them.
   html = html.replace(/<img src="([^"]*)" alt="([^"]*)"[^>]*>/g, (all, src: string, alt: string) => {
     if (/^(https?:|data:|file:)/i.test(src)) return all;
-    const absolute = `${vaultPath}/${src.replace(/&amp;/g, "&")}`;
+    const absolute = vaultImagePath(vaultPath, notePath, unescapeHtml(src));
+    if (!absolute) return all;
     return localImageTag(absolute, alt.replace(/&quot;/g, '"').replace(/&amp;/g, "&"), "", "md-embed-img");
   });
 
@@ -269,14 +308,20 @@ function renderEmbeddedMarkdown(markdown: string, vaultPath: string): string {
   return html;
 }
 
-function noteEmbedHtml(embed: ParsedEmbed, body: string): string {
+/**
+ * `notePath` is the embedded note, when it was found. Its text is marked as
+ * belonging to it, so that a click on a link in it is read from its folder.
+ * The title above is a link in the note that holds the embed, and is not.
+ */
+function noteEmbedHtml(embed: ParsedEmbed, body: string, notePath?: string): string {
+  const note = notePath ? ` ${NOTE_PATH_ATTRIBUTE}="${escapeHtml(notePath)}"` : "";
   return (
     `<div class="embed-container">` +
     `<div class="embed-header embed-header-clickable">` +
     `<span class="embed-icon">&#8689;</span>` +
     `<span class="embed-title md-wikilink" data-target="${escapeHtml(embed.target)}">${escapeHtml(embedTitle(embed))}</span>` +
     `</div>` +
-    `<div class="embed-content">${body}</div>` +
+    `<div class="embed-content"${note}>${body}</div>` +
     `</div>`
   );
 }
@@ -292,7 +337,7 @@ export const embedRenderer: InlineRenderer = {
   name: "embeds",
   priority: 7,
 
-  find(text: string, offset: number): InlineReplacement[] {
+  find(text: string, offset: number, context?: InlineContext): InlineReplacement[] {
     const results: InlineReplacement[] = [];
     const regex = /!\[\[([^\]]+)\]\]/g;
     let match;
@@ -302,12 +347,14 @@ export const embedRenderer: InlineRenderer = {
       const to = from + match[0].length;
       const embed = parseEmbed(match[1]);
       const vaultPath = currentVaultPath();
+      // A target written as a path from this note, when a file is there.
+      const beside = vaultPath ? fileBesideNote(vaultPath, context?.notePath, embed.file) : null;
 
       // Images render inline wherever they are written.
       if (embed.kind === "image" && vaultPath) {
-        const files = getAttachments(vaultPath);
+        const files = beside ? null : getAttachments(vaultPath);
         const wanted = forwardSlashes(embed.file).toLowerCase();
-        const path = files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
+        const path = beside ? `${vaultPath}/${beside}` : files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
         if (path) {
           const img = localImageTag(path, embed.file, sizeStyle(embed), "md-embed-img");
           results.push({ from, to, html: img, className: "md-embed-wrapper md-embed-image" });
@@ -325,9 +372,9 @@ export const embedRenderer: InlineRenderer = {
 
       // Sound and video play in place; a PDF is a card that opens it at its page.
       if ((embed.kind === "audio" || embed.kind === "video" || embed.kind === "pdf") && vaultPath) {
-        const files = getAttachments(vaultPath);
+        const files = beside ? null : getAttachments(vaultPath);
         const wanted = forwardSlashes(embed.file).toLowerCase();
-        const path = files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
+        const path = beside ? `${vaultPath}/${beside}` : files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
         if (!path) {
           results.push({
             from,
@@ -381,7 +428,12 @@ export const embedRenderer: InlineRenderer = {
       }
       if (embed.kind === "note" && vaultPath && wholeLine) {
         const notes = getNotes(vaultPath);
-        const note = notes && embed.file ? findNote(notes, embed.file, vaultPath) : null;
+        const besideRel = beside ? stripNoteExtension(beside).toLowerCase() : null;
+        const note =
+          notes && embed.file
+            ? (besideRel !== null ? notes.find((n) => n.rel === besideRel) : null) ??
+              findNote(notes, embed.file, vaultPath)
+            : null;
         const content = note ? getNoteText(note.filePath) : undefined;
 
         if (notes && embed.file && !note) {
@@ -398,9 +450,14 @@ export const embedRenderer: InlineRenderer = {
             body =
               section === null
                 ? `<div class="embed-not-found">Nothing in this note matches “${escapeHtml(embed.target)}”</div>`
-                : renderEmbeddedMarkdown(section, vaultPath);
+                : renderEmbeddedMarkdown(section, vaultPath, note.filePath);
           }
-          results.push({ from, to, html: noteEmbedHtml(embed, body), className: "md-embed-wrapper md-embed-block" });
+          results.push({
+            from,
+            to,
+            html: noteEmbedHtml(embed, body, note.filePath),
+            className: "md-embed-wrapper md-embed-block",
+          });
           continue;
         }
       }

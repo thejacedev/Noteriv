@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -15,26 +15,31 @@ import {
   mathExtension,
 } from "./markdown";
 import { folding } from "@/lib/editor-extensions";
+import { notePathSetting } from "@/lib/note-path";
 
 interface ReadOnlyViewProps {
   content: string;
   onChange?: (content: string) => void;
   /** Called with the view once it exists, so the page can scroll it to a link target. */
   onViewReady?: (view: EditorView) => void;
+  /** The full path of the note being shown: a link in it can be a path from its folder. */
+  notePath?: string;
   className?: string;
 }
 
-export default function ReadOnlyView({ content, onChange, onViewReady, className = "" }: ReadOnlyViewProps) {
+export default function ReadOnlyView({ content, onChange, onViewReady, notePath, className = "" }: ReadOnlyViewProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const [noteSetting] = useState(() => notePathSetting(notePath));
 
   const createEditor = useCallback(() => {
     if (!editorRef.current) return;
     if (viewRef.current) viewRef.current.destroy();
 
     const extensions = [
+      noteSetting.extension,
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       folding(),
       syntaxHighlighting(mdHighlightStyle),
@@ -96,9 +101,14 @@ export default function ReadOnlyView({ content, onChange, onViewReady, className
     }
   }, [content]);
 
+  // The same view shows whichever note's tab is in front.
+  useEffect(() => {
+    if (viewRef.current) noteSetting.set(viewRef.current, notePath);
+  }, [noteSetting, notePath]);
+
   // Wiki link click handling is done in page.tsx
 
   return (
-    <div ref={editorRef} className={`h-full overflow-hidden ${className}`} />
+    <div ref={editorRef} data-note-path={notePath} className={`h-full overflow-hidden ${className}`} />
   );
 }

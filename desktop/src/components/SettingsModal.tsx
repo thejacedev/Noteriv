@@ -197,6 +197,20 @@ export default function SettingsModal({
       <Row label="Update links on rename" desc="When a note, attachment or folder is renamed or moved, rewrite the links that point to it in every note.">
         <Toggle checked={settings.updateLinksOnRename} onChange={(v) => update({ updateLinksOnRename: v })} />
       </Row>
+      <Row label="New link format" desc="How the path is written in a link the app adds for you. Links you already have are not changed.">
+        <select
+          className="st-select"
+          value={settings.linkFormat}
+          onChange={(e) => update({ linkFormat: e.target.value as AppSettings["linkFormat"] })}
+        >
+          <option value="shortest">Shortest path when possible</option>
+          <option value="relative">Relative path to file</option>
+          <option value="absolute">Absolute path in vault</option>
+        </select>
+      </Row>
+      <Row label="Use [[Wikilinks]]" desc="Turn off to write new links as [text](path.md), which other markdown apps read too.">
+        <Toggle checked={settings.useWikilinks} onChange={(v) => update({ useWikilinks: v })} />
+      </Row>
       <Row label="New notes go" desc="Where a new note is created.">
         <select
           className="st-select"

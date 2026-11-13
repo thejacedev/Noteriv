@@ -5,7 +5,7 @@
  * Built from the vault index; no file is read here.
  */
 
-import { findLinkedNote } from "./wiki-link-utils";
+import { findLinkedNoteFrom } from "./wiki-link-utils";
 import { findNoteByAlias, type NoteMeta } from "./vault-index";
 
 export type GraphNodeKind = "note" | "tag" | "attachment" | "missing";
@@ -100,7 +100,7 @@ export function buildGraphModel(
   }
   for (const note of notes) {
     for (const target of note.links) {
-      const resolved = findLinkedNote(notes, target) ?? findNoteByAlias(notes, target);
+      const resolved = findLinkedNoteFrom(notes, note.relativePath, target) ?? findNoteByAlias(notes, target);
       if (resolved) {
         link(note.filePath, resolved.filePath);
         continue;

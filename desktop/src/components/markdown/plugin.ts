@@ -17,7 +17,8 @@ import { onCodeBlockProcessorsChange } from "@/lib/markdown-code-block-registry"
 import { onEmbedDataChange } from "./renderers/embeds";
 import { isCommentFence } from "@/lib/comments";
 import { frontmatterLineCount } from "@/lib/frontmatter-block";
-import type { BlockContext, InlineReplacement } from "./types";
+import { notePathFacet } from "@/lib/note-path";
+import type { BlockContext, InlineContext, InlineReplacement } from "./types";
 
 /** Dispatched when a plugin registers or removes a code-block processor. */
 const codeBlockProcessorsChanged = StateEffect.define<null>();
@@ -51,13 +52,14 @@ function getCursorLines(state: EditorState): Set<number> {
 function addInlineDecorations(
   builder: RangeSetBuilder<Decoration>,
   lineStart: number,
-  text: string
+  text: string,
+  context: InlineContext
 ) {
   const renderers = getInlineRenderers();
   const replacements: InlineReplacement[] = [];
 
   for (const renderer of renderers) {
-    const found = renderer.find(text, lineStart);
+    const found = renderer.find(text, lineStart, context);
     for (const r of found) {
       // Skip if overlapping with an existing replacement
       const overlaps = replacements.some(
@@ -163,6 +165,8 @@ function buildDecorations(
   const blockRenderers = getBlockRenderers();
   const mathTracker = new MathBlockTracker();
   const visible = getVisibleRange(view);
+  // Links and embeds can be paths from the folder of the note being shown.
+  const inlineContext: InlineContext = { notePath: view.state.facet(notePathFacet) };
 
   // Math tracker needs to know state up to the visible range
   // Pre-run math tracker from line 1 to visible.from to get correct state
@@ -247,14 +251,15 @@ function buildDecorations(
         addInlineDecorations(
           builder,
           line.from + inlineContent.offset,
-          inlineContent.content
+          inlineContent.content,
+          inlineContext
         );
       }
       continue;
     }
 
     // Regular paragraph — apply inline formatting to full line
-    addInlineDecorations(builder, line.from, text);
+    addInlineDecorations(builder, line.from, text, inlineContext);
   }
 
   return builder.finish();
@@ -330,6 +335,8 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       } else if (
         update.selectionSet ||
         update.viewportChanged ||
+        // Another note in the same editor: its relative links lead elsewhere.
+        update.startState.facet(notePathFacet) !== update.state.facet(notePathFacet) ||
         update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged))
         )

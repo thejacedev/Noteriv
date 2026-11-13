@@ -1,4 +1,6 @@
-import type { InlineRenderer, InlineReplacement } from "../types";
+import type { InlineContext, InlineRenderer, InlineReplacement } from "../types";
+import { folderOf, joinPath, parseDestination, percentDecode } from "@/lib/link-resolve";
+import { peekLinkIndex, vaultRelative } from "@/lib/vault-links";
 
 // Global EditorView reference — set by Editor.tsx
 let _editorView: any = null;
@@ -11,13 +13,38 @@ const imageCache = new Map<string, string>();
 // re-renders) used to be told "not loaded" and was never tried again.
 const loadingPaths = new Map<string, Promise<string | null>>();
 
-function resolveToAbsPath(src: string): string | null {
+/**
+ * The file on disk that an image's source names, or null for a web address.
+ *
+ * `src` is the text between `](` and `)` and `notePath` the note it is
+ * written in. The path is worked out by the rule every link follows
+ * (`link-resolve.ts`): from the top of the vault, from the note's folder, or
+ * by name. That needs the list of the vault's files, which is loaded in the
+ * background; until it is there, and for a file the list does not hold
+ * (one just saved, or one in a hidden folder such as `.imgs`), the source is
+ * read the way it always was, as a path from the top of the vault.
+ */
+export function vaultImagePath(vaultPath: string, notePath: string | null | undefined, src: string): string | null {
   if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:") || src.startsWith("file://")) {
     return null;
   }
+  const { path } = parseDestination(src);
+  const from = (notePath ? vaultRelative(vaultPath, notePath) : null) ?? "";
+  const found = peekLinkIndex(vaultPath)?.markdown(from, path);
+  if (found) return `${vaultPath}/${found}`;
+  // "../" leads to one place, whether or not the list knows the file yet.
+  // ("./" does not: with nothing beside the note it is read from the top.)
+  if (path.startsWith("../")) {
+    const beside = joinPath(folderOf(from), percentDecode(path) ?? path);
+    if (beside) return `${vaultPath}/${beside}`;
+  }
+  return `${vaultPath}/${src}`;
+}
+
+function resolveToAbsPath(src: string, notePath: string | undefined): string | null {
   const vaultPath = document.querySelector("[data-vault-path]")?.getAttribute("data-vault-path");
   if (!vaultPath) return null;
-  return `${vaultPath}/${src}`;
+  return vaultImagePath(vaultPath, notePath, src);
 }
 
 function getMime(name: string): string {
@@ -279,7 +306,7 @@ export const imageRenderer: InlineRenderer = {
   name: "images",
   priority: 10,
 
-  find(text: string, offset: number): InlineReplacement[] {
+  find(text: string, offset: number, context?: InlineContext): InlineReplacement[] {
     const results: InlineReplacement[] = [];
     // Match ![alt](src), ![alt|WIDTH](src), ![alt|WIDTHxHEIGHT](src)
     const regex = /!\[([^\]]*?)(?:\|(\d+(?:x\d+)?))?\]\(([^)]+)\)/g;
@@ -290,7 +317,7 @@ export const imageRenderer: InlineRenderer = {
       const sizeStr = match[2]; // "300" or "300x200"
       const rawSrc = match[3];
       const fullMatch = match[0];
-      const absPath = resolveToAbsPath(rawSrc);
+      const absPath = resolveToAbsPath(rawSrc, context?.notePath);
 
       let sizeStyle = "";
       if (sizeStr) {

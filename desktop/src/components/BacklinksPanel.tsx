@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { findLinkedNote } from "@/lib/wiki-link-utils";
+import { findLinkedNoteFrom } from "@/lib/wiki-link-utils";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
 import { findMentions, linkMention, outgoingLinks, possibleLinks, type TextRange } from "@/lib/mentions";
 import { excludedPatterns } from "@/lib/vault-prefs";
+import { loadLinkIndex, peekLinkIndex, writeLink } from "@/lib/vault-links";
 
 interface BacklinksPanelProps {
   /** Full path of the current file being viewed. */
@@ -34,9 +35,13 @@ interface Mention {
 
 type Section = "linked" | "unlinked" | "outgoing" | "possible";
 
-/** The note a link's file part points at: by name, by path, or by an alias. */
-function resolve(index: NoteMeta[], target: string): NoteMeta | null {
-  return findLinkedNote(index, target) ?? findNoteByAlias(index, target);
+/**
+ * The note a link's file part points at: by name, by path, or by an alias.
+ * `from` is the note the link is written in, as a path inside the vault: a
+ * link can be a path from its folder.
+ */
+function resolve(index: NoteMeta[], from: string, target: string): NoteMeta | null {
+  return findLinkedNoteFrom(index, from, target) ?? findNoteByAlias(index, target);
 }
 
 function groupByFile(mentions: Mention[]): [string, Mention[]][] {
@@ -72,6 +77,8 @@ export default function BacklinksPanel({
       setLoading(true);
       try {
         const notes = await loadVaultIndex(vaultPath, { fresh: reloadTick > 0 });
+        // The Link buttons write links, which takes the list of every file.
+        loadLinkIndex(vaultPath).catch(() => {});
         const self = notes.find((n) => n.filePath === filePath);
         if (cancelled) return;
         setIndex(notes);
@@ -83,7 +90,7 @@ export default function BacklinksPanel({
 
         // Notes with a link that resolves here, then the lines those links are on.
         const sources = notes.filter(
-          (n) => n.filePath !== filePath && n.links.some((l) => resolve(notes, l)?.filePath === filePath)
+          (n) => n.filePath !== filePath && n.links.some((l) => resolve(notes, n.relativePath, l)?.filePath === filePath)
         );
         const linkedFound: Mention[] = [];
         await Promise.all(
@@ -95,7 +102,7 @@ export default function BacklinksPanel({
               let match;
               while ((match = regex.exec(line)) !== null) {
                 const target = match[1].split("|")[0].replace(/\\$/, "").split("#")[0].trim();
-                if (target && resolve(notes, target)?.filePath === filePath) {
+                if (target && resolve(notes, n.relativePath, target)?.filePath === filePath) {
                   linkedFound.push({
                     filePath: n.filePath,
                     noteName: n.name,
@@ -161,8 +168,9 @@ export default function BacklinksPanel({
 
   // The links this note makes, and whether each leads anywhere.
   const outgoing = useMemo(
-    () => outgoingLinks(content).map((link) => ({ ...link, note: resolve(index, link.target) })),
-    [content, index]
+    () =>
+      outgoingLinks(content).map((link) => ({ ...link, note: resolve(index, self?.relativePath ?? "", link.target) })),
+    [content, index, self]
   );
 
   // Other notes' names in this note's text that are not links yet.
@@ -170,7 +178,7 @@ export default function BacklinksPanel({
     if (!self) return [];
     const names = index
       .filter((n) => n.filePath !== filePath)
-      .flatMap((n) => [n.name, ...n.aliases].map((name) => ({ name, noteName: n.name })));
+      .flatMap((n) => [n.name, ...n.aliases].map((name) => ({ name, noteName: n.name, notePath: n.relativePath })));
     return possibleLinks(content, names, 60);
   }, [content, index, self, filePath]);
 
@@ -195,24 +203,38 @@ export default function BacklinksPanel({
         setReloadTick((t) => t + 1);
         return;
       }
-      lines[mention.line - 1] = linkMention(mention.text, mention.range, self.name);
+      // Written in the other note, in the link format chosen in Settings.
+      const files = await loadLinkIndex(vaultPath, 0);
+      lines[mention.line - 1] = linkMention(mention.text, mention.range, self.name, (shown) =>
+        writeLink(files, vaultPath, mention.filePath, self.relativePath, { alias: shown })
+      );
       await window.electronAPI.writeFile(mention.filePath, lines.join("\n"));
       invalidateVaultIndex();
       setReloadTick((t) => t + 1);
     },
-    [self]
+    [self, vaultPath]
   );
 
   /** Turn another note's name in this note into a link. */
   const linkPossible = useCallback(
-    (line: number, range: TextRange, noteName: string) => {
+    (line: number, range: TextRange, noteName: string, notePath: string | undefined) => {
       if (!onContentChange) return;
+      // The files were loaded with the panel. Not waiting for them here
+      // keeps the note's text from changing between the click and the edit.
+      const files = peekLinkIndex(vaultPath);
       const lines = content.split("\n");
       if (lines[line - 1] === undefined) return;
-      lines[line - 1] = linkMention(lines[line - 1], range, noteName);
+      lines[line - 1] = linkMention(
+        lines[line - 1],
+        range,
+        noteName,
+        files && notePath !== undefined
+          ? (shown) => writeLink(files, vaultPath, filePath, notePath, { alias: shown })
+          : undefined
+      );
       onContentChange(lines.join("\n"));
     },
-    [content, onContentChange]
+    [content, onContentChange, vaultPath, filePath]
   );
 
   const renderMentions = (mentions: Mention[], withLinkButton: boolean) =>
@@ -333,7 +355,7 @@ export default function BacklinksPanel({
                 {onContentChange && (
                   <button
                     className="bl-action"
-                    onClick={() => linkPossible(p.line, p.range, p.noteName)}
+                    onClick={() => linkPossible(p.line, p.range, p.noteName, p.notePath)}
                     title={`Link to ${p.noteName}`}
                   >
                     Link

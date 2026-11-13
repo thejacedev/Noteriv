@@ -3,6 +3,7 @@
  */
 
 import { extractHeadings } from "./toc-utils";
+import { folderOf, joinPath } from "./link-resolve";
 
 /** The place inside a note that a wiki link points at. */
 export type WikiAnchor =
@@ -165,6 +166,27 @@ export function findLinkedNote<T extends { filePath: string; relativePath?: stri
       return name === wanted || linkKey(f.relativePath ?? "") === wanted;
     }) ?? null
   );
+}
+
+/**
+ * As `findLinkedNote`, for a link written in the note at `from` (its path
+ * inside the vault). A target that starts with "./" or "../" is a path from
+ * that note's folder; when no note is there, and for every other target,
+ * the note is found by name or by its whole path, as above.
+ */
+export function findLinkedNoteFrom<T extends { filePath: string; relativePath?: string }>(
+  files: T[],
+  from: string,
+  target: string
+): T | null {
+  const path = target.trim().replace(/\\/g, "/");
+  if (path.startsWith("./") || path.startsWith("../")) {
+    const place = joinPath(folderOf(from.replace(/\\/g, "/")), path);
+    const wanted = place ? linkKey(place) : "";
+    const beside = wanted ? files.find((f) => linkKey(f.relativePath ?? "") === wanted) : undefined;
+    if (beside) return beside;
+  }
+  return findLinkedNote(files, target);
 }
 
 /**

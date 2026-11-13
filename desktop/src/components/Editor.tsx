@@ -19,6 +19,7 @@ import {
   mathExtension,
 } from "./markdown";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
+import { notePathSetting } from "@/lib/note-path";
 import { setEditorViewForImages } from "./markdown/renderers/images";
 import { folding, multipleCursors } from "@/lib/editor-extensions";
 import { attachmentFolderName } from "@/lib/vault-prefs";
@@ -30,14 +31,17 @@ interface EditorProps {
   onChange: (value: string) => void;
   onViewReady?: (view: EditorView) => void;
   vaultPath?: string;
+  /** The full path of the note being edited: a link in it can be a path from its folder. */
+  notePath?: string;
   className?: string;
   focusMode?: boolean;
 }
 
-export default function Editor({ content, onChange, onViewReady, vaultPath, className = "", focusMode = false }: EditorProps) {
+export default function Editor({ content, onChange, onViewReady, vaultPath, notePath, className = "", focusMode = false }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const historyConfig = useRef(new Compartment());
+  const [noteSetting] = useState(() => notePathSetting(notePath));
   const onChangeRef = useRef(onChange);
   const vaultPathRef = useRef(vaultPath);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -56,6 +60,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
         multipleCursors(),
         closeBrackets(),
         historyConfig.current.of(history()),
+        noteSetting.extension,
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         // The properties are edited as values above the note, so the YAML starts folded.
@@ -103,6 +108,11 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
       replaceDocument(viewRef.current, historyConfig.current, content);
     }
   }, [content]);
+
+  // The same editor shows whichever note's tab is in front.
+  useEffect(() => {
+    if (viewRef.current) noteSetting.set(viewRef.current, notePath);
+  }, [noteSetting, notePath]);
 
   // Toggle focus mode via CSS class on editor container
   useEffect(() => {
@@ -228,6 +238,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
   return (
     <div
       ref={editorRef}
+      data-note-path={notePath}
       className={`h-full overflow-hidden ${className}${isDragOver ? " editor-drop-active" : ""}`}
     />
   );
