@@ -19,7 +19,6 @@ mod scope;
 mod search;
 mod shim;
 mod store;
-#[allow(dead_code)]
 mod sync_crypto;
 mod sync_folder;
 mod sync_webdav;

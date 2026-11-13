@@ -21,11 +21,10 @@
 //!   Without that rule two folders copy the same file back and forth.
 
 use crate::sync_webdav::{
-    action_rel, conflict_rel, content_hash, is_synced_file, list_local, load_record, local_path,
-    move_to_trash_if_unchanged, plan, safe_rel, save_record, settle_touched_files, stat_local,
-    write_local_if_unchanged, Action, ConflictCopy, FileRecord, LocalFile, Outcome, RemoteFile,
-    SyncRecord,
-    RECORD_VERSION, SAVE_EVERY, SKIP_DIRS,
+    action_rel, conflict_rel, content_hash, is_settings_file, list_local_with, load_record,
+    local_path, move_to_trash_if_unchanged, plan, safe_rel, save_record, settle_touched_files,
+    stat_local, write_local_if_unchanged, Action, ConflictCopy, FileRecord, LocalFile, Outcome,
+    RemoteFile, SyncFilter, SyncRecord, RECORD_VERSION, SAVE_EVERY,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -44,6 +43,9 @@ pub(crate) struct FolderConfig {
     pub target_path: String,
     #[serde(default = "default_direction")]
     pub direction: String,
+    /// What to sync. Left out, it is notes, images and PDFs.
+    #[serde(default)]
+    pub filter: SyncFilter,
 }
 
 fn default_direction() -> String {
@@ -128,8 +130,13 @@ fn sig_of(file: &LocalFile) -> String {
 /// iCloud Drive on older versions of macOS does this by renaming: `Note.md`
 /// becomes `.Note.md.icloud`. The note still exists in the cloud, so it must
 /// not be taken for deleted. Returns the real names of such files.
-fn evicted_files(base: &Path) -> Result<BTreeSet<String>, String> {
-    fn walk(cur: &Path, prefix: &str, out: &mut BTreeSet<String>) -> Result<(), String> {
+fn evicted_files(base: &Path, filter: &SyncFilter) -> Result<BTreeSet<String>, String> {
+    fn walk(
+        cur: &Path,
+        prefix: &str,
+        filter: &SyncFilter,
+        out: &mut BTreeSet<String>,
+    ) -> Result<(), String> {
         let unreadable = |e: std::io::Error| {
             format!(
                 "\"{}\" could not be read ({e}), so nothing was synced.",
@@ -142,13 +149,13 @@ fn evicted_files(base: &Path) -> Result<BTreeSet<String>, String> {
                 continue;
             };
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                if !SKIP_DIRS.contains(&name.as_str()) {
-                    let rel = if prefix.is_empty() {
-                        name
-                    } else {
-                        format!("{prefix}/{name}")
-                    };
-                    walk(&entry.path(), &rel, out)?;
+                let rel = if prefix.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{prefix}/{name}")
+                };
+                if filter.enters(&rel, &name) {
+                    walk(&entry.path(), &rel, filter, out)?;
                 }
                 continue;
             }
@@ -158,7 +165,7 @@ fn evicted_files(base: &Path) -> Result<BTreeSet<String>, String> {
                 } else {
                     format!("{prefix}/{real}")
                 };
-                if is_synced_file(&rel) && safe_rel(&rel) {
+                if filter.allows(&rel) && safe_rel(&rel) {
                     out.insert(rel);
                 }
             }
@@ -166,7 +173,7 @@ fn evicted_files(base: &Path) -> Result<BTreeSet<String>, String> {
         Ok(())
     }
     let mut out = BTreeSet::new();
-    walk(base, "", &mut out)?;
+    walk(base, "", filter, &mut out)?;
     Ok(out)
 }
 
@@ -317,6 +324,11 @@ impl Run<'_> {
             Direction::Pull => false,
             Direction::Both => remote.mtime_ms <= local.mtime_ms,
         };
+        if is_settings_file(rel) {
+            // Bookmarks and the like are not notes: the winning file takes
+            // the name and no second copy is kept beside it.
+            return self.copy(rel, vault_wins);
+        }
         let losing_bytes = if vault_wins {
             &remote_bytes
         } else {
@@ -446,9 +458,9 @@ pub(crate) fn sync(
             .map_err(|e| format!("The target folder could not be created: {e}"))?;
     }
 
-    let local = list_local(&vault)?;
-    let remote = list_local(&target)?;
-    let evicted = evicted_files(&target)?;
+    let local = list_local_with(&vault, &cfg.filter)?;
+    let remote = list_local_with(&target, &cfg.filter)?;
+    let evicted = evicted_files(&target, &cfg.filter)?;
 
     if let Some(record) = loaded.as_mut() {
         settle_touched_files(&vault, &local, record);
@@ -543,6 +555,7 @@ pub(crate) fn test_connection(cfg: &FolderConfig, vault_path: Option<&str>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sync_webdav::list_local;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::{Duration, SystemTime};
 
@@ -663,6 +676,7 @@ mod tests {
             let cfg = FolderConfig {
                 target_path: target.to_string_lossy().into_owned(),
                 direction: direction.into(),
+                filter: SyncFilter::default(),
             };
             sync(self.vault.to_str().unwrap(), cfg, &self.records)
         }
@@ -1213,6 +1227,7 @@ mod tests {
             let cfg = FolderConfig {
                 target_path: path.into(),
                 direction: direction.into(),
+                filter: SyncFilter::default(),
             };
             let err = sync(a.vault.to_str().unwrap(), cfg, &a.records).unwrap_err();
             assert!(err.contains(expected), "{path:?} {direction:?}: {err}");
@@ -1227,6 +1242,7 @@ mod tests {
         let cfg = FolderConfig {
             target_path: target.to_string_lossy().into_owned(),
             direction: "both".into(),
+            filter: SyncFilter::default(),
         };
         test_connection(&cfg, None).expect("a writable folder passes");
         assert!(target.is_dir());
@@ -1235,6 +1251,7 @@ mod tests {
         let bad = FolderConfig {
             target_path: "relative/path".into(),
             direction: "both".into(),
+            filter: SyncFilter::default(),
         };
         assert!(test_connection(&bad, None).is_err());
     }
@@ -1247,6 +1264,7 @@ mod tests {
         let config = |target: &Path| FolderConfig {
             target_path: target.to_string_lossy().into_owned(),
             direction: "both".into(),
+            filter: SyncFilter::default(),
         };
 
         let inside = a.vault.join("Backup").join("Deep");
@@ -1302,5 +1320,112 @@ mod tests {
             .unwrap()
             .to_string_lossy()
             .starts_with("folder-"));
+    }
+
+    // ── Choosing what to sync ──
+
+    fn sync_with(device: &Device, target: &Path, filter: SyncFilter) -> Outcome {
+        let cfg = FolderConfig {
+            target_path: target.to_string_lossy().into_owned(),
+            direction: "both".into(),
+            filter,
+        };
+        let outcome = sync(device.vault.to_str().unwrap(), cfg, &device.records).expect("the sync runs");
+        assert!(outcome.errors.is_empty(), "unexpected errors: {:?}", outcome.errors);
+        outcome
+    }
+
+    #[test]
+    fn a_folder_left_out_is_never_copied_or_deleted_on_either_side() {
+        let a = Device::new("leftout");
+        let target = scratch("leftout-target");
+        write(&a.vault, "Keep.md", b"keep");
+        write(&a.vault, "Archive/Old.md", b"old");
+        assert_eq!(counts(&a.sync(&target, "both")), (2, 0, 0, 0));
+
+        let without = SyncFilter {
+            exclude_folders: vec!["Archive".into()],
+            ..SyncFilter::default()
+        };
+        // Leaving the folder out changes nothing anywhere.
+        assert_eq!(counts(&sync_with(&a, &target, without.clone())), (0, 0, 0, 0));
+        // Deleting a note in it here does not delete it over there, and a
+        // new note in it does not travel.
+        remove(&a.vault, "Archive/Old.md");
+        write(&a.vault, "Archive/New.md", b"new");
+        assert_eq!(counts(&sync_with(&a, &target, without.clone())), (0, 0, 0, 0));
+        assert_eq!(text(&target, "Archive/Old.md"), "old");
+        assert!(!local_path(&target, "Archive/New.md").exists());
+        // A folder whose name only starts the same way is not left out.
+        write(&a.vault, "Archive2/Note.md", b"n");
+        assert_eq!(counts(&sync_with(&a, &target, without)), (1, 0, 0, 0));
+
+        // Taking the folder back in brings the two sides together and deletes nothing.
+        let together = a.sync(&target, "both");
+        assert_eq!(together.deleted, 0);
+        assert_eq!(text(&a.vault, "Archive/Old.md"), "old");
+        assert_eq!(text(&target, "Archive/New.md"), "new");
+    }
+
+    #[test]
+    fn kinds_of_file_are_synced_only_when_chosen() {
+        let a = Device::new("kinds");
+        let target = scratch("kinds-target");
+        write(&a.vault, "Note.md", b"n");
+        write(&a.vault, "pic.png", b"png");
+        write(&a.vault, "talk.mp3", b"mp3");
+        assert_eq!(counts(&a.sync(&target, "both")), (2, 0, 0, 0));
+        assert!(!local_path(&target, "talk.mp3").exists());
+
+        let with_audio = SyncFilter { audio: true, ..SyncFilter::default() };
+        assert_eq!(counts(&sync_with(&a, &target, with_audio)), (1, 0, 0, 0));
+        assert_eq!(text(&target, "talk.mp3"), "mp3");
+
+        // Turning images off leaves the picture on both sides and syncs it no more.
+        let no_images = SyncFilter { images: false, audio: true, ..SyncFilter::default() };
+        remove(&a.vault, "pic.png");
+        assert_eq!(counts(&sync_with(&a, &target, no_images)), (0, 0, 0, 0));
+        assert_eq!(text(&target, "pic.png"), "png");
+    }
+
+    #[test]
+    fn vault_settings_travel_only_when_asked_and_the_newer_file_wins_without_a_copy() {
+        let a = Device::new("settings-a");
+        let b = Device::new("settings-b");
+        let target = scratch("settings-target");
+        write(&a.vault, "Note.md", b"n");
+        write(&a.vault, ".noteriv/bookmarks.json", b"{\"items\":[1]}");
+        write(&a.vault, ".noteriv/workspace.json", b"this machine's open tabs");
+        write(&a.vault, ".noteriv/trash/Old.md", b"trashed");
+
+        // Not asked for: the app's folder stays where it is.
+        assert_eq!(counts(&a.sync(&target, "both")), (1, 0, 0, 0));
+        assert!(!local_path(&target, ".noteriv").exists());
+
+        let with = SyncFilter { settings: true, ..SyncFilter::default() };
+        assert_eq!(counts(&sync_with(&a, &target, with.clone())), (1, 0, 0, 0));
+        assert_eq!(text(&target, ".noteriv/bookmarks.json"), "{\"items\":[1]}");
+        assert!(!local_path(&target, ".noteriv/workspace.json").exists());
+        assert!(!local_path(&target, ".noteriv/trash").exists());
+
+        // A second device has bookmarks of its own, written later. (A
+        // different length, so the change shows even when both files were
+        // written within one tick of the file system's clock.)
+        write(&b.vault, ".noteriv/bookmarks.json", b"{\"items\":[2,3]}");
+        set_time(&b.vault, ".noteriv/bookmarks.json", 60);
+        let outcome = sync_with(&b, &target, with.clone());
+        assert_eq!(outcome.conflicts, 0);
+        assert!(outcome.conflict_copies.is_empty());
+        assert_eq!(text(&target, ".noteriv/bookmarks.json"), "{\"items\":[2,3]}");
+        let in_folder: Vec<String> = fs::read_dir(b.vault.join(".noteriv"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(in_folder, ["bookmarks.json"]);
+
+        // And the first device takes the newer file.
+        sync_with(&a, &target, with);
+        assert_eq!(text(&a.vault, ".noteriv/bookmarks.json"), "{\"items\":[2,3]}");
+        assert_eq!(text(&a.vault, ".noteriv/workspace.json"), "this machine's open tabs");
     }
 }

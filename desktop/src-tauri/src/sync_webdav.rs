@@ -23,14 +23,109 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// File types WebDAV sync carries. Anything else in the vault stays local.
-const SYNC_EXTS: &[&str] = &[
-    "md", "markdown", "txt", "canvas", "drawing", "json", "csv", "css", "yaml", "yml", "png",
-    "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif", "pdf",
+/// File types that are always synced. Anything not listed here or in one
+/// of the kinds below stays local.
+const NOTE_EXTS: &[&str] = &[
+    "md", "markdown", "txt", "canvas", "drawing", "base", "json", "csv", "css", "yaml", "yml",
 ];
+const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"];
+const PDF_EXTS: &[&str] = &["pdf"];
+const AUDIO_EXTS: &[&str] = &["mp3", "wav", "m4a", "ogg", "flac"];
+const VIDEO_EXTS: &[&str] = &["mp4", "webm", "mov", "mkv"];
 
 /// Folders that are never synced, on either side.
 pub(crate) const SKIP_DIRS: &[&str] = &[".git", ".noteriv", "node_modules", ".obsidian", ".trash"];
+
+/// The app's own folder in a vault, and the files in it that hold settings
+/// worth having on every device: bookmarks, property types and saved
+/// layouts. The rest of the folder (the open tabs of this machine, the
+/// trash, plugins) stays where it is.
+const SETTINGS_DIR: &str = ".noteriv";
+const SETTINGS_FILES: &[&str] = &["bookmarks.json", "types.json", "workspaces.json"];
+
+/// Whether a file is one of the vault's settings files rather than a note.
+pub(crate) fn is_settings_file(rel: &str) -> bool {
+    rel.strip_prefix(SETTINGS_DIR)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .is_some_and(|name| SETTINGS_FILES.contains(&name))
+}
+
+/// The encryption key file on the server. Its ending is one no kind of
+/// synced file has, so it is never listed, downloaded into a vault or
+/// deleted as a note.
+pub(crate) const KEY_FILE: &str = "noteriv-encryption.key";
+
+/// What the user has chosen to sync. The same choice is applied to the
+/// vault and to the other side, which is what makes leaving something out
+/// safe: a file that is left out is invisible on both sides, so it is never
+/// taken for one that was deleted.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub(crate) struct SyncFilter {
+    pub images: bool,
+    pub pdfs: bool,
+    pub audio: bool,
+    pub video: bool,
+    /// Bookmarks, property types and saved layouts.
+    pub settings: bool,
+    /// Folders left out, as paths inside the vault with `/`.
+    pub exclude_folders: Vec<String>,
+}
+
+impl Default for SyncFilter {
+    /// What was synced before there was a choice: notes, images and PDFs.
+    fn default() -> SyncFilter {
+        SyncFilter {
+            images: true,
+            pdfs: true,
+            audio: false,
+            video: false,
+            settings: false,
+            exclude_folders: Vec::new(),
+        }
+    }
+}
+
+impl SyncFilter {
+    fn excluded(&self, rel: &str) -> bool {
+        self.exclude_folders.iter().any(|folder| {
+            let folder = folder.trim().trim_matches('/');
+            !folder.is_empty()
+                && rel
+                    .strip_prefix(folder)
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        })
+    }
+
+    /// Whether a file is synced.
+    pub(crate) fn allows(&self, rel: &str) -> bool {
+        if rel == SETTINGS_DIR || rel.starts_with(".noteriv/") {
+            return self.settings && is_settings_file(rel);
+        }
+        if self.excluded(rel) {
+            return false;
+        }
+        let Some(ext) = Path::new(rel).extension().and_then(|e| e.to_str()) else {
+            return false;
+        };
+        let ext = ext.to_lowercase();
+        let is = |kinds: &[&str]| kinds.contains(&ext.as_str());
+        is(NOTE_EXTS)
+            || (self.images && is(IMAGE_EXTS))
+            || (self.pdfs && is(PDF_EXTS))
+            || (self.audio && is(AUDIO_EXTS))
+            || (self.video && is(VIDEO_EXTS))
+    }
+
+    /// Whether a folder is looked into at all. `rel` is its path inside the
+    /// vault and `name` its own name.
+    pub(crate) fn enters(&self, rel: &str, name: &str) -> bool {
+        if rel == SETTINGS_DIR {
+            return self.settings;
+        }
+        !SKIP_DIRS.contains(&name) && !rel.starts_with(".noteriv/") && !self.excluded(rel)
+    }
+}
 
 /// Bumped when the record's meaning changes; an older record is then ignored.
 pub(crate) const RECORD_VERSION: u32 = 1;
@@ -49,6 +144,13 @@ pub(crate) struct WebDavConfig {
     pub password: String,
     #[serde(rename = "remotePath", default = "default_root")]
     pub remote_path: String,
+    /// What to sync. Left out, it is notes, images and PDFs.
+    #[serde(default)]
+    pub filter: SyncFilter,
+    /// When set, file contents are encrypted before they leave this machine.
+    /// File and folder names are not: they stay readable on the server.
+    #[serde(rename = "encryptionPassword", default)]
+    pub encryption_password: Option<String>,
 }
 
 fn default_root() -> String {
@@ -59,12 +161,10 @@ fn default_root() -> String {
 // Paths and addresses
 // ============================================================
 
+/// Whether a file is synced when nothing has been chosen otherwise.
+#[cfg(test)]
 pub(crate) fn is_synced_file(rel: &str) -> bool {
-    Path::new(rel)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| SYNC_EXTS.contains(&e.to_lowercase().as_str()))
-        .unwrap_or(false)
+    SyncFilter::default().allows(rel)
 }
 
 /// A relative path is only used if it cannot point outside the vault. The
@@ -202,7 +302,16 @@ pub(crate) fn stat_local(path: &Path) -> Option<LocalFile> {
 /// must never be skipped: a note that is merely unreadable right now, on a
 /// drive that hiccuped or a folder whose permissions changed, would otherwise
 /// look like one the user deleted, and be deleted from the server.
+#[cfg(test)]
 pub(crate) fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, String> {
+    list_local_with(vault, &SyncFilter::default())
+}
+
+/// `list_local`, for what the user has chosen to sync.
+pub(crate) fn list_local_with(
+    vault: &Path,
+    filter: &SyncFilter,
+) -> Result<BTreeMap<String, LocalFile>, String> {
     fn unreadable(path: &Path, e: std::io::Error) -> String {
         format!(
             "\"{}\" could not be read ({e}), so nothing was synced.",
@@ -210,7 +319,12 @@ pub(crate) fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, St
         )
     }
 
-    fn walk(cur: &Path, prefix: &str, out: &mut BTreeMap<String, LocalFile>) -> Result<(), String> {
+    fn walk(
+        cur: &Path,
+        prefix: &str,
+        filter: &SyncFilter,
+        out: &mut BTreeMap<String, LocalFile>,
+    ) -> Result<(), String> {
         for entry in fs::read_dir(cur).map_err(|e| unreadable(cur, e))? {
             let entry = entry.map_err(|e| unreadable(cur, e))?;
             // A name that is not valid text cannot be sent as a path; leave it local.
@@ -225,12 +339,12 @@ pub(crate) fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, St
             let path = entry.path();
             let file_type = entry.file_type().map_err(|e| unreadable(&path, e))?;
             if file_type.is_dir() {
-                if !SKIP_DIRS.contains(&name.as_str()) {
-                    walk(&path, &rel, out)?;
+                if filter.enters(&rel, &name) {
+                    walk(&path, &rel, filter, out)?;
                 }
                 continue;
             }
-            if !is_synced_file(&rel) || !safe_rel(&rel) {
+            if !filter.allows(&rel) || !safe_rel(&rel) {
                 continue;
             }
             let meta = match fs::metadata(&path) {
@@ -263,7 +377,7 @@ pub(crate) fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, St
     }
 
     let mut out = BTreeMap::new();
-    walk(vault, "", &mut out)?;
+    walk(vault, "", filter, &mut out)?;
     Ok(out)
 }
 
@@ -622,11 +736,19 @@ async fn ensure_root(client: &reqwest::Client, cfg: &WebDavConfig) -> Result<(),
 struct RemoteListing {
     files: BTreeMap<String, RemoteFile>,
     dirs: HashSet<String>,
+    /// Whether the folder holds any file at all, synced kind or not, other
+    /// than the encryption key file.
+    any_files: bool,
 }
 
 /// List every synced file under the remote folder. Any failure aborts: a
 /// partial listing would make files that are merely unlisted look deleted.
-async fn list_remote(client: &reqwest::Client, root: &str) -> Result<RemoteListing, String> {
+async fn list_remote(
+    client: &reqwest::Client,
+    root: &str,
+    filter: &SyncFilter,
+) -> Result<RemoteListing, String> {
+    let mut any_files = false;
     let mut files = BTreeMap::new();
     let mut dirs: HashSet<String> = HashSet::new();
     let mut queue = vec![String::new()];
@@ -659,18 +781,21 @@ async fn list_remote(client: &reqwest::Client, root: &str) -> Result<RemoteListi
                 continue;
             }
             if entry.is_dir {
-                if !SKIP_DIRS.contains(&child.as_str()) && dirs.insert(rel.clone()) {
+                if filter.enters(&rel, &child) && dirs.insert(rel.clone()) {
                     queue.push(rel);
                 }
-            } else if is_synced_file(&rel) {
-                files.insert(rel, entry.to_remote_file());
+            } else {
+                any_files |= rel != KEY_FILE;
+                if filter.allows(&rel) {
+                    files.insert(rel, entry.to_remote_file());
+                }
             }
         }
         if !entries.is_empty() && matched == 0 {
             return Err("The server listed a different folder than the one asked for, so nothing was synced.".into());
         }
     }
-    Ok(RemoteListing { files, dirs })
+    Ok(RemoteListing { files, dirs, any_files })
 }
 
 async fn stat_remote(
@@ -743,6 +868,108 @@ async fn delete(client: &reqwest::Client, url: &str) -> Result<(), String> {
     } else {
         Err(explain_status(status, "Deleting"))
     }
+}
+
+// ============================================================
+// Encryption
+// ============================================================
+
+/// Fetch the encryption key file. `None` when the folder has none.
+async fn get_key_file(client: &reqwest::Client, root: &str) -> Result<Option<String>, String> {
+    let resp = client
+        .get(file_url(root, KEY_FILE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    if status == 404 {
+        return Ok(None);
+    }
+    if !(200..300).contains(&status) {
+        return Err(explain_status(status, "Reading the encryption key file"));
+    }
+    let not_ours = "The encryption key file on the server is not one this app wrote, so nothing was synced.";
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    // A real one is a few hundred bytes.
+    if bytes.len() > 64 * 1024 {
+        return Err(not_ours.into());
+    }
+    String::from_utf8(bytes.to_vec())
+        .map(Some)
+        .map_err(|_| not_ours.to_string())
+}
+
+/// Whether the remote folder is encrypted and, if it is, the key to it.
+///
+/// This runs before a single note is read or written, and every way it can
+/// fail stops the run there:
+///
+/// - the folder is encrypted and no password is set: syncing would fill the
+///   vault with encrypted bytes and the folder with readable notes
+/// - the password is not the folder's
+/// - a password is set but the folder already holds readable files: they
+///   would stay readable beside the encrypted ones, so encryption is only
+///   ever started on an empty folder
+///
+/// `set_up` allows the one change this makes: writing the key file on the
+/// first encrypted sync into an empty folder.
+async fn unlock(
+    client: &reqwest::Client,
+    root: &str,
+    cfg: &WebDavConfig,
+    any_files: bool,
+    set_up: bool,
+) -> Result<Option<crate::sync_crypto::Key>, String> {
+    use crate::sync_crypto::{CryptoError, KeyFile};
+
+    let password = cfg
+        .encryption_password
+        .as_deref()
+        .filter(|password| !password.is_empty());
+    // Twice at most: the second time only when another device wrote the
+    // key file between our looking for it and our writing one.
+    for _ in 0..2 {
+        let existing = get_key_file(client, root).await?;
+        match (password, existing) {
+            (None, None) => return Ok(None),
+            (None, Some(_)) => {
+                return Err("This remote folder is encrypted. Turn on encryption in the sync settings and enter its password. Nothing was synced.".into())
+            }
+            (Some(password), Some(json)) => {
+                let password = password.to_string();
+                // Working the key out is slow on purpose; keep it off the async threads.
+                let unlocked = tokio::task::spawn_blocking(move || {
+                    KeyFile::from_json(&json).and_then(|file| file.unlock(&password))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                return match unlocked {
+                    Ok(key) => Ok(Some(key)),
+                    Err(CryptoError::WrongPassword) => Err("The encryption password is not the one this remote folder was set up with. Nothing was synced.".into()),
+                    Err(e) => Err(format!("The encryption key file on the server could not be used. {e} Nothing was synced.")),
+                };
+            }
+            (Some(password), None) => {
+                if any_files {
+                    return Err("The remote folder already holds files that are not encrypted. Encryption can only be started on an empty remote folder: choose a new one, or empty this one first. Nothing was synced.".into());
+                }
+                if !set_up {
+                    return Ok(None);
+                }
+                let password = password.to_string();
+                let (file, key) = tokio::task::spawn_blocking(move || KeyFile::create(&password))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| format!("Encryption could not be set up. {e}"))?;
+                let url = file_url(root, KEY_FILE);
+                if put(client, &url, file.to_json().into_bytes(), &Expect::Absent).await? {
+                    return Ok(Some(key));
+                }
+                // Someone else's key file is there now. Go round again and use it.
+            }
+        }
+    }
+    Err("The encryption key file on the server changed while it was being read. Nothing was synced; try again.".into())
 }
 
 // ============================================================
@@ -953,11 +1180,45 @@ struct Run<'a> {
     remote: &'a BTreeMap<String, RemoteFile>,
     /// Remote folders known to exist, so each is created at most once.
     remote_dirs: HashSet<String>,
+    /// Set when the remote folder is encrypted.
+    key: Option<crate::sync_crypto::Key>,
     record: SyncRecord,
     outcome: Outcome,
 }
 
 impl Run<'_> {
+    /// A file's contents as they are stored on the server.
+    fn seal(&self, bytes: &[u8]) -> Result<Vec<u8>, String> {
+        match &self.key {
+            Some(key) => crate::sync_crypto::encrypt(key, bytes).map_err(|e| e.to_string()),
+            None => Ok(bytes.to_vec()),
+        }
+    }
+
+    /// The contents of a file fetched from the server. In an encrypted
+    /// folder a file that is not encrypted, or that this key does not open,
+    /// is refused rather than written into the vault: whoever can write to
+    /// the server could otherwise plant notes, or the vault would fill with
+    /// unreadable bytes.
+    fn unseal(&self, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+        use crate::sync_crypto::CryptoError;
+        let Some(key) = &self.key else {
+            // The key file is checked before a run starts, so this is a
+            // folder whose key file went missing. Its contents must not be
+            // written into a vault as if they were notes.
+            if crate::sync_crypto::is_encrypted(&bytes) {
+                return Err("The copy on the server is encrypted, and this vault is not set up to read it, so it was left alone.".into());
+            }
+            return Ok(bytes);
+        };
+        crate::sync_crypto::decrypt(key, &bytes).map_err(|e| match e {
+            CryptoError::NotEncrypted => {
+                "The copy on the server is not encrypted, so it was left alone.".to_string()
+            }
+            other => format!("The copy on the server could not be decrypted. {other}"),
+        })
+    }
+
     async fn ensure_remote_parents(&mut self, rel: &str) {
         let mut so_far = String::new();
         let parts: Vec<&str> = rel.split('/').collect();
@@ -983,7 +1244,10 @@ impl Run<'_> {
         // Taken before reading: if the file changes mid-upload, the next run sees it as changed.
         let before = stat_local(&full).ok_or("The file is no longer on disk.")?;
         let bytes = fs::read(&full).map_err(|e| e.to_string())?;
+        // The fingerprint is of the note as it is here. What is sent may be
+        // encrypted, and differs every time it is.
         let hash = content_hash(&bytes);
+        let body = self.seal(&bytes)?;
         let url = file_url(self.root, rel);
         // Only replace the version this run saw, and only create a file that was not there.
         let (listed_sig, expect) = match self.remote.get(rel) {
@@ -998,7 +1262,7 @@ impl Run<'_> {
         };
 
         self.ensure_remote_parents(rel).await;
-        if !put(self.client, &url, bytes.clone(), &expect).await? {
+        if !put(self.client, &url, body.clone(), &expect).await? {
             let now = stat_remote(self.client, self.root, rel)
                 .await?
                 .map(|r| r.sig);
@@ -1008,7 +1272,7 @@ impl Run<'_> {
             }
             // The server refused, yet still shows exactly what this run listed:
             // its answer contradicts its own listing, so send the file plainly.
-            put(self.client, &url, bytes.clone(), &Expect::Anything).await?;
+            put(self.client, &url, body.clone(), &Expect::Anything).await?;
         }
         let missing = "The file was uploaded but the server does not list it.";
         let mut uploaded = stat_remote(self.client, self.root, rel)
@@ -1020,7 +1284,7 @@ impl Run<'_> {
             // replaced, so other devices would never notice it. Send it again
             // a moment later, when it gets a time of its own.
             tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-            put(self.client, &url, bytes, &Expect::Anything).await?;
+            put(self.client, &url, body, &Expect::Anything).await?;
             uploaded = stat_remote(self.client, self.root, rel)
                 .await?
                 .ok_or(missing)?;
@@ -1070,7 +1334,7 @@ impl Run<'_> {
             .get(rel)
             .ok_or("The file is no longer on the server.")?
             .clone();
-        let bytes = get(self.client, &file_url(self.root, rel)).await?;
+        let bytes = self.unseal(get(self.client, &file_url(self.root, rel)).await?)?;
         self.place_download(rel, &bytes, &remote)
     }
 
@@ -1091,7 +1355,7 @@ impl Run<'_> {
             .clone();
         let full = local_path(self.vault, rel);
         let local_bytes = fs::read(&full).map_err(|e| e.to_string())?;
-        let remote_bytes = get(self.client, &file_url(self.root, rel)).await?;
+        let remote_bytes = self.unseal(get(self.client, &file_url(self.root, rel)).await?)?;
 
         if local_bytes == remote_bytes {
             self.record.files.insert(
@@ -1103,6 +1367,17 @@ impl Run<'_> {
                     hash: content_hash(&local_bytes),
                 },
             );
+            return Ok(());
+        }
+
+        if is_settings_file(rel) {
+            // Bookmarks and the like are not notes: the newer file wins and
+            // no second copy is kept beside it.
+            if remote.mtime_ms > local.mtime_ms {
+                self.place_download(rel, &remote_bytes, &remote)?;
+            } else {
+                self.upload(rel).await?;
+            }
             return Ok(());
         }
 
@@ -1193,6 +1468,7 @@ struct Prepared {
     record_path: PathBuf,
     record: SyncRecord,
     actions: Vec<Action>,
+    key: Option<crate::sync_crypto::Key>,
 }
 
 /// Look at both sides and decide what to do. Changes nothing but the remote
@@ -1214,11 +1490,19 @@ async fn prepare(
 
     let root = root_url(cfg)?;
     let client = build_client(cfg)?;
-    let remote_id = format!("{root}\n{}", cfg.username);
 
     ensure_root(&client, cfg).await?;
-    let listing = list_remote(&client, &root).await?;
-    let local = list_local(vault)?;
+    let listing = list_remote(&client, &root, &cfg.filter).await?;
+    // Before any note is looked at: is this folder encrypted, and do we hold its key?
+    let key = unlock(&client, &root, cfg, listing.any_files, true).await?;
+    let local = list_local_with(vault, &cfg.filter)?;
+    // An encrypted folder has a record of its own, so one kept for the same
+    // address when it held readable files is never applied to it.
+    let remote_id = format!(
+        "{root}\n{}{}",
+        cfg.username,
+        if key.is_some() { "\nencrypted" } else { "" }
+    );
 
     let record_path = record_path(record_dir, &vault_id, &remote_id);
     let mut loaded = load_record(&record_path, &vault_id, &remote_id);
@@ -1241,6 +1525,7 @@ async fn prepare(
         record_path,
         record,
         actions,
+        key,
     })
 }
 
@@ -1256,6 +1541,7 @@ async fn execute(prepared: Prepared) -> Result<Outcome, String> {
         record_path,
         record,
         actions,
+        key,
     } = prepared;
     let mut run = Run {
         client: &client,
@@ -1264,6 +1550,7 @@ async fn execute(prepared: Prepared) -> Result<Outcome, String> {
         local: &local,
         remote: &listing.files,
         remote_dirs: listing.dirs.clone(),
+        key,
         record,
         outcome: Outcome::default(),
     };
@@ -1307,7 +1594,12 @@ pub(crate) async fn test_connection(cfg: WebDavConfig) -> Result<(), String> {
     let url = dir_url(&root, "");
     let (status, _) = propfind(&client, &url, 0).await?;
     if (200..300).contains(&status) {
-        return Ok(());
+        // The folder is there: check the encryption settings against it too,
+        // without setting anything up.
+        let listing = list_remote(&client, &root, &cfg.filter).await?;
+        return unlock(&client, &root, &cfg, listing.any_files, false)
+            .await
+            .map(|_| ());
     }
     if status != 404 {
         return Err(explain_status(status, "Reaching the remote folder"));
@@ -1330,6 +1622,100 @@ pub(crate) async fn test_connection(cfg: WebDavConfig) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_filter_chooses_by_kind_and_folder_and_keeps_the_apps_own_folder_private() {
+        let plain = SyncFilter::default();
+        for yes in ["Note.md", "a/b.canvas", "Projects.base", "pic.PNG", "paper.pdf"] {
+            assert!(plain.allows(yes), "{yes}");
+        }
+        for no in [
+            "song.mp3",
+            "clip.mp4",
+            "archive.zip",
+            "noext",
+            ".noteriv/bookmarks.json",
+            ".noteriv/workspace.json",
+            KEY_FILE,
+        ] {
+            assert!(!plain.allows(no), "{no}");
+        }
+
+        let all = SyncFilter {
+            audio: true,
+            video: true,
+            settings: true,
+            ..SyncFilter::default()
+        };
+        for yes in [
+            "song.mp3",
+            "clip.mp4",
+            ".noteriv/bookmarks.json",
+            ".noteriv/types.json",
+            ".noteriv/workspaces.json",
+        ] {
+            assert!(all.allows(yes), "{yes}");
+        }
+        // Even with settings on, only the three settings files leave the app's folder.
+        for private in [
+            ".noteriv/workspace.json",
+            ".noteriv/trash/Note.md",
+            ".noteriv/plugins/x/main.js",
+            ".noteriv/bookmarks (conflict).json",
+            ".noteriv",
+            KEY_FILE,
+        ] {
+            assert!(!all.allows(private), "{private}");
+        }
+
+        let lean = SyncFilter {
+            images: false,
+            pdfs: false,
+            exclude_folders: vec!["Archive".into(), "/Work/Private/".into(), "  ".into()],
+            ..SyncFilter::default()
+        };
+        assert!(!lean.allows("pic.png") && !lean.allows("paper.pdf") && lean.allows("Note.md"));
+        assert!(!lean.allows("Archive/Old.md") && !lean.allows("Work/Private/x.md"));
+        // A name that only starts the same way is another folder, or a file.
+        assert!(lean.allows("Archive2/Note.md") && lean.allows("Work/Public/x.md"));
+        assert!(lean.allows("Archive.md"));
+
+        assert!(!plain.enters(".noteriv", ".noteriv"));
+        assert!(all.enters(".noteriv", ".noteriv") && !all.enters(".noteriv/trash", "trash"));
+        assert!(!plain.enters(".git", ".git") && !plain.enters("a/node_modules", "node_modules"));
+        assert!(!lean.enters("Archive", "Archive") && lean.enters("Archive2", "Archive2"));
+        assert!(!lean.enters("Work/Private", "Private") && lean.enters("Work", "Work"));
+    }
+
+    #[test]
+    fn a_listing_follows_the_filter_on_disk() {
+        let vault = std::env::temp_dir().join(format!("noteriv-filter-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&vault);
+        for (rel, text) in [
+            ("Note.md", "n"),
+            ("Archive/Old.md", "o"),
+            ("song.mp3", "s"),
+            (".noteriv/bookmarks.json", "{}"),
+            (".noteriv/workspace.json", "{}"),
+            (".noteriv/trash/Gone.md", "g"),
+        ] {
+            let path = local_path(&vault, rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        let names = |filter: &SyncFilter| -> Vec<String> {
+            list_local_with(&vault, filter).unwrap().keys().cloned().collect()
+        };
+        assert_eq!(names(&SyncFilter::default()), ["Archive/Old.md", "Note.md"]);
+        let chosen = SyncFilter {
+            audio: true,
+            settings: true,
+            exclude_folders: vec!["Archive".into()],
+            ..SyncFilter::default()
+        };
+        assert_eq!(names(&chosen), [".noteriv/bookmarks.json", "Note.md", "song.mp3"]);
+        let _ = fs::remove_dir_all(&vault);
+    }
 
     fn local(mtime_ms: u64, size: u64) -> LocalFile {
         LocalFile { mtime_ms, size }
@@ -1488,6 +1874,8 @@ mod tests {
             username: "u".into(),
             password: "p".into(),
             remote_path: path.into(),
+            filter: SyncFilter::default(),
+            encryption_password: None,
         };
         assert_eq!(
             root_url(&cfg("https://c.example/dav/", "/Noteriv")).unwrap(),
@@ -1949,6 +2337,8 @@ mod live {
             username: var("NOTERIV_WEBDAV_USER"),
             password: var("NOTERIV_WEBDAV_PASS"),
             remote_path: format!("/{}/{remote}", prefix()),
+            filter: SyncFilter::default(),
+            encryption_password: None,
         }
     }
 
@@ -2038,7 +2428,7 @@ mod live {
         let cfg = cfg(remote);
         let client = build_client(&cfg).unwrap();
         let root = root_url(&cfg).unwrap();
-        rt().block_on(list_remote(&client, &root))
+        rt().block_on(list_remote(&client, &root, &SyncFilter::default()))
             .expect("the server lists the folder")
             .files
             .keys()
@@ -2542,5 +2932,154 @@ mod live {
         assert_eq!(server_tree("s15"), ["C# basics.md"]);
         assert_eq!(server_get("s15", "C"), b"left by an older version");
         a.assert_idle("s15");
+    }
+
+    // ── Encryption and choosing what to sync ──
+
+    impl Device {
+        fn try_sync_as(
+            &self,
+            remote: &str,
+            change: impl Fn(&mut WebDavConfig),
+        ) -> Result<Outcome, String> {
+            let mut cfg = cfg(remote);
+            change(&mut cfg);
+            rt().block_on(sync(self.vault.to_str().unwrap(), cfg, &self.records))
+        }
+    }
+
+    fn encrypted(password: &'static str) -> impl Fn(&mut WebDavConfig) {
+        move |cfg| cfg.encryption_password = Some(password.into())
+    }
+
+    fn server_has(remote: &str, rel: &str) -> bool {
+        let cfg = cfg(remote);
+        let client = build_client(&cfg).unwrap();
+        let root = root_url(&cfg).unwrap();
+        rt().block_on(stat_remote(&client, &root, rel))
+            .expect("the server answers")
+            .is_some()
+    }
+
+    fn holds(bytes: &[u8], text: &[u8]) -> bool {
+        bytes.windows(text.len()).any(|window| window == text)
+    }
+
+    #[test]
+    #[ignore = "needs a WebDAV server; see the module docs"]
+    fn an_encrypted_folder_holds_no_readable_note_and_a_second_device_reads_it() {
+        let remote = "enc-round-trip";
+        let a = Device::new("enc-a");
+        let b = Device::new("enc-b");
+        a.write("Note.md", b"secret text");
+        a.write("Sub/Other.md", b"more secrets");
+
+        let first = a.try_sync_as(remote, encrypted("pw one")).unwrap();
+        assert!(first.errors.is_empty(), "{:?}", first.errors);
+        assert_eq!(counts(&first), (2, 0, 0, 0));
+        let raw = server_get(remote, "Note.md");
+        assert!(crate::sync_crypto::is_encrypted(&raw));
+        assert!(!holds(&raw, b"secret"));
+        assert!(server_has(remote, KEY_FILE));
+        // The key file is not a note: it is not listed and not brought into a vault.
+        assert_eq!(server_tree(remote), ["Note.md", "Sub/Other.md"]);
+
+        let second = b.try_sync_as(remote, encrypted("pw one")).unwrap();
+        assert!(second.errors.is_empty(), "{:?}", second.errors);
+        assert_eq!(counts(&second), (0, 2, 0, 0));
+        assert_eq!(b.text("Note.md"), "secret text");
+        assert_eq!(b.text("Sub/Other.md"), "more secrets");
+        assert_eq!(b.tree(), ["Note.md", "Sub/Other.md"]);
+
+        // Nothing to do afterwards, although an encrypted upload never looks the same twice.
+        for device in [&a, &b] {
+            for _ in 0..2 {
+                let idle = device.try_sync_as(remote, encrypted("pw one")).unwrap();
+                assert_eq!(counts(&idle), (0, 0, 0, 0), "{:?}", idle.errors);
+            }
+        }
+
+        pause();
+        b.write("Note.md", b"edited secret");
+        assert_eq!(counts(&b.try_sync_as(remote, encrypted("pw one")).unwrap()), (1, 0, 0, 0));
+        assert_eq!(counts(&a.try_sync_as(remote, encrypted("pw one")).unwrap()), (0, 1, 0, 0));
+        assert_eq!(a.text("Note.md"), "edited secret");
+        assert!(!holds(&server_get(remote, "Note.md"), b"edited"));
+    }
+
+    #[test]
+    #[ignore = "needs a WebDAV server; see the module docs"]
+    fn a_wrong_password_or_none_changes_nothing_on_either_side() {
+        let remote = "enc-wrong-password";
+        let a = Device::new("enc-owner");
+        a.write("Note.md", b"secret text");
+        a.try_sync_as(remote, encrypted("the right one")).unwrap();
+        let on_server = server_get(remote, "Note.md");
+
+        let c = Device::new("enc-stranger");
+        c.write("Local.md", b"local only");
+        let wrong = c.try_sync_as(remote, encrypted("not it")).unwrap_err();
+        assert!(wrong.contains("password"), "{wrong}");
+        let none = c.try_sync_as(remote, |_| {}).unwrap_err();
+        assert!(none.contains("encrypted"), "{none}");
+
+        assert_eq!(c.tree(), ["Local.md"]);
+        assert_eq!(c.text("Local.md"), "local only");
+        assert_eq!(server_tree(remote), ["Note.md"]);
+        assert_eq!(server_get(remote, "Note.md"), on_server);
+    }
+
+    #[test]
+    #[ignore = "needs a WebDAV server; see the module docs"]
+    fn encryption_is_not_started_on_a_folder_that_holds_readable_files() {
+        let remote = "enc-refused";
+        let a = Device::new("enc-late");
+        a.write("Note.md", b"readable");
+        a.sync_clean(remote);
+
+        let refused = a.try_sync_as(remote, encrypted("pw")).unwrap_err();
+        assert!(refused.contains("not encrypted"), "{refused}");
+        assert_eq!(server_get(remote, "Note.md"), b"readable");
+        assert!(!server_has(remote, KEY_FILE));
+        // Without the password it still syncs as it did.
+        a.assert_idle(remote);
+    }
+
+    #[test]
+    #[ignore = "needs a WebDAV server; see the module docs"]
+    fn a_readable_file_put_in_an_encrypted_folder_is_not_taken_into_the_vault() {
+        let remote = "enc-planted";
+        let a = Device::new("enc-guarded");
+        a.write("Note.md", b"secret text");
+        a.try_sync_as(remote, encrypted("pw")).unwrap();
+
+        server_put(remote, "Planted.md", b"written by someone with the server and no key");
+        let outcome = a.try_sync_as(remote, encrypted("pw")).unwrap();
+        assert_eq!(outcome.errors.len(), 1, "{:?}", outcome.errors);
+        assert!(outcome.errors[0].contains("not encrypted"), "{:?}", outcome.errors);
+        assert_eq!(a.tree(), ["Note.md"]);
+        assert_eq!(a.text("Note.md"), "secret text");
+    }
+
+    #[test]
+    #[ignore = "needs a WebDAV server; see the module docs"]
+    fn a_folder_left_out_of_sync_is_untouched_on_both_sides() {
+        let remote = "filter-folder";
+        let a = Device::new("filter-a");
+        a.write("Keep.md", b"keep");
+        a.write("Archive/Old.md", b"old");
+        assert_eq!(counts(&a.sync_clean(remote)), (2, 0, 0, 0));
+
+        let without = |cfg: &mut WebDavConfig| cfg.filter.exclude_folders = vec!["Archive".into()];
+        assert_eq!(counts(&a.try_sync_as(remote, without).unwrap()), (0, 0, 0, 0));
+        a.remove("Archive/Old.md");
+        a.write("Archive/New.md", b"new");
+        assert_eq!(counts(&a.try_sync_as(remote, without).unwrap()), (0, 0, 0, 0));
+        assert_eq!(server_tree(remote), ["Archive/Old.md", "Keep.md"]);
+
+        // A device that takes everything still gets the folder as the server has it.
+        let b = Device::new("filter-b");
+        assert_eq!(counts(&b.sync_clean(remote)), (0, 2, 0, 0));
+        assert_eq!(b.text("Archive/Old.md"), "old");
     }
 }

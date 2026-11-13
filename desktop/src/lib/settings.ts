@@ -12,7 +12,9 @@ export interface AppSettings {
   commitMessageFormat: string; // template: {date}, {time}, {count}
   extraSyncProvider: "none" | "folder" | "webdav";
   folderSync: { targetPath: string; direction: "push" | "pull" | "both" };
-  webdavSync: { url: string; username: string; password: string; remotePath: string };
+  webdavSync: { url: string; username: string; password: string; remotePath: string; encryptionPassword?: string };
+  /** What the cloud folder and WebDAV sync carry. The same choice applies to both sides. */
+  syncFilter: import("./sync-providers").SyncFilterSettings;
   theme: string; // theme ID
   autoUpdate: boolean; // check for and install updates automatically
   autoCollapseSidebar: boolean;
@@ -48,7 +50,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   commitMessageFormat: "Sync {date} {time}",
   extraSyncProvider: "none",
   folderSync: { targetPath: "", direction: "both" },
-  webdavSync: { url: "", username: "", password: "", remotePath: "/Noteriv" },
+  webdavSync: { url: "", username: "", password: "", remotePath: "/Noteriv", encryptionPassword: "" },
+  syncFilter: { images: true, pdfs: true, audio: false, video: false, settings: false, excludeFolders: "" },
   theme: "catppuccin-mocha",
   autoUpdate: true,
   autoCollapseSidebar: true,
@@ -108,7 +111,12 @@ export function applySettings(s: AppSettings) {
 }
 
 export function mergeSettings(saved: Partial<AppSettings>): AppSettings {
-  return { ...DEFAULT_SETTINGS, ...saved };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...saved,
+    // A choice saved before a kind was added keeps the default for that kind.
+    syncFilter: { ...DEFAULT_SETTINGS.syncFilter, ...(saved.syncFilter ?? {}) },
+  };
 }
 
 export function formatCommitMessage(template: string, changeCount?: number): string {

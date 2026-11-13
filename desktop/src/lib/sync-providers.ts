@@ -10,6 +10,53 @@ export interface WebDAVSyncConfig {
   username: string;
   password: string;
   remotePath: string;
+  /** Set to encrypt file contents before they are uploaded. Names stay readable. */
+  encryptionPassword?: string;
+}
+
+/** What sync carries, as the settings screen keeps it. */
+export interface SyncFilterSettings {
+  images: boolean;
+  pdfs: boolean;
+  audio: boolean;
+  video: boolean;
+  /** Bookmarks, property types and saved layouts. */
+  settings: boolean;
+  /** Folders left out, one to a line, as paths inside the vault. */
+  excludeFolders: string;
+}
+
+/** The filter as the backend reads it. */
+export function syncFilterConfig(filter: SyncFilterSettings) {
+  return {
+    images: filter.images,
+    pdfs: filter.pdfs,
+    audio: filter.audio,
+    video: filter.video,
+    settings: filter.settings,
+    excludeFolders: filter.excludeFolders
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""))
+      .filter((line) => line !== "" && !line.split("/").includes("..")),
+  };
+}
+
+/**
+ * What a sync run, or a connection test, is given for the provider in use.
+ * Null when there is none.
+ */
+export function providerConfig(settings: {
+  extraSyncProvider: string;
+  folderSync: FolderSyncConfig;
+  webdavSync: WebDAVSyncConfig;
+  syncFilter: SyncFilterSettings;
+}): Record<string, unknown> | null {
+  const filter = syncFilterConfig(settings.syncFilter);
+  if (settings.extraSyncProvider === "folder") return { ...settings.folderSync, filter };
+  if (settings.extraSyncProvider === "webdav") {
+    return { ...settings.webdavSync, encryptionPassword: settings.webdavSync.encryptionPassword || null, filter };
+  }
+  return null;
 }
 
 /**

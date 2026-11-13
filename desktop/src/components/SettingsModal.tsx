@@ -21,6 +21,7 @@ import {
   SYNC_PROVIDERS,
   FOLDER_DIRECTIONS,
   type SyncProviderType,
+  providerConfig,
 } from "@/lib/sync-providers";
 import ThemePicker from "@/components/ThemePicker";
 import PluginMount from "@/components/PluginMount";
@@ -694,9 +695,7 @@ export default function SettingsModal({
     setTestResult(null);
     try {
       const provider = settings.extraSyncProvider as SyncProviderType;
-      const config =
-        provider === "folder" ? settings.folderSync :
-        provider === "webdav" ? settings.webdavSync : null;
+      const config = providerConfig(settings);
       if (!config) return;
       // The vault lets the folder test refuse a target that sync would refuse.
       const result = await window.electronAPI.syncProviderTest(provider, config, vault?.path);
@@ -962,6 +961,53 @@ export default function SettingsModal({
               value={settings.webdavSync.remotePath}
               onChange={(e) => update({ webdavSync: { ...settings.webdavSync, remotePath: e.target.value } })}
               placeholder="/Noteriv"
+            />
+          </Row>
+          <Row
+            label="Encryption password"
+            desc="Leave empty for no encryption. With a password, the contents of every file are encrypted on this device before they are uploaded; file and folder names stay readable on the server. It has to be started on an empty remote folder, and every device needs the same password. Without the password the copies on the server cannot be read by anyone, you included. The notes on this device are never encrypted."
+          >
+            <input
+              type="password"
+              className="st-text-input"
+              value={settings.webdavSync.encryptionPassword ?? ""}
+              onChange={(e) => update({ webdavSync: { ...settings.webdavSync, encryptionPassword: e.target.value } })}
+              placeholder="No encryption"
+              autoComplete="new-password"
+            />
+          </Row>
+        </>
+      )}
+
+      {/* What to sync: the same for the cloud folder and WebDAV */}
+      {settings.extraSyncProvider !== "none" && (
+        <>
+          <Row label="Images" desc="Sync pictures (png, jpg, gif, svg, webp and the like).">
+            <Toggle checked={settings.syncFilter.images} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, images: v } })} />
+          </Row>
+          <Row label="PDFs" desc="Sync PDF files.">
+            <Toggle checked={settings.syncFilter.pdfs} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, pdfs: v } })} />
+          </Row>
+          <Row label="Audio" desc="Sync sound files (mp3, wav, m4a, ogg, flac). Off unless you turn it on: they are large.">
+            <Toggle checked={settings.syncFilter.audio} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, audio: v } })} />
+          </Row>
+          <Row label="Video" desc="Sync video files (mp4, webm, mov, mkv). Off unless you turn it on.">
+            <Toggle checked={settings.syncFilter.video} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, video: v } })} />
+          </Row>
+          <Row label="Vault settings" desc="Sync this vault's bookmarks, property types and saved layouts, so they are the same on every device. When two devices changed one of them, the newer wins.">
+            <Toggle checked={settings.syncFilter.settings} onChange={(v) => update({ syncFilter: { ...settings.syncFilter, settings: v } })} />
+          </Row>
+          <Row
+            label="Folders to leave out"
+            desc="One folder to a line, as a path inside the vault (Archive, Work/Private). A folder left out is not synced from this device and is left alone on the other side: nothing in it is copied or deleted."
+          >
+            <textarea
+              className="st-textarea"
+              rows={3}
+              value={settings.syncFilter.excludeFolders}
+              onChange={(e) => update({ syncFilter: { ...settings.syncFilter, excludeFolders: e.target.value } })}
+              placeholder={"Archive\nWork/Private"}
+              spellCheck={false}
             />
           </Row>
         </>

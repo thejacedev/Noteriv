@@ -90,7 +90,7 @@ import {
   applySettings,
   formatCommitMessage,
 } from "@/lib/settings";
-import { autoSyncApplies } from "@/lib/sync-providers";
+import { autoSyncApplies, providerConfig } from "@/lib/sync-providers";
 import { addConflicts, conflictsFor, dismissConflicts, removeConflictCopy, splitPath, type SyncConflict } from "@/lib/sync-conflicts";
 import SyncConflictNotice from "@/components/SyncConflictNotice";
 import {
@@ -285,6 +285,8 @@ function Home() {
   const layoutsLoadedFor = useRef<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Counts up when the vault's own settings files may have changed on disk, so they are read again.
+  const [vaultFilesTick, setVaultFilesTick] = useState(0);
 
   // Ecosystem
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -841,9 +843,7 @@ function Home() {
 
       // Extra sync provider (folder, webdav, s3)
       if (settings.extraSyncProvider !== "none") {
-        const config =
-          settings.extraSyncProvider === "folder" ? settings.folderSync :
-          settings.extraSyncProvider === "webdav" ? settings.webdavSync : null;
+        const config = providerConfig(settings);
         if (config) {
           const vaultPath = activeVault.path;
           const result = await window.electronAPI.syncProviderSync(
@@ -854,6 +854,8 @@ function Home() {
           // Before anything else can fail: these conflicts are resolved on
           // disk now, so no later run will report them again.
           setSyncConflicts((prev) => addConflicts(prev, vaultPath, result?.conflictCopies));
+          // Bookmarks, property types and layouts may have arrived from another device.
+          if (settings.syncFilter.settings && (result?.pulled ?? 0) > 0) setVaultFilesTick((t) => t + 1);
           // Some files could not be synced. The status bar shows it as before.
           if (result?.error) throw new Error(result.error);
         }
@@ -877,7 +879,7 @@ function Home() {
     } finally {
       syncInFlightRef.current = false;
     }
-  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync, showKnowledgeIngest]);
+  }, [activeVault, saveWorkspace, settings.commitMessageFormat, settings.extraSyncProvider, settings.folderSync, settings.webdavSync, settings.syncFilter, showKnowledgeIngest]);
 
   const handleGitSync = performSync;
 
@@ -1142,7 +1144,7 @@ function Home() {
       bookmarksLoadedFor.current = bookmarksVault;
     });
     return () => { cancelled = true; };
-  }, [bookmarksVault]);
+  }, [bookmarksVault, vaultFilesTick]);
   useEffect(() => {
     if (!bookmarksVault || bookmarksLoadedFor.current !== bookmarksVault || !window.electronAPI) return;
     const timer = setTimeout(async () => {
@@ -1155,7 +1157,6 @@ function Home() {
   // Property types live in the vault too, so every device and every note agrees on them.
   useEffect(() => {
     propertyTypesLoadedFor.current = null;
-    setPropertyTypes({});
     if (!bookmarksVault || !window.electronAPI) return;
     let cancelled = false;
     window.electronAPI.readFile(`${bookmarksVault}/.noteriv/types.json`).then((text) => {
@@ -1164,7 +1165,7 @@ function Home() {
       propertyTypesLoadedFor.current = bookmarksVault;
     });
     return () => { cancelled = true; };
-  }, [bookmarksVault]);
+  }, [bookmarksVault, vaultFilesTick]);
   const changePropertyType = useCallback((name: string, type: PropertyType) => {
     const vault = bookmarksVault;
     if (!vault || propertyTypesLoadedFor.current !== vault || !window.electronAPI) return;
@@ -1182,7 +1183,6 @@ function Home() {
   // Saved layouts live in the vault as well.
   useEffect(() => {
     layoutsLoadedFor.current = null;
-    setLayoutStore(EMPTY_LAYOUTS);
     if (!bookmarksVault || !window.electronAPI) return;
     let cancelled = false;
     window.electronAPI.readFile(`${bookmarksVault}/.noteriv/workspaces.json`).then((text) => {
@@ -1191,7 +1191,7 @@ function Home() {
       layoutsLoadedFor.current = bookmarksVault;
     });
     return () => { cancelled = true; };
-  }, [bookmarksVault]);
+  }, [bookmarksVault, vaultFilesTick]);
   const changeLayouts = useCallback((change: (store: LayoutStore) => LayoutStore) => {
     const vault = bookmarksVault;
     if (!vault || layoutsLoadedFor.current !== vault || !window.electronAPI) return;
