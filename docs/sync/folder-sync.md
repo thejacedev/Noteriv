@@ -123,7 +123,9 @@ Meeting notes (conflict 2026-11-12 14-30-05).md
 
 The conflict copy is an ordinary note. You can merge the two by hand and delete the one you no longer need. Nothing is merged automatically; for line-by-line merging and version history, use Git sync.
 
-Your cloud client may also make conflict copies of its own when two devices upload at the same moment. Those arrive as ordinary new files.
+When a sync on this device keeps both versions, Noteriv shows a notice above the status bar that lists the notes, with a button to open each conflict copy. The notice stays until you dismiss it, so you see it even if the sync ran on the timer while you were away. In push-only mode the copy is kept in the target folder, not the vault, and the notice says so. Versions up to 2.4.13 show no notice.
+
+The notice only covers conflicts this device resolved, and it is not kept if you quit Noteriv before dismissing it. A conflict copy made by another device, or by your cloud client when two devices upload at the same moment, arrives as an ordinary new file with no notice.
 
 ## File Deletion
 
