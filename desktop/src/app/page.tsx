@@ -21,6 +21,8 @@ import BookmarksPanel from "@/components/BookmarksPanel";
 import PropertiesEditor from "@/components/PropertiesEditor";
 import AllPropertiesPanel from "@/components/AllPropertiesPanel";
 import WorkspacesModal from "@/components/WorkspacesModal";
+import BaseView from "@/components/BaseView";
+import { NEW_BASE, isBaseFile } from "@/lib/bases-data";
 import {
   EMPTY_LAYOUTS,
   fromStoredLayout,
@@ -141,7 +143,7 @@ interface TabState {
   savedContent: string;
   // Non-markdown tabs render a dedicated view instead of the text editor.
   // Absent = a normal markdown note.
-  kind?: "canvas" | "drawing" | "pdf" | "image";
+  kind?: "canvas" | "drawing" | "pdf" | "image" | "base";
   externalConflict?: boolean;
 }
 
@@ -472,6 +474,7 @@ export default function Home() {
       else if (filePath.endsWith(".canvas")) kind = "canvas";
       else if (isPdfFile(filePath)) kind = "pdf";
       else if (isImageFile(filePath)) kind = "image";
+      else if (isBaseFile(filePath)) kind = "base";
       if (kind) {
         restored.push({ filePath, content: "", savedContent: "", kind });
         continue;
@@ -1029,6 +1032,7 @@ export default function Home() {
     else if (filePath.endsWith(".canvas")) kind = "canvas";
     else if (isPdfFile(filePath)) kind = "pdf";
     else if (isImageFile(filePath)) kind = "image";
+    else if (isBaseFile(filePath)) kind = "base";
 
     if (kind) {
       setTabs((prev) =>
@@ -1793,6 +1797,21 @@ export default function Home() {
     [createNote]
   );
 
+  // A base that lists every note, as somewhere to start from.
+  const handleNewBase = useCallback(async () => {
+    if (!window.electronAPI || !activeVault) return;
+    const folder = newNoteFolder(activeVault.path, settings.newNoteLocation, settings.newNoteFolder, activeTab);
+    await window.electronAPI.createDir(folder);
+    const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
+    let name = "Untitled";
+    for (let counter = 2; existing.has(`${name}.base`.toLowerCase()); counter++) name = `Untitled ${counter}`;
+    const filePath = `${folder}/${name}.base`;
+    if (!await window.electronAPI.writeFile(filePath, NEW_BASE)) return;
+    setTabs((prev) => [...prev, { filePath, content: "", savedContent: "", kind: "base" }]);
+    setActiveTab(filePath);
+    setSidebarRefresh((k) => k + 1);
+  }, [activeVault, activeTab, settings.newNoteLocation, settings.newNoteFolder]);
+
   // A note named by the time, to the minute: a Zettelkasten-style id.
   const handleUniqueNote = useCallback(
     () => createNote((taken) => nextTimestampName(new Date(), taken)),
@@ -2310,6 +2329,7 @@ export default function Home() {
         setAddPropertyRequest((n) => n + 1);
       },
       toggleAllProperties: () => setShowAllProperties((p) => !p),
+      newBase: () => { void handleNewBase(); },
       manageWorkspaces: () => setShowWorkspaces(true),
       saveWorkspaceLayout: () => {
         // With a layout in use, this saves over it; otherwise it asks for a name.
@@ -2682,7 +2702,7 @@ export default function Home() {
         )}
 
         {/* Editor */}
-        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} onContextMenu={handleEditorContextMenu}>
+        <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} data-open-file={currentTab?.filePath || ""} onContextMenu={handleEditorContextMenu}>
           {currentTab && !currentTab.kind ? (
             <SplitPane
               left={
@@ -2781,6 +2801,8 @@ export default function Home() {
               onFileSelect={(f) => openFile(f)}
               onClose={() => closeTab(currentTab.filePath)}
             />
+          ) : currentTab.kind === "base" && activeVault ? (
+            <BaseView filePath={currentTab.filePath} vaultPath={activeVault.path} onOpenFile={openFile} />
           ) : currentTab.kind === "image" ? (
             <ImageViewer filePath={currentTab.filePath} />
           ) : currentTab.kind === "pdf" && activeVault ? (

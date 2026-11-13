@@ -46,6 +46,15 @@ describe("parseEmbed", () => {
     expect(parseEmbed("docs/paper.pdf#height=400&page=12").page).toBe(12);
   });
 
+  it("knows a base file and the view an embed of it names", () => {
+    expect(parseEmbed("Projects.base")).toMatchObject({ kind: "base", file: "Projects.base", anchor: null });
+    expect(parseEmbed("Work/Projects.base#Open tasks")).toMatchObject({
+      kind: "base",
+      file: "Work/Projects.base",
+      anchor: { type: "heading", text: "Open tasks" },
+    });
+  });
+
   it("ignores an alias on a note embed", () => {
     expect(parseEmbed("Note|shown differently")).toEqual({
       target: "Note",

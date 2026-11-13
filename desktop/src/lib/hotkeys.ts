@@ -89,6 +89,7 @@ export type HotkeyAction =
   | "addProperty"
   | "toggleAllProperties"
   | "manageWorkspaces"
+  | "newBase"
   | "saveWorkspaceLayout"
   | "revealActiveFile"
   | "collapseAllFolders"
@@ -209,6 +210,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "addProperty", label: "Add Property to the Open Note", keys: "", category: "Edit" },
   { action: "toggleAllProperties", label: "Toggle All Properties", keys: "", category: "View" },
   { action: "manageWorkspaces", label: "Manage Workspace Layouts", keys: "", category: "View" },
+  { action: "newBase", label: "Create New Base", keys: "", category: "File" },
   { action: "saveWorkspaceLayout", label: "Save Workspace Layout", keys: "", category: "View" },
   { action: "revealActiveFile", label: "Reveal the Open Note in the File List", keys: "", category: "Navigation" },
   { action: "collapseAllFolders", label: "Collapse All Folders", keys: "", category: "View" },

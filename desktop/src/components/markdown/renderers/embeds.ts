@@ -8,6 +8,7 @@ import {
   type ParsedEmbed,
 } from "@/lib/embed-utils";
 import { localImageTag, localMediaTag } from "./images";
+import { baseEmbedTag, scheduleBaseEmbeds } from "./base-block";
 
 /**
  * Obsidian-style embeds: `![[Note]]`, `![[Note#Heading]]`, `![[image.png|160]]`.
@@ -321,6 +322,26 @@ export const embedRenderer: InlineRenderer = {
       // A note is shown inline only when the embed is the whole line; in the
       // middle of a sentence it stays a link.
       const wholeLine = text.trim() === match[0];
+
+      // A base file shows its views, or the one named after the "#".
+      if (embed.kind === "base" && vaultPath && wholeLine) {
+        const files = getAttachments(vaultPath);
+        const wanted = forwardSlashes(embed.file).toLowerCase();
+        const path = files?.get(wanted) ?? files?.get(wanted.split("/").pop() || "");
+        if (path) {
+          const view = embed.anchor?.type === "heading" ? embed.anchor.text : null;
+          results.push({
+            from,
+            to,
+            html: baseEmbedTag(path, view, embed.file),
+            className: "md-embed-wrapper md-embed-block",
+          });
+          scheduleBaseEmbeds();
+        } else {
+          results.push({ from, to, html: chip(match[1], files ? "md-embed-missing" : ""), className: "md-embed-wrapper" });
+        }
+        continue;
+      }
       if (embed.kind === "note" && vaultPath && wholeLine) {
         const notes = getNotes(vaultPath);
         const note = notes && embed.file ? findNote(notes, embed.file) : null;

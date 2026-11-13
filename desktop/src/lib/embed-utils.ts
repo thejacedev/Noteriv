@@ -11,7 +11,7 @@ import {
   type WikiAnchor,
 } from "./wiki-link-utils";
 
-export type EmbedKind = "note" | "image" | "audio" | "video" | "pdf" | "other";
+export type EmbedKind = "note" | "image" | "audio" | "video" | "pdf" | "base" | "other";
 
 export interface ParsedEmbed {
   /** The target as written, without any `|size` or `|alias` part. */
@@ -54,6 +54,8 @@ export function parseEmbed(inner: string): ParsedEmbed {
   else if (AUDIO_EXTENSION.test(file)) kind = "audio";
   else if (VIDEO_EXTENSION.test(file)) kind = "video";
   else if (PDF_EXTENSION.test(file)) kind = "pdf";
+  // A base shows its views in place; "Projects.base#Open" names one of them.
+  else if (/\.base$/i.test(file)) kind = "base";
   else if (!NOTE_EXTENSION.test(file) && OTHER_EXTENSION.test(file)) kind = "other";
 
   const parsed: ParsedEmbed = { target, file, anchor, kind };
