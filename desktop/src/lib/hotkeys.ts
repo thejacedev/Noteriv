@@ -86,6 +86,10 @@ export type HotkeyAction =
   | "bookmarkHeading"
   | "uniqueNote"
   | "toggleFootnotes"
+  | "addProperty"
+  | "toggleAllProperties"
+  | "manageWorkspaces"
+  | "saveWorkspaceLayout"
   | "revealActiveFile"
   | "collapseAllFolders"
   | "foldAll"
@@ -202,6 +206,10 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "bookmarkHeading", label: "Bookmark the Heading Under the Cursor", keys: "", category: "Navigation" },
   { action: "uniqueNote", label: "Create New Unique Note", keys: "", category: "File" },
   { action: "toggleFootnotes", label: "Toggle Footnotes", keys: "", category: "View" },
+  { action: "addProperty", label: "Add Property to the Open Note", keys: "", category: "Edit" },
+  { action: "toggleAllProperties", label: "Toggle All Properties", keys: "", category: "View" },
+  { action: "manageWorkspaces", label: "Manage Workspace Layouts", keys: "", category: "View" },
+  { action: "saveWorkspaceLayout", label: "Save Workspace Layout", keys: "", category: "View" },
   { action: "revealActiveFile", label: "Reveal the Open Note in the File List", keys: "", category: "Navigation" },
   { action: "collapseAllFolders", label: "Collapse All Folders", keys: "", category: "View" },
   { action: "foldAll", label: "Fold All Headings and Lists", keys: "", category: "View" },

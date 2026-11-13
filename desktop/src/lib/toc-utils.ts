@@ -1,3 +1,5 @@
+import { frontmatterLineCount } from "./frontmatter-block";
+
 /**
  * Table of Contents utilities for auto-generating and updating TOC in markdown.
  */
@@ -15,8 +17,10 @@ export function extractHeadings(content: string, minLevel: number = 1, maxLevel:
   const headings: TocEntry[] = [];
   const slugCounts = new Map<string, number>();
   let inCodeBlock = false;
+  // The properties block is YAML: a "# comment" in it is not a heading.
+  const firstLine = frontmatterLineCount(content);
 
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = firstLine; i < lines.length; i++) {
     const line = lines[i];
 
     // Toggle code block state

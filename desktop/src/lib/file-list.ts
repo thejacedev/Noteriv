@@ -31,12 +31,27 @@ export interface ListedEntry {
 }
 
 /**
+ * A comparison of names the way a person sorts them: capitals and accents
+ * aside, numbers by value ("Note 2" before "Note 10"), in the system's
+ * language. A system set to the "C" locale would sort by character code,
+ * every capital before every small letter, so there English rules are used.
+ */
+export function nameComparer(locale?: string): (a: string, b: string) => number {
+  const options = { numeric: true, sensitivity: "base" } as const;
+  const own = new Intl.Collator(locale, options);
+  const usable = !/posix/i.test(own.resolvedOptions().locale);
+  return (usable ? own : new Intl.Collator("en", options)).compare;
+}
+
+export const compareNames = nameComparer();
+
+/**
  * Order one folder's entries. Folders always come before files. "manual"
  * keeps the order the user dragged things into (`order` lists names), with
  * anything not in that list after it, by name.
  */
 export function sortFileEntries<T extends ListedEntry>(entries: T[], sort: FileSort, order?: string[]): T[] {
-  const byName = (a: T, b: T) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  const byName = (a: T, b: T) => compareNames(a.name, b.name);
   const foldersFirst = (a: T, b: T) => Number(b.isDirectory) - Number(a.isDirectory);
   const sorted = [...entries];
 

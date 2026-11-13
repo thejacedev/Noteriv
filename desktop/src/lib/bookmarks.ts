@@ -4,6 +4,8 @@
  * `.noteriv/bookmarks.json`.
  */
 
+import { fromVaultRelative, isAbsolutePath, toVaultRelative } from "./vault-paths";
+
 export type BookmarkKind = "file" | "folder" | "search" | "heading";
 
 export interface Bookmark {
@@ -28,7 +30,21 @@ export const EMPTY_BOOKMARKS: BookmarkStore = { items: [], groups: [] };
 const KINDS: BookmarkKind[] = ["file", "folder", "search", "heading"];
 
 /** Read a store from its file's text. Anything unreadable gives an empty store. */
-export function parseBookmarks(text: string | null | undefined): BookmarkStore {
+/** Where a bookmark's path ends: a heading bookmark is `path#Heading text`. */
+function splitTarget(bookmark: Bookmark): { path: string; rest: string } {
+  if (bookmark.kind !== "heading") return { path: bookmark.target, rest: "" };
+  const hash = bookmark.target.indexOf("#");
+  return hash === -1
+    ? { path: bookmark.target, rest: "" }
+    : { path: bookmark.target.slice(0, hash), rest: bookmark.target.slice(hash) };
+}
+
+/**
+ * Read the vault's bookmarks file. Paths in it are from the top of the
+ * vault; `vaultPath` turns them into full paths. A full path, from a file
+ * written before paths were stored that way, is kept as it is.
+ */
+export function parseBookmarks(text: string | null | undefined, vaultPath?: string): BookmarkStore {
   if (!text) return { items: [], groups: [] };
   try {
     const raw = JSON.parse(text);
@@ -39,6 +55,15 @@ export function parseBookmarks(text: string | null | undefined): BookmarkStore {
     for (const item of Array.isArray(raw?.items) ? raw.items : []) {
       if (!item || typeof item.target !== "string" || !KINDS.includes(item.kind)) continue;
       const bookmark: Bookmark = { kind: item.kind, target: item.target };
+      if (vaultPath && bookmark.kind !== "search") {
+        const { path, rest } = splitTarget(bookmark);
+        if (!isAbsolutePath(path)) {
+          const full = fromVaultRelative(path, vaultPath);
+          // A path that points out of the vault is not a bookmark in it.
+          if (!full) continue;
+          bookmark.target = full + rest;
+        }
+      }
       if (typeof item.group === "string" && item.group) {
         bookmark.group = item.group;
         if (!groups.includes(item.group)) groups.push(item.group);
@@ -51,8 +76,16 @@ export function parseBookmarks(text: string | null | undefined): BookmarkStore {
   }
 }
 
-export function serializeBookmarks(store: BookmarkStore): string {
-  return JSON.stringify(store, null, 2);
+/** The bookmarks file's text. With `vaultPath`, paths inside the vault are written from its top. */
+export function serializeBookmarks(store: BookmarkStore, vaultPath?: string): string {
+  if (!vaultPath) return JSON.stringify(store, null, 2);
+  const items = store.items.map((bookmark) => {
+    if (bookmark.kind === "search") return bookmark;
+    const { path, rest } = splitTarget(bookmark);
+    const relative = toVaultRelative(path, vaultPath);
+    return relative === null ? bookmark : { ...bookmark, target: relative + rest };
+  });
+  return JSON.stringify({ items, groups: store.groups }, null, 2);
 }
 
 function sameBookmark(a: Bookmark, b: Bookmark): boolean {

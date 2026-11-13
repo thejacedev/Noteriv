@@ -57,7 +57,8 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
         historyConfig.current.of(history()),
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
-        folding(),
+        // The properties are edited as values above the note, so the YAML starts folded.
+        folding("inline", { foldProperties: true }),
         syntaxHighlighting(mdHighlightStyle),
         editorTheme,
         markdownRenderTheme,

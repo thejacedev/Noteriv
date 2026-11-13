@@ -365,6 +365,23 @@ export default function Sidebar({
   }, [refreshEntries, refreshTrigger]);
 
   const [showSortMenu, setShowSortMenu] = useState(false);
+  // The sort menu closes on a click anywhere else and on Escape.
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest?.(".sidebar-sort-menu, [aria-haspopup='menu']")) setShowSortMenu(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowSortMenu(false);
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showSortMenu]);
 
   // Scroll to a file the app wants shown. Its folders are opened by the app
   // first, so the row may take a moment to exist.

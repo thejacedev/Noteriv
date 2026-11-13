@@ -96,3 +96,38 @@ describe("bookmark store", () => {
     expect(bookmarkLabel({ kind: "heading", target: "/v/Plan.md#Next steps" }, "/v")).toEqual({ name: "Next steps", detail: "Plan" });
   });
 });
+
+describe("bookmark paths in the vault's file", () => {
+  const store = {
+    items: [
+      { kind: "file" as const, target: "/home/me/vault/Projects/Alpha.md", group: "Work" },
+      { kind: "folder" as const, target: "/home/me/vault/Projects" },
+      { kind: "heading" as const, target: "/home/me/vault/Plan.md#Goals #1" },
+      { kind: "search" as const, target: "tag:#work path:/home/me/vault" },
+      { kind: "file" as const, target: "/elsewhere/Loose.md" },
+    ],
+    groups: ["Work"],
+  };
+
+  it("writes paths from the top of the vault and reads them back in another place", () => {
+    const text = serializeBookmarks(store, "/home/me/vault");
+    expect(JSON.parse(text).items.map((i: { target: string }) => i.target)).toEqual([
+      "Projects/Alpha.md",
+      "Projects",
+      "Plan.md#Goals #1",
+      "tag:#work path:/home/me/vault",
+      "/elsewhere/Loose.md",
+    ]);
+    expect(parseBookmarks(text, "/home/me/vault")).toEqual(store);
+    // The same file on a Windows machine, where the vault is somewhere else.
+    const there = parseBookmarks(text, "C:\\Users\\me\\Notes");
+    expect(there.items[0].target).toBe("C:\\Users\\me\\Notes\\Projects\\Alpha.md");
+    expect(there.items[2].target).toBe("C:\\Users\\me\\Notes\\Plan.md#Goals #1");
+    expect(serializeBookmarks(there, "C:\\Users\\me\\Notes")).toBe(text);
+  });
+
+  it("keeps full paths from an older file and drops a path that leaves the vault", () => {
+    const old = '{"items":[{"kind":"file","target":"/home/me/vault/A.md"},{"kind":"file","target":"../outside.md"}]}';
+    expect(parseBookmarks(old, "/home/me/vault").items).toEqual([{ kind: "file", target: "/home/me/vault/A.md" }]);
+  });
+});

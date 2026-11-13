@@ -352,6 +352,21 @@ export const markdownRenderTheme = EditorView.baseTheme({
     color: "var(--text-muted)",
     fontStyle: "italic",
   },
+  "& .md-frontmatter-line": {
+    color: "var(--text-muted)",
+    fontFamily: "var(--font-mono, monospace)",
+    fontSize: "0.85em",
+  },
+  // The markdown highlighter reads YAML as markdown (a "# comment" as a
+  // heading); inside the properties block its styling is switched off.
+  "& .md-frontmatter-line span:not(.cm-foldPlaceholder):not(.cm-fold-arrow)": {
+    color: "inherit !important",
+    fontSize: "inherit !important",
+    fontWeight: "normal !important",
+    fontStyle: "normal !important",
+    fontFamily: "inherit !important",
+    textDecoration: "none !important",
+  },
   "& .md-comment-line": {
     color: "var(--text-muted)",
     fontStyle: "italic",

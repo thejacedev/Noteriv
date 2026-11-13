@@ -16,6 +16,7 @@ import { extractHeadings } from "@/lib/toc-utils";
 import { onCodeBlockProcessorsChange } from "@/lib/markdown-code-block-registry";
 import { onEmbedDataChange } from "./renderers/embeds";
 import { isCommentFence } from "@/lib/comments";
+import { frontmatterLineCount } from "@/lib/frontmatter-block";
 import type { BlockContext, InlineReplacement } from "./types";
 
 /** Dispatched when a plugin registers or removes a code-block processor. */
@@ -153,7 +154,8 @@ function buildDecorations(
   codeTracker: CodeBlockTracker,
   htmlTracker: HtmlBlockTracker,
   cachedHeadings: { level: number; text: string; line: number }[] | null,
-  commentLines: Set<number>
+  commentLines: Set<number>,
+  frontmatterLines: number
 ): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const cursorLines = getCursorLines(view.state);
@@ -180,6 +182,14 @@ function buildDecorations(
     // reading view hides `.md-comment-line`.
     if (commentLines.has(i)) {
       builder.add(line.from, line.from, Decoration.line({ class: "md-comment-line" }));
+      continue;
+    }
+
+    // The properties block at the top is YAML, not markdown: shown as written
+    // and never rendered, or its fences would turn into rules and headings.
+    // The properties editor above the note is where it is edited as values.
+    if (i <= frontmatterLines) {
+      builder.add(line.from, line.from, Decoration.line({ class: "md-frontmatter-line" }));
       continue;
     }
 
@@ -258,6 +268,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
     private htmlTracker: HtmlBlockTracker;
     private cachedHeadings: { level: number; text: string; line: number }[] | null = null;
     private commentLines: Set<number> = new Set();
+    private frontmatterLines = 0;
     private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
     private unsubscribeProcessors: () => void;
     private unsubscribeEmbeds: () => void;
@@ -268,7 +279,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       this.codeTracker = new CodeBlockTracker();
       this.htmlTracker = new HtmlBlockTracker();
       this.runPreScans(view);
-      this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
+      this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines, this.frontmatterLines);
       // Re-render open code blocks when a plugin is enabled or disabled.
       // Deferred because a registration can happen mid-update (e.g. from a
       // processor), and coalesced since a plugin may register several languages.
@@ -301,7 +312,9 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       this.htmlTracker = new HtmlBlockTracker();
       this.htmlTracker.preScan(doc, cursorLines);
       // Extract headings once per doc change so any [TOC] widgets have them.
-      this.cachedHeadings = extractHeadings(doc.toString()).map((h) => ({
+      const text = doc.toString();
+      this.frontmatterLines = frontmatterLineCount(text);
+      this.cachedHeadings = extractHeadings(text).map((h) => ({
         level: h.level,
         text: h.text,
         line: h.line,
@@ -313,7 +326,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       if (update.docChanged) {
         // Document changed — re-scan block structure and rebuild
         this.runPreScans(update.view);
-        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines, this.frontmatterLines);
       } else if (
         update.selectionSet ||
         update.viewportChanged ||
@@ -322,7 +335,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         )
       ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
-        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines, this.frontmatterLines);
       }
     }
   },

@@ -6,6 +6,7 @@ import {
   parseExcludedPatterns,
   sortFileEntries,
   timestampName,
+  nameComparer,
 } from "../file-list";
 import { extractFootnotes } from "../footnotes";
 
@@ -130,5 +131,18 @@ describe("extractFootnotes", () => {
 
   it("ignores code", () => {
     expect(extractFootnotes("`[^1]` and `^[x]`\n```\n[^2]: in a block\n```")).toEqual([]);
+  });
+});
+
+describe("nameComparer", () => {
+  it("sorts names without regard to capitals, and numbers by value", () => {
+    const names = ["apple", "Zebra", "Plan", "note 10", "Note 2", "Média", "media"];
+    const sorted = [...names].sort(nameComparer("en"));
+    expect(sorted.map((n) => n.toLowerCase())).toEqual(["apple", "média", "media", "note 2", "note 10", "plan", "zebra"]);
+  });
+
+  it("does not fall back to character-code order on a system set to the C locale", () => {
+    const sorted = ["apple", "Zebra", "Plan", "tone.mp3"].sort(nameComparer("en-US-u-va-posix"));
+    expect(sorted).toEqual(["apple", "Plan", "tone.mp3", "Zebra"]);
   });
 });

@@ -52,6 +52,60 @@ const listFolding = foldService.of((state, lineStart) => {
   return { from: line.to, to: state.doc.line(line.number + end).to };
 });
 
+/** The properties block at the top of a note, as the range a fold hides: everything after the first `---`. */
+function propertiesRange(state: EditorState): { from: number; to: number } | null {
+  const { doc } = state;
+  if (doc.lines < 2 || doc.line(1).text !== "---") return null;
+  for (let n = 2; n <= doc.lines; n++) {
+    const text = doc.line(n).text;
+    if (text === "---" || text === "...") return { from: doc.line(1).to, to: doc.line(n).to };
+  }
+  return null;
+}
+
+/** Folds the properties block from its first line. */
+const propertiesFolding = foldService.of((state, lineStart) => (lineStart === 0 ? propertiesRange(state) : null));
+
+/**
+ * Keeps the properties block folded when a note is loaded into the editor,
+ * for an editor that shows the properties as values somewhere else. It is
+ * folded once per load: unfolded by hand, it stays open.
+ */
+const foldPropertiesOnLoad = ViewPlugin.fromClass(
+  class {
+    constructor(view: EditorView) {
+      this.fold(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (!update.docChanged) return;
+      // A change that replaces everything is another note, or this one read again.
+      const loaded = update.transactions.some((tr) => {
+        let whole = false;
+        tr.changes.iterChangedRanges((fromA, toA) => {
+          if (fromA === 0 && toA === tr.startState.doc.length) whole = true;
+        });
+        return whole;
+      });
+      if (loaded) this.fold(update.view);
+    }
+
+    fold(view: EditorView) {
+      // A view cannot be changed while it is updating, so this waits for it to finish.
+      queueMicrotask(() => {
+        try {
+          const range = propertiesRange(view.state);
+          if (range && !isFolded(view.state, range.from, range.to)) {
+            view.dispatch({ effects: foldEffect.of(range) });
+          }
+        } catch {
+          // The editor was closed in the meantime.
+        }
+      });
+    }
+  }
+);
+
 /** Whether exactly this range is folded. */
 function isFolded(state: EditorState, from: number, to: number): boolean {
   let folded = false;
@@ -103,7 +157,7 @@ function buildFoldArrows(view: EditorView): DecorationSet {
     let pos = from;
     while (pos <= to) {
       const line = state.doc.lineAt(pos);
-      const range = isOutlineLine(line.text) ? foldable(state, line.from, line.to) : null;
+      const range = isOutlineLine(line.text) || line.number === 1 ? foldable(state, line.from, line.to) : null;
       if (range) {
         const widget = new FoldArrow(isFolded(state, range.from, range.to));
         builder.add(line.from, line.from, Decoration.widget({ widget, side: -1 }));
@@ -202,12 +256,15 @@ const foldTheme = EditorView.baseTheme({
 /**
  * Folding for headings (from the markdown language) and list items.
  * `arrows` says where the fold arrows go: beside the text, or in the margin
- * column of an editor that has one.
+ * column of an editor that has one. `foldProperties` starts each note with
+ * its properties block folded.
  */
-export function folding(arrows: "inline" | "gutter" = "inline"): Extension {
+export function folding(arrows: "inline" | "gutter" = "inline", options: { foldProperties?: boolean } = {}): Extension {
   return [
     codeFolding({ placeholderText: "…" }),
     listFolding,
+    propertiesFolding,
+    options.foldProperties ? foldPropertiesOnLoad : [],
     arrows === "gutter" ? foldGutter({ markerDOM: gutterMarker }) : inlineFoldArrows,
     keymap.of(foldKeymap),
     foldTheme,

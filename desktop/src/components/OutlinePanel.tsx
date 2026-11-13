@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { frontmatterLineCount } from "@/lib/frontmatter-block";
 
 interface Heading {
   level: number;
@@ -20,7 +21,8 @@ export default function OutlinePanel({ content, onHeadingClick, onClose }: Outli
     const lines = content.split("\n");
     let inCodeBlock = false;
 
-    for (let i = 0; i < lines.length; i++) {
+    // The properties block is YAML: a "# comment" in it is not a heading.
+    for (let i = frontmatterLineCount(content); i < lines.length; i++) {
       const line = lines[i];
 
       // Track code fences to avoid matching headings inside code blocks

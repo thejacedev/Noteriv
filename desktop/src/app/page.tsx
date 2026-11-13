@@ -18,7 +18,23 @@ import BacklinksPanel from "@/components/BacklinksPanel";
 import TagPane from "@/components/TagPane";
 import TemplatePicker from "@/components/TemplatePicker";
 import BookmarksPanel from "@/components/BookmarksPanel";
-import FrontmatterEditor from "@/components/FrontmatterEditor";
+import PropertiesEditor from "@/components/PropertiesEditor";
+import AllPropertiesPanel from "@/components/AllPropertiesPanel";
+import WorkspacesModal from "@/components/WorkspacesModal";
+import {
+  EMPTY_LAYOUTS,
+  fromStoredLayout,
+  parseLayouts,
+  putLayout,
+  removeLayout,
+  renameLayout,
+  serializeLayouts,
+  toStoredLayout,
+  type Layout,
+  type LayoutStore,
+} from "@/lib/workspaces";
+import { parsePropertyTypes, serializePropertyTypes, type PropertyType } from "@/lib/properties";
+import { frontmatterLineCount, hasProperties } from "@/lib/frontmatter-block";
 import NoteComposer from "@/components/NoteComposer";
 import FileRecovery from "@/components/FileRecovery";
 import AudioRecorder from "@/components/AudioRecorder";
@@ -231,7 +247,18 @@ export default function Home() {
   const bookmarksLoadedFor = useRef<string | null>(null);
   // A search to open the search panel with, from a bookmarked search.
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
-  const [frontmatterCollapsed, setFrontmatterCollapsed] = useState(true);
+  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
+  // The types the vault has given its properties, from .noteriv/types.json.
+  const [propertyTypes, setPropertyTypes] = useState<Record<string, PropertyType>>({});
+  const propertyTypesLoadedFor = useRef<string | null>(null);
+  // Counts the runs of the Add Property command; the note it was last run on shows the editor even when empty.
+  const [addPropertyRequest, setAddPropertyRequest] = useState(0);
+  const [addPropertyFor, setAddPropertyFor] = useState<string | null>(null);
+  const [showAllProperties, setShowAllProperties] = useState(false);
+  // Saved layouts ("workspaces") of the vault, from .noteriv/workspaces.json.
+  const [layoutStore, setLayoutStore] = useState<LayoutStore>(EMPTY_LAYOUTS);
+  const layoutsLoadedFor = useRef<string | null>(null);
+  const [showWorkspaces, setShowWorkspaces] = useState(false);
 
   // Ecosystem
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -434,6 +461,29 @@ export default function Home() {
     if (appState === "app") debounceSaveWorkspace();
   }, [appState, tabs.length, activeTab, expandedFolders, sidebarCollapsed, sidebarWidth, viewMode, fileOrder, fileViewModes, pinnedTabs, debounceSaveWorkspace]);
 
+  /** Open tabs for a list of files, reading the notes among them. A file that is gone is left out. */
+  const readTabs = useCallback(async (paths: string[]): Promise<TabState[]> => {
+    const restored: TabState[] = [];
+    for (const filePath of paths) {
+      // Dedicated-view tabs (canvas/drawing/pdf) carry no text content; they
+      // load their own files. Restore them by kind, not by reading as markdown.
+      let kind: TabState["kind"];
+      if (isDrawingFile(filePath)) kind = "drawing";
+      else if (filePath.endsWith(".canvas")) kind = "canvas";
+      else if (isPdfFile(filePath)) kind = "pdf";
+      else if (isImageFile(filePath)) kind = "image";
+      if (kind) {
+        restored.push({ filePath, content: "", savedContent: "", kind });
+        continue;
+      }
+      const fileContent = await window.electronAPI.readFile(filePath);
+      if (fileContent !== null) {
+        restored.push({ filePath, content: fileContent, savedContent: fileContent });
+      }
+    }
+    return restored;
+  }, []);
+
   const loadWorkspace = useCallback(async (vault: Vault) => {
     if (!window.electronAPI) return;
     const ws = await window.electronAPI.loadWorkspace(vault.path);
@@ -453,27 +503,10 @@ export default function Home() {
     setPinnedTabs(new Set(ws.pinnedTabs ?? []));
 
     // Restore tabs
-    const restoredTabs: TabState[] = [];
-    for (const filePath of ws.openTabs || []) {
-      // Dedicated-view tabs (canvas/drawing/pdf) carry no text content; they
-      // load their own files. Restore them by kind, not by reading as markdown.
-      let kind: TabState["kind"];
-      if (isDrawingFile(filePath)) kind = "drawing";
-      else if (filePath.endsWith(".canvas")) kind = "canvas";
-      else if (isPdfFile(filePath)) kind = "pdf";
-      else if (isImageFile(filePath)) kind = "image";
-      if (kind) {
-        restoredTabs.push({ filePath, content: "", savedContent: "", kind });
-        continue;
-      }
-      const fileContent = await window.electronAPI.readFile(filePath);
-      if (fileContent !== null) {
-        restoredTabs.push({ filePath, content: fileContent, savedContent: fileContent });
-      }
-    }
+    const restoredTabs = await readTabs(ws.openTabs || []);
     setTabs(restoredTabs);
     setActiveTab(ws.activeTab && restoredTabs.some((t) => t.filePath === ws.activeTab) ? ws.activeTab : restoredTabs[0]?.filePath || null);
-  }, []);
+  }, [readTabs]);
 
   // ============================================================
   // Initialization
@@ -1077,7 +1110,7 @@ export default function Home() {
     let cancelled = false;
     window.electronAPI.readFile(`${bookmarksVault}/.noteriv/bookmarks.json`).then((text) => {
       if (cancelled) return;
-      setBookmarks(parseBookmarks(text));
+      setBookmarks(parseBookmarks(text, bookmarksVault));
       bookmarksLoadedFor.current = bookmarksVault;
     });
     return () => { cancelled = true; };
@@ -1086,10 +1119,128 @@ export default function Home() {
     if (!bookmarksVault || bookmarksLoadedFor.current !== bookmarksVault || !window.electronAPI) return;
     const timer = setTimeout(async () => {
       await window.electronAPI.createDir(`${bookmarksVault}/.noteriv`);
-      await window.electronAPI.writeFile(`${bookmarksVault}/.noteriv/bookmarks.json`, serializeBookmarks(bookmarks));
+      await window.electronAPI.writeFile(`${bookmarksVault}/.noteriv/bookmarks.json`, serializeBookmarks(bookmarks, bookmarksVault));
     }, 400);
     return () => clearTimeout(timer);
   }, [bookmarks, bookmarksVault]);
+
+  // Property types live in the vault too, so every device and every note agrees on them.
+  useEffect(() => {
+    propertyTypesLoadedFor.current = null;
+    setPropertyTypes({});
+    if (!bookmarksVault || !window.electronAPI) return;
+    let cancelled = false;
+    window.electronAPI.readFile(`${bookmarksVault}/.noteriv/types.json`).then((text) => {
+      if (cancelled) return;
+      setPropertyTypes(parsePropertyTypes(text));
+      propertyTypesLoadedFor.current = bookmarksVault;
+    });
+    return () => { cancelled = true; };
+  }, [bookmarksVault]);
+  const changePropertyType = useCallback((name: string, type: PropertyType) => {
+    const vault = bookmarksVault;
+    if (!vault || propertyTypesLoadedFor.current !== vault || !window.electronAPI) return;
+    setPropertyTypes((types) => {
+      if (types[name] === type) return types;
+      const next = { ...types, [name]: type };
+      void (async () => {
+        await window.electronAPI.createDir(`${vault}/.noteriv`);
+        await window.electronAPI.writeFile(`${vault}/.noteriv/types.json`, serializePropertyTypes(next));
+      })();
+      return next;
+    });
+  }, [bookmarksVault]);
+
+  // Saved layouts live in the vault as well.
+  useEffect(() => {
+    layoutsLoadedFor.current = null;
+    setLayoutStore(EMPTY_LAYOUTS);
+    if (!bookmarksVault || !window.electronAPI) return;
+    let cancelled = false;
+    window.electronAPI.readFile(`${bookmarksVault}/.noteriv/workspaces.json`).then((text) => {
+      if (cancelled) return;
+      setLayoutStore(parseLayouts(text));
+      layoutsLoadedFor.current = bookmarksVault;
+    });
+    return () => { cancelled = true; };
+  }, [bookmarksVault]);
+  const changeLayouts = useCallback((change: (store: LayoutStore) => LayoutStore) => {
+    const vault = bookmarksVault;
+    if (!vault || layoutsLoadedFor.current !== vault || !window.electronAPI) return;
+    setLayoutStore((store) => {
+      const next = change(store);
+      if (next === store) return store;
+      void (async () => {
+        await window.electronAPI.createDir(`${vault}/.noteriv`);
+        await window.electronAPI.writeFile(`${vault}/.noteriv/workspaces.json`, serializeLayouts(next));
+      })();
+      return next;
+    });
+  }, [bookmarksVault]);
+
+  /** What is on screen now, as a layout. */
+  const captureLayout = useCallback((): Layout => ({
+    openTabs: tabs.map((t) => t.filePath),
+    activeTab,
+    splitTab,
+    pinnedTabs: Array.from(pinnedTabs),
+    expandedFolders,
+    fileViewModes,
+    viewMode,
+    sidebarCollapsed: manualSidebarCollapsedRef.current,
+    sidebarWidth,
+    panels: [
+      showOutline ? "outline" : "",
+      showBacklinks ? "backlinks" : "",
+      showFootnotes ? "footnotes" : "",
+      showTagPane ? "tags" : "",
+      showAllProperties ? "properties" : "",
+      showLintPanel ? "lint" : "",
+    ].filter(Boolean),
+  }), [tabs, activeTab, splitTab, pinnedTabs, expandedFolders, fileViewModes, viewMode, sidebarWidth, showOutline, showBacklinks, showFootnotes, showTagPane, showAllProperties, showLintPanel]);
+
+  const saveLayoutAs = useCallback((name: string) => {
+    if (!bookmarksVault) return;
+    const stored = toStoredLayout(captureLayout(), bookmarksVault);
+    changeLayouts((store) => putLayout(store, name, stored));
+    showStatusNote(`Saved the layout "${name}"`);
+  }, [bookmarksVault, captureLayout, changeLayouts, showStatusNote]);
+
+  /** Bring a saved layout back. Unsaved notes are saved first, since their tabs may close. */
+  const loadLayout = useCallback(async (name: string) => {
+    const stored = layoutStore.layouts[name];
+    if (!stored || !bookmarksVault || !window.electronAPI) return;
+    if (!await saveDirtyTabs()) return;
+    const layout = fromStoredLayout(stored, bookmarksVault);
+    const restoredTabs = await readTabs(layout.openTabs);
+    const open = new Set(restoredTabs.map((t) => t.filePath));
+    manualSidebarCollapsedRef.current = layout.sidebarCollapsed;
+    sidebarCollapsedRef.current = layout.sidebarCollapsed;
+    responsiveSidebarRef.current = false;
+    setSidebarCollapsed(layout.sidebarCollapsed);
+    setSidebarWidth(layout.sidebarWidth);
+    setViewMode(layout.viewMode);
+    setExpandedFolders(layout.expandedFolders);
+    setFileViewModes((modes) => ({ ...modes, ...layout.fileViewModes }));
+    setPinnedTabs(new Set(layout.pinnedTabs.filter((p) => open.has(p))));
+    setTabs(restoredTabs);
+    setActiveTab(layout.activeTab && open.has(layout.activeTab) ? layout.activeTab : restoredTabs[0]?.filePath ?? null);
+    setSplitTab(layout.splitTab && open.has(layout.splitTab) ? layout.splitTab : null);
+    setShowOutline(layout.panels.includes("outline"));
+    setShowBacklinks(layout.panels.includes("backlinks"));
+    setShowFootnotes(layout.panels.includes("footnotes"));
+    setShowTagPane(layout.panels.includes("tags"));
+    setShowAllProperties(layout.panels.includes("properties"));
+    setShowLintPanel(layout.panels.includes("lint"));
+    changeLayouts((store) => (store.active === name ? store : { ...store, active: name }));
+    setShowWorkspaces(false);
+    const missing = layout.openTabs.length - restoredTabs.length;
+    showStatusNote(
+      missing > 0
+        ? `Loaded the layout "${name}"; ${missing} of its ${missing === 1 ? "notes is" : "notes are"} no longer there`
+        : `Loaded the layout "${name}"`
+    );
+  }, [layoutStore, bookmarksVault, saveDirtyTabs, readTabs, changeLayouts, showStatusNote]);
 
   const openBookmark = useCallback((bookmark: Bookmark) => {
     if (bookmark.kind === "file") {
@@ -1302,6 +1453,31 @@ export default function Home() {
       )
     );
   }, [activeTab]);
+
+  // A change to the open note made outside the editor (the properties
+  // editor, a Link button). It goes through the editor as an ordinary edit of
+  // just the part that differs, so it can be undone and the cursor, the
+  // scroll position and the folds stay where they are. Handing the editor a
+  // whole new text instead would reset all of that.
+  const applyTextEdit = useCallback((next: string) => {
+    const view = viewMode === "view" ? null : editorViewRef.current;
+    const current = view?.state.doc.toString();
+    if (!view || current !== contentRef.current || current === undefined) {
+      handleContentChange(next);
+      return;
+    }
+    let start = 0;
+    const max = Math.min(current.length, next.length);
+    while (start < max && current[start] === next[start]) start++;
+    let endA = current.length;
+    let endB = next.length;
+    while (endA > start && endB > start && current[endA - 1] === next[endB - 1]) {
+      endA--;
+      endB--;
+    }
+    if (start === endA && start === endB) return;
+    view.dispatch({ changes: { from: start, to: endA, insert: next.slice(start, endB) } });
+  }, [handleContentChange, viewMode]);
 
   const handleSplitContentChange = useCallback((newContent: string) => {
     if (!splitTab) return;
@@ -2080,7 +2256,8 @@ export default function Home() {
         // The heading the cursor is under, in the open note.
         if (!view || !activeTab) return;
         const doc = view.state.doc;
-        for (let n = doc.lineAt(view.state.selection.main.head).number; n >= 1; n--) {
+        const propertyLines = frontmatterLineCount(doc.toString());
+        for (let n = doc.lineAt(view.state.selection.main.head).number; n > propertyLines; n--) {
           const match = doc.line(n).text.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
           if (match) {
             setBookmarks((b) => toggleBookmarkItem(b, "heading", `${activeTab}#${match[1]}`));
@@ -2125,6 +2302,20 @@ export default function Home() {
       knowledgeIngest: () => openKnowledgeIngest(),
       uniqueNote: () => { void handleUniqueNote(); },
       toggleFootnotes: () => setShowFootnotes((f) => !f),
+      addProperty: () => {
+        if (!currentTab || currentTab.kind) return;
+        if (viewMode === "source") setViewMode("live");
+        setPropertiesCollapsed(false);
+        setAddPropertyFor(currentTab.filePath);
+        setAddPropertyRequest((n) => n + 1);
+      },
+      toggleAllProperties: () => setShowAllProperties((p) => !p),
+      manageWorkspaces: () => setShowWorkspaces(true),
+      saveWorkspaceLayout: () => {
+        // With a layout in use, this saves over it; otherwise it asks for a name.
+        if (layoutStore.active) saveLayoutAs(layoutStore.active);
+        else setShowWorkspaces(true);
+      },
       revealActiveFile: () => { if (activeTab) { if (sidebarCollapsed) handleToggleSidebar(); revealInFileList(activeTab); } },
       collapseAllFolders: () => setExpandedFolders([]),
       foldAll: () => { const v = shownView(); if (v) foldAllHeadingsAndLists(v); },
@@ -2506,6 +2697,22 @@ export default function Home() {
                     viewMode !== "view" && (
                       <FormattingToolbar onAction={handleCommandExecute} />
                     )}
+                  {viewMode !== "source" &&
+                    !isBoardFile(currentTab.filePath) &&
+                    !isBoardContent(content) &&
+                    (hasProperties(content) || addPropertyFor === currentTab.filePath) && (
+                      <PropertiesEditor
+                        content={content}
+                        onChange={applyTextEdit}
+                        types={propertyTypes}
+                        onTypeChange={changePropertyType}
+                        vaultPath={activeVault?.path ?? null}
+                        collapsed={propertiesCollapsed}
+                        onToggleCollapse={() => setPropertiesCollapsed((c) => !c)}
+                        addRequest={addPropertyRequest}
+                        onDismiss={() => setAddPropertyFor(null)}
+                      />
+                    )}
                   <div className="flex-1 overflow-hidden">
                     {(isBoardFile(currentTab.filePath) || isBoardContent(content)) && viewMode !== "source" ? (
                       <BoardView content={content} onChange={handleContentChange} />
@@ -2613,12 +2820,21 @@ export default function Home() {
             onClose={() => setShowFootnotes(false)}
           />
         )}
+        {showAllProperties && activeVault && (
+          <AllPropertiesPanel
+            vaultPath={activeVault.path}
+            types={propertyTypes}
+            onTypeChange={changePropertyType}
+            onSearch={(query) => { setVaultSearchQuery(query); setShowVaultSearch(true); }}
+            onClose={() => setShowAllProperties(false)}
+          />
+        )}
         {showBacklinks && activeVault && currentTab && (
           <BacklinksPanel
             filePath={currentTab.filePath}
             vaultPath={activeVault.path}
             content={currentTab.content}
-            onContentChange={handleContentChange}
+            onContentChange={applyTextEdit}
             onFileOpen={openFileAtLine}
             onClose={() => setShowBacklinks(false)}
           />
@@ -2750,6 +2966,16 @@ export default function Home() {
       )}
 
       {/* Vault search (Ctrl+Shift+F) */}
+      {showWorkspaces && activeVault && (
+        <WorkspacesModal
+          store={layoutStore}
+          onSave={saveLayoutAs}
+          onLoad={(name) => { void loadLayout(name); }}
+          onRename={(from, to) => changeLayouts((store) => renameLayout(store, from, to))}
+          onDelete={(name) => changeLayouts((store) => removeLayout(store, name))}
+          onClose={() => setShowWorkspaces(false)}
+        />
+      )}
       {showVaultSearch && activeVault && (
         <VaultSearch
           vaultPath={activeVault.path}

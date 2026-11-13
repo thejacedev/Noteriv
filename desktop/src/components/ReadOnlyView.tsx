@@ -53,6 +53,8 @@ export default function ReadOnlyView({ content, onChange, onViewReady, className
         // Comments are for the writer; a reader does not see them.
         ".md-comment": { display: "none" },
         ".md-comment-line": { display: "none" },
+        // Properties are shown as values above the note, not as YAML in it.
+        ".md-frontmatter-line": { display: "none" },
       }),
     ];
 
