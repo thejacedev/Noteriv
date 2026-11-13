@@ -3137,6 +3137,85 @@ body {
 }
 
 /* Loading state */
+/* The panel's sections: backlinks, unlinked mentions, outgoing and possible links */
+.bl-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bl-section:first-child {
+  border-top: none;
+}
+
+.bl-section:hover {
+  color: var(--text-secondary);
+}
+
+.bl-section:focus-visible,
+.bl-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.bl-section-label {
+  flex: 1;
+}
+
+.bl-section-arrow {
+  width: 10px;
+  font-size: 10px;
+}
+
+.bl-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bl-row .bl-snippet {
+  flex: 1;
+  min-width: 0;
+}
+
+.bl-static {
+  cursor: default;
+}
+
+.bl-unresolved .bl-snippet-text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.bl-action {
+  flex: none;
+  margin-right: 8px;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bl-action:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .bl-loading {
   display: flex;
   flex-direction: column;

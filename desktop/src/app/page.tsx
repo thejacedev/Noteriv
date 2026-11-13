@@ -2445,7 +2445,9 @@ export default function Home() {
           <BacklinksPanel
             filePath={currentTab.filePath}
             vaultPath={activeVault.path}
-            onFileOpen={openFile}
+            content={currentTab.content}
+            onContentChange={handleContentChange}
+            onFileOpen={openFileAtLine}
             onClose={() => setShowBacklinks(false)}
           />
         )}

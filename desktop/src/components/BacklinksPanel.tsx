@@ -1,186 +1,344 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { findBacklinks } from "@/lib/wiki-link-utils";
-import type { Backlink, FileInfo } from "@/lib/wiki-link-utils";
+import { findLinkedNote } from "@/lib/wiki-link-utils";
+import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
+import { findMentions, linkMention, outgoingLinks, possibleLinks, type TextRange } from "@/lib/mentions";
 
 interface BacklinksPanelProps {
   /** Full path of the current file being viewed. */
   filePath: string;
   /** Base path of the vault directory. */
   vaultPath: string;
+  /** The current note's text, for the links it makes. */
+  content: string;
+  /** Replaces the current note's text, when a mention in it is turned into a link. */
+  onContentChange?: (content: string) => void;
   /** Called when user clicks a backlink to open the linked file. */
-  onFileOpen: (filePath: string) => void;
+  onFileOpen: (filePath: string, line?: number) => void;
   /** Called when the panel close button is clicked. */
   onClose: () => void;
+}
+
+/** A line in another note that links to, or mentions, this one. */
+interface Mention {
+  filePath: string;
+  noteName: string;
+  relativePath: string;
+  line: number;
+  text: string;
+  /** Where the mention is, for an unlinked one. */
+  range?: TextRange;
+}
+
+type Section = "linked" | "unlinked" | "outgoing" | "possible";
+
+/** The note a link's file part points at: by name, by path, or by an alias. */
+function resolve(index: NoteMeta[], target: string): NoteMeta | null {
+  return findLinkedNote(index, target) ?? findNoteByAlias(index, target);
+}
+
+function groupByFile(mentions: Mention[]): [string, Mention[]][] {
+  const groups = new Map<string, Mention[]>();
+  for (const m of mentions) {
+    const list = groups.get(m.filePath);
+    if (list) list.push(m);
+    else groups.set(m.filePath, [m]);
+  }
+  return [...groups.entries()];
 }
 
 export default function BacklinksPanel({
   filePath,
   vaultPath,
+  content,
+  onContentChange,
   onFileOpen,
   onClose,
 }: BacklinksPanelProps) {
-  const [backlinks, setBacklinks] = useState<Backlink[]>([]);
+  const [index, setIndex] = useState<NoteMeta[]>([]);
+  const [linked, setLinked] = useState<Mention[]>([]);
+  const [unlinked, setUnlinked] = useState<Mention[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [closed, setClosed] = useState<Set<Section>>(new Set(["possible"]));
 
-  // Extract the file name from the full path
-  const currentFileName = useMemo(() => {
-    const parts = filePath.split("/");
-    return parts[parts.length - 1] || "";
-  }, [filePath]);
-
-  // Scan for backlinks when the file changes
+  // Links to this note, and plain mentions of it, in the rest of the vault.
   useEffect(() => {
     let cancelled = false;
-
-    async function scan() {
-      if (!window.electronAPI || !currentFileName) {
-        setBacklinks([]);
-        setLoading(false);
-        return;
-      }
-
+    (async () => {
+      if (!window.electronAPI) return;
       setLoading(true);
-
       try {
-        const allFiles: FileInfo[] = await window.electronAPI.listAllFiles(vaultPath);
+        const notes = await loadVaultIndex(vaultPath, { fresh: reloadTick > 0 });
+        const self = notes.find((n) => n.filePath === filePath);
+        if (cancelled) return;
+        setIndex(notes);
+        if (!self) {
+          setLinked([]);
+          setUnlinked([]);
+          return;
+        }
 
-        const results = await findBacklinks(
-          currentFileName,
-          vaultPath,
-          allFiles.map((f) => ({
-            filePath: f.filePath,
-            fileName: f.fileName,
-            relativePath: f.relativePath,
-          })),
-          (path: string) => window.electronAPI.readFile(path)
+        // Notes with a link that resolves here, then the lines those links are on.
+        const sources = notes.filter(
+          (n) => n.filePath !== filePath && n.links.some((l) => resolve(notes, l)?.filePath === filePath)
+        );
+        const linkedFound: Mention[] = [];
+        await Promise.all(
+          sources.map(async (n) => {
+            const text = await window.electronAPI.readFile(n.filePath);
+            if (!text) return;
+            text.split("\n").forEach((line, i) => {
+              const regex = /\[\[([^\]]+)\]\]/g;
+              let match;
+              while ((match = regex.exec(line)) !== null) {
+                const target = match[1].split("|")[0].replace(/\\$/, "").split("#")[0].trim();
+                if (target && resolve(notes, target)?.filePath === filePath) {
+                  linkedFound.push({
+                    filePath: n.filePath,
+                    noteName: n.name,
+                    relativePath: n.relativePath,
+                    line: i + 1,
+                    text: line.trim().slice(0, 160),
+                  });
+                  break;
+                }
+              }
+            });
+          })
         );
 
-        if (!cancelled) {
-          setBacklinks(results);
+        // The note's name and aliases as plain text elsewhere.
+        const unlinkedFound: Mention[] = [];
+        const seen = new Set<string>();
+        for (const name of [self.name, ...self.aliases]) {
+          if (name.trim().length < 3) continue;
+          const result = await window.electronAPI.searchVault(vaultPath, `"${name.replace(/"/g, '\\"')}"`);
+          for (const file of result.files) {
+            if (file.filePath === filePath) continue;
+            for (const hit of file.lines) {
+              for (const range of findMentions(hit.text, name)) {
+                const key = `${file.filePath}:${hit.line}:${range.from}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                unlinkedFound.push({
+                  filePath: file.filePath,
+                  noteName: file.name.replace(/\.(md|markdown)$/i, ""),
+                  relativePath: file.relativePath,
+                  line: hit.line,
+                  text: hit.text,
+                  range,
+                });
+              }
+            }
+          }
         }
+
+        if (cancelled) return;
+        const byPlace = (a: Mention, b: Mention) => a.noteName.localeCompare(b.noteName) || a.line - b.line;
+        setLinked(linkedFound.sort(byPlace));
+        setUnlinked(unlinkedFound.sort(byPlace));
       } catch (err) {
         console.error("Failed to scan for backlinks:", err);
         if (!cancelled) {
-          setBacklinks([]);
+          setLinked([]);
+          setUnlinked([]);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
-    }
-
-    scan();
+    })();
     return () => {
       cancelled = true;
     };
-  }, [filePath, vaultPath, currentFileName]);
+  }, [filePath, vaultPath, reloadTick]);
 
-  // Group backlinks by source file
-  const grouped = useMemo(() => {
-    const groups: Record<string, Backlink[]> = {};
-    for (const bl of backlinks) {
-      if (!groups[bl.filePath]) {
-        groups[bl.filePath] = [];
+  const self = useMemo(() => index.find((n) => n.filePath === filePath) ?? null, [index, filePath]);
+
+  // The links this note makes, and whether each leads anywhere.
+  const outgoing = useMemo(
+    () => outgoingLinks(content).map((link) => ({ ...link, note: resolve(index, link.target) })),
+    [content, index]
+  );
+
+  // Other notes' names in this note's text that are not links yet.
+  const possible = useMemo(() => {
+    if (!self) return [];
+    const names = index
+      .filter((n) => n.filePath !== filePath)
+      .flatMap((n) => [n.name, ...n.aliases].map((name) => ({ name, noteName: n.name })));
+    return possibleLinks(content, names, 60);
+  }, [content, index, self, filePath]);
+
+  const toggle = useCallback((section: Section) => {
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  }, []);
+
+  /** Turn a plain mention in another note into a link to this one. */
+  const linkUnlinked = useCallback(
+    async (mention: Mention) => {
+      if (!window.electronAPI || !self || !mention.range) return;
+      const text = await window.electronAPI.readFile(mention.filePath);
+      if (text === null) return;
+      const lines = text.split("\n");
+      // Only if the line is still what the search showed.
+      if (lines[mention.line - 1] !== mention.text) {
+        setReloadTick((t) => t + 1);
+        return;
       }
-      groups[bl.filePath].push(bl);
-    }
-    return groups;
-  }, [backlinks]);
-
-  const fileCount = Object.keys(grouped).length;
-
-  const handleBacklinkClick = useCallback(
-    (blFilePath: string) => {
-      onFileOpen(blFilePath);
+      lines[mention.line - 1] = linkMention(mention.text, mention.range, self.name);
+      await window.electronAPI.writeFile(mention.filePath, lines.join("\n"));
+      invalidateVaultIndex();
+      setReloadTick((t) => t + 1);
     },
-    [onFileOpen]
+    [self]
+  );
+
+  /** Turn another note's name in this note into a link. */
+  const linkPossible = useCallback(
+    (line: number, range: TextRange, noteName: string) => {
+      if (!onContentChange) return;
+      const lines = content.split("\n");
+      if (lines[line - 1] === undefined) return;
+      lines[line - 1] = linkMention(lines[line - 1], range, noteName);
+      onContentChange(lines.join("\n"));
+    },
+    [content, onContentChange]
+  );
+
+  const renderMentions = (mentions: Mention[], withLinkButton: boolean) =>
+    groupByFile(mentions).map(([sourcePath, rows]) => (
+      <div key={sourcePath} className="bl-group">
+        <button className="bl-file-header" onClick={() => onFileOpen(sourcePath)} title={rows[0].relativePath}>
+          <svg width="12" height="12" viewBox="0 0 16 16" className="bl-file-icon" aria-hidden="true">
+            <path d="M4 1h5l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.2" fill="none" />
+            <path d="M9 1v4h4" stroke="currentColor" strokeWidth="1.2" fill="none" />
+          </svg>
+          <span className="bl-file-name">{rows[0].noteName}</span>
+        </button>
+        {rows.map((m, idx) => (
+          <div key={`${m.line}:${m.range?.from ?? idx}`} className="bl-row">
+            <button className="bl-snippet" onClick={() => onFileOpen(m.filePath, m.line)} title={`Line ${m.line}`}>
+              <span className="bl-line-num">L{m.line}</span>
+              <span className="bl-snippet-text">
+                {m.range ? (
+                  <>
+                    {m.text.slice(0, m.range.from).trimStart()}
+                    <mark className="search-highlight">{m.text.slice(m.range.from, m.range.to)}</mark>
+                    {m.text.slice(m.range.to)}
+                  </>
+                ) : (
+                  m.text
+                )}
+              </span>
+            </button>
+            {withLinkButton && (
+              <button className="bl-action" onClick={() => linkUnlinked(m)} title="Turn this mention into a link">
+                Link
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    ));
+
+  const sectionHeader = (section: Section, label: string, count: number) => (
+    <button className="bl-section" onClick={() => toggle(section)} aria-expanded={!closed.has(section)}>
+      <span className="bl-section-arrow">{closed.has(section) ? "▸" : "▾"}</span>
+      <span className="bl-section-label">{label}</span>
+      <span className="bl-count">{count}</span>
+    </button>
   );
 
   return (
     <div className="bl-panel">
       <div className="bl-header">
-        <span className="bl-title">Backlinks</span>
+        <span className="bl-title">Links</span>
         <div className="bl-header-right">
-          {!loading && (
-            <span className="bl-count">
-              {backlinks.length} {backlinks.length === 1 ? "link" : "links"}
-            </span>
-          )}
           <button onClick={onClose} className="bl-close" title="Close">
             <svg width="12" height="12" viewBox="0 0 12 12">
-              <path
-                d="M3 3l6 6M9 3l-6 6"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
+              <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
       </div>
 
       <div className="bl-list">
-        {loading ? (
-          <div className="bl-loading">
-            <div className="bl-spinner" />
-            <span>Scanning vault...</span>
-          </div>
-        ) : backlinks.length === 0 ? (
-          <div className="bl-empty">
-            No backlinks found for this note.
-          </div>
-        ) : (
-          Object.entries(grouped).map(([sourceFilePath, bls]) => {
-            const displayName = bls[0].fileName.replace(/\.md$/i, "");
-            const relPath = bls[0].relativePath;
+        {sectionHeader("linked", "Backlinks", linked.length)}
+        {!closed.has("linked") &&
+          (loading ? (
+            <div className="bl-loading">
+              <div className="bl-spinner" />
+              <span>Scanning vault...</span>
+            </div>
+          ) : linked.length === 0 ? (
+            <div className="bl-empty">No other note links here.</div>
+          ) : (
+            renderMentions(linked, false)
+          ))}
 
-            return (
-              <div key={sourceFilePath} className="bl-group">
+        {sectionHeader("unlinked", "Unlinked mentions", unlinked.length)}
+        {!closed.has("unlinked") &&
+          !loading &&
+          (unlinked.length === 0 ? (
+            <div className="bl-empty">No other note mentions this one by name.</div>
+          ) : (
+            renderMentions(unlinked, true)
+          ))}
+
+        {sectionHeader("outgoing", "Outgoing links", outgoing.length)}
+        {!closed.has("outgoing") &&
+          (outgoing.length === 0 ? (
+            <div className="bl-empty">This note links to nothing.</div>
+          ) : (
+            outgoing.map((link) => (
+              <div key={link.target.toLowerCase()} className="bl-row">
                 <button
-                  className="bl-file-header"
-                  onClick={() => handleBacklinkClick(sourceFilePath)}
-                  title={relPath}
+                  className={`bl-snippet${link.note ? "" : " bl-unresolved"}`}
+                  onClick={() => link.note && onFileOpen(link.note.filePath)}
+                  disabled={!link.note}
+                  title={link.note ? link.note.relativePath : "No note or file with this name"}
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    className="bl-file-icon"
-                  >
-                    <path
-                      d="M4 1h5l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                      fill="none"
-                    />
-                    <path
-                      d="M9 1v4h4"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                      fill="none"
-                    />
-                  </svg>
-                  <span className="bl-file-name">{displayName}</span>
+                  <span className="bl-snippet-text">{link.target}</span>
+                  {link.count > 1 && <span className="bl-line-num">×{link.count}</span>}
                 </button>
-
-                {bls.map((bl, idx) => (
-                  <button
-                    key={`${bl.filePath}:${bl.line}:${idx}`}
-                    className="bl-snippet"
-                    onClick={() => handleBacklinkClick(bl.filePath)}
-                    title={`Line ${bl.line}`}
-                  >
-                    <span className="bl-line-num">L{bl.line}</span>
-                    <span className="bl-snippet-text">{bl.snippet}</span>
-                  </button>
-                ))}
               </div>
-            );
-          })
-        )}
+            ))
+          ))}
+
+        {sectionHeader("possible", "Possible links", possible.length)}
+        {!closed.has("possible") &&
+          (possible.length === 0 ? (
+            <div className="bl-empty">No other note is named in this one without a link.</div>
+          ) : (
+            possible.map((p) => (
+              <div key={`${p.line}:${p.range.from}`} className="bl-row">
+                <span className="bl-snippet bl-static" title={`Line ${p.line}`}>
+                  <span className="bl-line-num">L{p.line}</span>
+                  <span className="bl-snippet-text">
+                    {p.text.slice(0, p.range.from).trimStart()}
+                    <mark className="search-highlight">{p.text.slice(p.range.from, p.range.to)}</mark>
+                    {p.text.slice(p.range.to)}
+                  </span>
+                </span>
+                {onContentChange && (
+                  <button
+                    className="bl-action"
+                    onClick={() => linkPossible(p.line, p.range, p.noteName)}
+                    title={`Link to ${p.noteName}`}
+                  >
+                    Link
+                  </button>
+                )}
+              </div>
+            ))
+          ))}
       </div>
     </div>
   );
