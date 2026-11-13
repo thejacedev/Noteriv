@@ -5,7 +5,7 @@
 # (updpkgsums), then `makepkg --printsrcinfo > .SRCINFO` and push to the AUR.
 
 pkgname=noteriv-bin
-pkgver=2.4.12
+pkgver=2.4.13
 pkgrel=1
 pkgdesc="Open-source markdown editor with graph view, plugins, themes, Git/WebDAV sync and an MCP server"
 arch=('x86_64')
@@ -19,7 +19,7 @@ options=('!strip' '!debug')
 source=("noteriv-${pkgver}.deb::https://github.com/thejacedev/Noteriv/releases/download/v${pkgver}/Noteriv_${pkgver}_amd64.deb"
         "LICENSE-${pkgver}::https://raw.githubusercontent.com/thejacedev/Noteriv/v${pkgver}/LICENSE")
 noextract=("noteriv-${pkgver}.deb")
-sha256sums=('047b40e396cc326b0157b53d71b81eff58f46036b563c18d9f4b32eac96a7bd1'
+sha256sums=('d9a737897de339ca77915e311f9f0a8e5f6d6e097577f8fb4b01133211685fbc'
             '2fa5b217344633c55e347f25f17d9523131e473f574c07272609b2ec9b947b4a')
 
 package() {

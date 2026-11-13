@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.28.0.schema.json
 
 PackageIdentifier: thejacedev.Noteriv
-PackageVersion: 2.4.12
+PackageVersion: 2.4.13
 PackageLocale: en-US
 Publisher: Jace Sleeman
 PublisherUrl: https://github.com/thejacedev
@@ -20,6 +20,6 @@ Tags:
 - knowledge-base
 - open-source
 - tauri
-ReleaseNotesUrl: https://github.com/thejacedev/Noteriv/releases/tag/v2.4.12
+ReleaseNotesUrl: https://github.com/thejacedev/Noteriv/releases/tag/v2.4.13
 ManifestType: defaultLocale
 ManifestVersion: 1.28.0
