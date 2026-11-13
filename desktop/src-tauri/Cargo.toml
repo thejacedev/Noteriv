@@ -65,8 +65,16 @@ wait-timeout = "0.2"
 regex = "1"
 # Deleting to the system's own trash, when the user chooses that
 trash = "5"
-# WebDAV: minimal XML parsing
+# WebDAV: minimal XML parsing. Also streams Evernote exports (see src/importers).
 quick-xml = { version = "0.36", features = ["serialize"] }
+
+# Importers (src/importers): zip archives from Notion, Google Takeout, Bear and
+# Textpack, and an HTML parser for Evernote and HTML files. All three are
+# already in the lockfile through Tauri; zip's default features would add
+# compression libraries that are not, so only deflate through flate2 is on.
+zip = { version = "4.6", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+html5ever = "0.29"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

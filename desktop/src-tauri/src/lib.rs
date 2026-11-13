@@ -9,6 +9,7 @@ mod commands_sync;
 mod commands_vault;
 mod commands_window;
 mod commands_workspace;
+mod importers;
 mod links;
 mod menu;
 mod paths;
