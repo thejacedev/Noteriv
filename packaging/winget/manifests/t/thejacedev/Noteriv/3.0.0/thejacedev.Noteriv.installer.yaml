@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.28.0.schema.json
 
 PackageIdentifier: thejacedev.Noteriv
-PackageVersion: 2.4.13
+PackageVersion: 3.0.0
 InstallerType: nullsoft
 Scope: user
 UpgradeBehavior: install
@@ -12,7 +12,7 @@ AppsAndFeaturesEntries:
 ReleaseDate: 2026-11-13
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/thejacedev/Noteriv/releases/download/v2.4.13/Noteriv_2.4.13_x64-setup.exe
-  InstallerSha256: 0DF9FE1C30B5D43FBBFCEE5DDA4207282446DBBB185723B617F59BAC53AF7AB7
+  InstallerUrl: https://github.com/thejacedev/Noteriv/releases/download/v3.0.0/Noteriv_3.0.0_x64-setup.exe
+  InstallerSha256: 870D66734CDAB6C468DE569884863842203996AC7F9176F6D45D0D75D0874AEA
 ManifestType: installer
 ManifestVersion: 1.28.0

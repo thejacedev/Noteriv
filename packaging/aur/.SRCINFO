@@ -1,6 +1,6 @@
 pkgbase = noteriv-bin
 	pkgdesc = Open-source markdown editor with graph view, plugins, themes, Git/WebDAV sync and an MCP server
-	pkgver = 2.4.13
+	pkgver = 3.0.0
 	pkgrel = 1
 	url = https://www.noteriv.com
 	arch = x86_64
@@ -11,12 +11,12 @@ pkgbase = noteriv-bin
 	optdepends = git: Git sync
 	provides = noteriv
 	conflicts = noteriv
-	noextract = noteriv-2.4.13.deb
+	noextract = noteriv-3.0.0.deb
 	options = !strip
 	options = !debug
-	source = noteriv-2.4.13.deb::https://github.com/thejacedev/Noteriv/releases/download/v2.4.13/Noteriv_2.4.13_amd64.deb
-	source = LICENSE-2.4.13::https://raw.githubusercontent.com/thejacedev/Noteriv/v2.4.13/LICENSE
-	sha256sums = d9a737897de339ca77915e311f9f0a8e5f6d6e097577f8fb4b01133211685fbc
+	source = noteriv-3.0.0.deb::https://github.com/thejacedev/Noteriv/releases/download/v3.0.0/Noteriv_3.0.0_amd64.deb
+	source = LICENSE-3.0.0::https://raw.githubusercontent.com/thejacedev/Noteriv/v3.0.0/LICENSE
+	sha256sums = d05da9532912150a48f5a96ace7e5841a91f3dbd6289520702a53e5445793a50
 	sha256sums = 2fa5b217344633c55e347f25f17d9523131e473f574c07272609b2ec9b947b4a
 
 pkgname = noteriv-bin
