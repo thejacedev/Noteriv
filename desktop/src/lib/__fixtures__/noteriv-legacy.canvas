@@ -1,0 +1,91 @@
+{
+  "nodes": [
+    {
+      "id": "1111111111111111",
+      "type": "text",
+      "x": 100.5,
+      "y": 200.25,
+      "width": 260,
+      "height": 160,
+      "text": "Main idea",
+      "color": "red"
+    },
+    {
+      "id": "2222222222222222",
+      "type": "file",
+      "x": 420,
+      "y": 200,
+      "width": 260,
+      "height": 120,
+      "filePath": "/home/sam/Vault/Projects/Plan.md",
+      "color": "blue"
+    },
+    {
+      "id": "3333333333333333",
+      "type": "sticky",
+      "x": 100,
+      "y": 420,
+      "width": 200,
+      "height": 200,
+      "text": "Call Dana",
+      "color": "pink",
+      "rotation": -1.37
+    },
+    {
+      "id": "4444444444444444",
+      "type": "image",
+      "x": 420,
+      "y": 420,
+      "width": 300,
+      "height": 240,
+      "imagePath": "/home/sam/Vault/attachments/sketch.png"
+    },
+    {
+      "id": "5555555555555555",
+      "type": "image",
+      "x": 760,
+      "y": 420,
+      "width": 300,
+      "height": 240,
+      "imagePath": "/home/sam/Pictures/holiday.jpg"
+    },
+    {
+      "id": "6666666666666666",
+      "type": "drawing",
+      "x": 97.2,
+      "y": 697.6,
+      "width": 126.4,
+      "height": 46.8,
+      "drawingPoints": [[3, 3], [60.5, 43.8], [123.4, 12.1]],
+      "strokeColor": "#f38ba8",
+      "strokeWidth": 3
+    },
+    {
+      "id": "7777777777777777",
+      "type": "group",
+      "x": 60,
+      "y": 160,
+      "width": 680,
+      "height": 520,
+      "label": "Sprint",
+      "color": "purple"
+    }
+  ],
+  "edges": [
+    {
+      "id": "aaaaaaaaaaaaaaaa",
+      "fromNode": "1111111111111111",
+      "toNode": "2222222222222222",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "bbbbbbbbbbbbbbbb",
+      "fromNode": "3333333333333333",
+      "toNode": "6666666666666666",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "see sketch"
+    }
+  ]
+}

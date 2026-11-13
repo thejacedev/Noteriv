@@ -11,20 +11,46 @@ import {
   CanvasData,
   CanvasNode,
   CanvasEdge,
+  CanvasEnd,
+  CanvasSide,
+  CANVAS_COLORS,
+  arrowHeadPath,
+  canvasBounds,
+  canvasColorCss,
+  canvasFileFor,
+  cardsForFiles,
   createTextNode,
   createFileNode,
   createGroupNode,
+  createLinkNode,
   createStickyNode,
   createImageNode,
   createDrawingNode,
   createEdge,
+  edgeEnds,
+  edgeGeometry,
+  edgeSides,
+  fileCardKind,
+  headingSubpath,
+  isHexColor,
+  notesInFolder,
+  pastedWebUrl,
   serializeCanvas,
   parseCanvas,
   getAnchorPoint,
   generateId,
   recalcEdgeSides,
+  recalcEdgesFor,
+  resolveCanvasFile,
+  stickyBackground,
   STICKY_COLORS,
 } from "@/lib/canvas-utils";
+import { generateAttachmentName, getAttachmentsDir } from "@/lib/attachment-utils";
+import { CardChrome, cardColor } from "@/components/canvas/CardChrome";
+import { FileCard } from "@/components/canvas/FileCard";
+import { LinkCard } from "@/components/canvas/LinkCard";
+import { AddressPrompt, FolderPicker, HeadingMenu } from "@/components/canvas/Pickers";
+import { useObjectUrl, useSeen } from "@/components/canvas/media";
 import "@/styles/canvas.css";
 
 // ─── Props ───
@@ -44,7 +70,7 @@ const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
 const MIN_NODE_W = 100;
 const MIN_NODE_H = 60;
-const NODE_COLORS = ["", "red", "orange", "yellow", "green", "blue", "purple"];
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
 
 /** Tool modes for the canvas toolbar */
 type CanvasTool = "select" | "text" | "sticky" | "image" | "draw";
@@ -62,82 +88,63 @@ const DRAW_STROKE_COLORS = [
 
 // ─── Sub-components ───
 
-/** SVG arrow marker definition */
-function EdgeMarkerDefs() {
-  return (
-    <defs>
-      <marker
-        id="canvas-arrowhead"
-        markerWidth="10"
-        markerHeight="8"
-        refX="9"
-        refY="4"
-        orient="auto"
-        markerUnits="strokeWidth"
-      >
-        <path d="M0,0 L10,4 L0,8 Z" className="canvas-edge-arrowhead" />
-      </marker>
-    </defs>
-  );
-}
-
 /** Render a single edge as SVG path */
 function EdgeLine({
   edge,
   nodes,
   selected,
+  hideLabel,
   onClick,
+  onDoubleClick,
+  onContextMenu,
 }: {
   edge: CanvasEdge;
   nodes: CanvasNode[];
   selected: boolean;
+  /** While the label is being typed, the box it is typed in stands in its place. */
+  hideLabel: boolean;
   onClick: (id: string, e: React.MouseEvent) => void;
+  onDoubleClick: (id: string) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
 }) {
   const fromNode = nodes.find((n) => n.id === edge.fromNode);
   const toNode = nodes.find((n) => n.id === edge.toNode);
   if (!fromNode || !toNode) return null;
 
-  const from = getAnchorPoint(fromNode, edge.fromSide);
-  const to = getAnchorPoint(toNode, edge.toSide);
-
-  // Cubic bezier with control points offset in direction of the side
-  const sideOffset = 60;
-  const cp1 = { ...from };
-  const cp2 = { ...to };
-  if (edge.fromSide === "right") cp1.x += sideOffset;
-  else if (edge.fromSide === "left") cp1.x -= sideOffset;
-  else if (edge.fromSide === "bottom") cp1.y += sideOffset;
-  else cp1.y -= sideOffset;
-
-  if (edge.toSide === "right") cp2.x += sideOffset;
-  else if (edge.toSide === "left") cp2.x -= sideOffset;
-  else if (edge.toSide === "bottom") cp2.y += sideOffset;
-  else cp2.y -= sideOffset;
-
-  const d = `M${from.x},${from.y} C${cp1.x},${cp1.y} ${cp2.x},${cp2.y} ${to.x},${to.y}`;
-
-  const midX = (from.x + to.x) / 2;
-  const midY = (from.y + to.y) / 2;
+  const sides = edgeSides(edge, fromNode, toNode);
+  const { path, from, to, middle } = edgeGeometry(fromNode, toNode, sides.from, sides.to);
+  const ends = edgeEnds(edge);
+  const color = canvasColorCss(edge.color);
+  const headClass = `canvas-edge-arrowhead${selected ? " selected" : ""}`;
+  const headStyle = color ? { fill: color } : undefined;
 
   return (
-    <g>
+    // The handlers are on the group: the line itself lies over the wider path
+    // and takes the clicks that land exactly on it.
+    <g
+      className="canvas-edge"
+      onClick={(e) => onClick(edge.id, e)}
+      onDoubleClick={() => onDoubleClick(edge.id)}
+      onContextMenu={(e) => onContextMenu(edge.id, e)}
+    >
       {/* Invisible wider path for easier click */}
       <path
-        d={d}
+        d={path}
         fill="none"
         stroke="transparent"
         strokeWidth={14}
         style={{ pointerEvents: "stroke", cursor: "pointer" }}
-        onClick={(e) => onClick(edge.id, e)}
       />
       <path
-        d={d}
+        d={path}
         className={`canvas-edge-line${selected ? " selected" : ""}`}
-        markerEnd="url(#canvas-arrowhead)"
-        style={edge.color ? { stroke: edge.color } : undefined}
+        style={color ? { stroke: color } : undefined}
       />
-      {edge.label && (
-        <text x={midX} y={midY - 8} className="canvas-edge-label">
+      {/* Drawn as shapes of their own so that they take the edge's colour */}
+      {ends.to === "arrow" && <path d={arrowHeadPath(to, sides.to)} className={headClass} style={headStyle} />}
+      {ends.from === "arrow" && <path d={arrowHeadPath(from, sides.from)} className={headClass} style={headStyle} />}
+      {edge.label && !hideLabel && (
+        <text x={middle.x} y={middle.y} className="canvas-edge-label">
           {edge.label}
         </text>
       )}
@@ -178,15 +185,18 @@ function TextNodeView({
     }
   }, [editing]);
 
+  const color = cardColor(node.color);
+
   return (
     <div
       className={`canvas-node canvas-node-text${selected ? " selected" : ""}`}
-      data-color={node.color || undefined}
+      data-color={color.name}
       style={{
         left: node.x,
         top: node.y,
         width: node.width,
         height: node.height,
+        ...color.style,
       }}
       onPointerDown={(e) => onPointerDown(node.id, e)}
       onDoubleClick={() => onDoubleClick(node.id)}
@@ -225,72 +235,12 @@ function TextNodeView({
   );
 }
 
-/** Single file node */
-function FileNodeView({
-  node,
-  selected,
-  preview,
-  onPointerDown,
-  onDoubleClick,
-  onAnchorPointerDown,
-  onResizePointerDown,
-  onContextMenu,
-}: {
-  node: CanvasNode;
-  selected: boolean;
-  preview: string;
-  onPointerDown: (id: string, e: React.PointerEvent) => void;
-  onDoubleClick: (id: string) => void;
-  onAnchorPointerDown: (nodeId: string, side: string, e: React.PointerEvent) => void;
-  onResizePointerDown: (nodeId: string, corner: string, e: React.PointerEvent) => void;
-  onContextMenu: (id: string, e: React.MouseEvent) => void;
-}) {
-  const fileName = node.filePath?.split("/").pop()?.split("\\").pop() || "Unknown";
-  return (
-    <div
-      className={`canvas-node canvas-node-file${selected ? " selected" : ""}`}
-      data-color={node.color || undefined}
-      style={{
-        left: node.x,
-        top: node.y,
-        width: node.width,
-        height: node.height,
-      }}
-      onPointerDown={(e) => onPointerDown(node.id, e)}
-      onDoubleClick={() => onDoubleClick(node.id)}
-      onContextMenu={(e) => onContextMenu(node.id, e)}
-    >
-      <div className="canvas-node-header">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path d="M4 1h5l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3" />
-          <path d="M9 1v4h4" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
-        <span className="file-name">{fileName}</span>
-      </div>
-      <div className="canvas-node-body">
-        {preview || "Loading..."}
-      </div>
-      {selected && (
-        <>
-          <div className="canvas-resize-handle nw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "nw", e); }} />
-          <div className="canvas-resize-handle ne" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "ne", e); }} />
-          <div className="canvas-resize-handle sw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "sw", e); }} />
-          <div className="canvas-resize-handle se" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "se", e); }} />
-        </>
-      )}
-      <div className="canvas-edge-anchor top" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "top", e); }} />
-      <div className="canvas-edge-anchor bottom" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "bottom", e); }} />
-      <div className="canvas-edge-anchor left" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "left", e); }} />
-      <div className="canvas-edge-anchor right" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "right", e); }} />
-    </div>
-  );
-}
-
 /** Group node */
 function GroupNodeView({
   node,
   selected,
   editingLabel,
+  vaultPath,
   onPointerDown,
   onDoubleClick,
   onLabelChange,
@@ -301,6 +251,7 @@ function GroupNodeView({
   node: CanvasNode;
   selected: boolean;
   editingLabel: boolean;
+  vaultPath: string;
   onPointerDown: (id: string, e: React.PointerEvent) => void;
   onDoubleClick: (id: string) => void;
   onLabelChange: (id: string, label: string) => void;
@@ -317,15 +268,36 @@ function GroupNodeView({
     }
   }, [editingLabel]);
 
+  const color = cardColor(node.color);
+  // A background picture, as a canvas made in Obsidian can give a group.
+  const groupRef = useRef<HTMLDivElement>(null);
+  const seen = useSeen(groupRef);
+  const background = useObjectUrl(
+    node.background ? resolveCanvasFile(node.background, vaultPath) : null,
+    seen
+  ).url;
+  const backgroundStyle: React.CSSProperties = background
+    ? {
+        backgroundImage: `url("${background}")`,
+        backgroundPosition: "center",
+        backgroundRepeat: node.backgroundStyle === "repeat" ? "repeat" : "no-repeat",
+        backgroundSize:
+          node.backgroundStyle === "repeat" ? "auto" : node.backgroundStyle === "ratio" ? "contain" : "cover",
+      }
+    : {};
+
   return (
     <div
+      ref={groupRef}
       className={`canvas-node canvas-node-group${selected ? " selected" : ""}`}
-      data-color={node.color || undefined}
+      data-color={color.name}
       style={{
         left: node.x,
         top: node.y,
         width: node.width,
         height: node.height,
+        ...(background ? { borderColor: color.style.borderColor } : color.style),
+        ...backgroundStyle,
       }}
       onPointerDown={(e) => onPointerDown(node.id, e)}
       onDoubleClick={() => onDoubleClick(node.id)}
@@ -402,7 +374,7 @@ function StickyNoteView({
         width: node.width,
         height: node.height,
         transform: `rotate(${rotation}deg)`,
-        background: STICKY_COLORS[node.color || "yellow"] || "#f9e2af",
+        background: stickyBackground(node.color),
       }}
       onPointerDown={(e) => onPointerDown(node.id, e)}
       onDoubleClick={() => onDoubleClick(node.id)}
@@ -445,6 +417,7 @@ function StickyNoteView({
 function ImageNodeView({
   node,
   selected,
+  vaultPath,
   onPointerDown,
   onDoubleClick,
   onAnchorPointerDown,
@@ -453,49 +426,32 @@ function ImageNodeView({
 }: {
   node: CanvasNode;
   selected: boolean;
+  vaultPath: string;
   onPointerDown: (id: string, e: React.PointerEvent) => void;
   onDoubleClick: (id: string) => void;
   onAnchorPointerDown: (nodeId: string, side: string, e: React.PointerEvent) => void;
   onResizePointerDown: (nodeId: string, corner: string, e: React.PointerEvent) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
 }) {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!node.imagePath) { setImageSrc(null); return; }
-    let cancelled = false;
-    // file:// is blocked in the Tauri/WebKitGTK webview, so read the bytes and
-    // build a data: URL — same mechanism the markdown image renderer uses.
-    async function loadImage() {
-      const path = node.imagePath;
-      if (!path || !window.electronAPI?.readBinaryFile) { setImageSrc(null); return; }
-      try {
-        const base64 = await window.electronAPI.readBinaryFile(path);
-        if (cancelled) return;
-        if (!base64) { setImageSrc(null); return; }
-        const ext = path.split(".").pop()?.toLowerCase() || "";
-        const mime: Record<string, string> = {
-          png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-          gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp",
-        };
-        setImageSrc(`data:${mime[ext] || "image/png"};base64,${base64}`);
-      } catch {
-        if (!cancelled) setImageSrc(null);
-      }
-    }
-    loadImage();
-    return () => { cancelled = true; };
-  }, [node.imagePath]);
+  // file:// is blocked in the Tauri/WebKitGTK webview, so the bytes are read
+  // through the app. The picture is read once the card has been on screen, and
+  // its object URL is released when the card goes away.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const seen = useSeen(cardRef);
+  const imageSrc = useObjectUrl(resolveCanvasFile(node.file, vaultPath), seen).url;
+  const color = cardColor(node.color);
 
   return (
     <div
+      ref={cardRef}
       className={`canvas-node canvas-node-image${selected ? " selected" : ""}`}
-      data-color={node.color || undefined}
+      data-color={color.name}
       style={{
         left: node.x,
         top: node.y,
         width: node.width,
         height: node.height,
+        ...color.style,
       }}
       onPointerDown={(e) => onPointerDown(node.id, e)}
       onDoubleClick={() => onDoubleClick(node.id)}
@@ -516,20 +472,49 @@ function ImageNodeView({
           </svg>
         </div>
       )}
-      {/* Resize handles */}
-      {selected && (
-        <>
-          <div className="canvas-resize-handle nw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "nw", e); }} />
-          <div className="canvas-resize-handle ne" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "ne", e); }} />
-          <div className="canvas-resize-handle sw" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "sw", e); }} />
-          <div className="canvas-resize-handle se" onPointerDown={(e) => { e.stopPropagation(); onResizePointerDown(node.id, "se", e); }} />
-        </>
-      )}
-      {/* Edge anchors */}
-      <div className="canvas-edge-anchor top" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "top", e); }} />
-      <div className="canvas-edge-anchor bottom" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "bottom", e); }} />
-      <div className="canvas-edge-anchor left" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "left", e); }} />
-      <div className="canvas-edge-anchor right" onPointerDown={(e) => { e.stopPropagation(); onAnchorPointerDown(node.id, "right", e); }} />
+      <CardChrome
+        node={node}
+        selected={selected}
+        onAnchorPointerDown={onAnchorPointerDown}
+        onResizePointerDown={onResizePointerDown}
+      />
+    </div>
+  );
+}
+
+/** A card of a kind this version does not know. It keeps its place; what it holds is not shown. */
+function UnknownNodeView({
+  node,
+  selected,
+  onPointerDown,
+  onAnchorPointerDown,
+  onResizePointerDown,
+  onContextMenu,
+}: {
+  node: CanvasNode;
+  selected: boolean;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
+  onAnchorPointerDown: (nodeId: string, side: string, e: React.PointerEvent) => void;
+  onResizePointerDown: (nodeId: string, corner: string, e: React.PointerEvent) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+}) {
+  const kind = typeof node.extra?.type === "string" ? node.extra.type : "";
+  return (
+    <div
+      className={`canvas-node canvas-node-unknown${selected ? " selected" : ""}`}
+      style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
+      onPointerDown={(e) => onPointerDown(node.id, e)}
+      onContextMenu={(e) => onContextMenu(node.id, e)}
+    >
+      <div className="canvas-card-status">
+        {kind ? `A “${kind}” card, which this version cannot show` : "A card this version cannot show"}
+      </div>
+      <CardChrome
+        node={node}
+        selected={selected}
+        onAnchorPointerDown={onAnchorPointerDown}
+        onResizePointerDown={onResizePointerDown}
+      />
     </div>
   );
 }
@@ -588,11 +573,12 @@ function FilePicker({
   onClose,
 }: {
   vaultPath: string;
-  onSelect: (filePath: string) => void;
+  /** Called with the chosen file's path from the top of the vault. */
+  onSelect: (file: string) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [files, setFiles] = useState<{ filePath: string; fileName: string; relativePath: string }[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -600,7 +586,8 @@ function FilePicker({
     if (inputRef.current) inputRef.current.focus();
     async function loadFiles() {
       if (!window.electronAPI) return;
-      const all = await window.electronAPI.listAllFiles(vaultPath);
+      // Every file, so that pictures, PDFs and recordings can be added as cards too.
+      const all = await window.electronAPI.listVaultFiles(vaultPath);
       setFiles(all);
     }
     loadFiles();
@@ -609,26 +596,23 @@ function FilePicker({
   const filtered = useMemo(() => {
     if (!query) return files;
     const q = query.toLowerCase();
-    return files.filter(
-      (f) => f.fileName.toLowerCase().includes(q) || f.relativePath.toLowerCase().includes(q)
-    );
+    return files.filter((f) => f.toLowerCase().includes(q));
   }, [files, query]);
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
+  const active = Math.min(selectedIndex, Math.max(filtered.length - 1, 0));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setSelectedIndex(Math.min(active + 1, filtered.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && filtered[selectedIndex]) {
+      setSelectedIndex(Math.max(active - 1, 0));
+    } else if (e.key === "Enter" && filtered[active]) {
       e.preventDefault();
-      onSelect(filtered[selectedIndex].filePath);
+      onSelect(filtered[active]);
     } else if (e.key === "Escape") {
+      // Kept from the canvas's own Escape handler, which would close the canvas.
+      e.stopPropagation();
       onClose();
     }
   };
@@ -645,7 +629,10 @@ function FilePicker({
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Search files..."
           />
@@ -653,12 +640,12 @@ function FilePicker({
         <div className="canvas-file-picker-list">
           {filtered.slice(0, 50).map((f, i) => (
             <button
-              key={f.filePath}
-              className={`canvas-file-picker-item${i === selectedIndex ? " active" : ""}`}
-              onClick={() => onSelect(f.filePath)}
+              key={f}
+              className={`canvas-file-picker-item${i === active ? " active" : ""}`}
+              onClick={() => onSelect(f)}
             >
-              <span>{f.fileName.replace(/\.(md|markdown)$/i, "")}</span>
-              <span className="file-path">{f.relativePath}</span>
+              <span>{(f.split("/").pop() || f).replace(/\.(md|markdown)$/i, "")}</span>
+              <span className="file-path">{f}</span>
             </button>
           ))}
           {filtered.length === 0 && (
@@ -672,52 +659,145 @@ function FilePicker({
   );
 }
 
+/** The row of colours in a menu: none, the six presets, and one of the user's own. */
+function ColorRow({
+  current,
+  onPick,
+  onPickOwn,
+}: {
+  current: string;
+  onPick: (color: string) => void;
+  /** A colour from the colour chooser. It is applied as it is chosen, so the menu stays open. */
+  onPickOwn: (color: string) => void;
+}) {
+  return (
+    <>
+      <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
+        Color
+      </div>
+      <div className="canvas-context-submenu">
+        <div
+          className={`canvas-color-dot${current === "" ? " active" : ""}`}
+          style={{ background: "var(--bg-hover)" }}
+          title="No color"
+          onClick={() => onPick("")}
+        />
+        {CANVAS_COLORS.map((c) => (
+          <div
+            key={c.preset}
+            className={`canvas-color-dot${current === c.preset ? " active" : ""}`}
+            style={{ background: c.hex }}
+            title={c.name}
+            onClick={() => onPick(c.preset)}
+          />
+        ))}
+        <label
+          className={`canvas-color-dot canvas-color-own${isHexColor(current) ? " active" : ""}`}
+          style={isHexColor(current) ? { background: current } : undefined}
+          title="Another color"
+        >
+          <input
+            type="color"
+            value={/^#[0-9a-f]{6}$/i.test(current) ? current : "#888888"}
+            onChange={(e) => onPickOwn(e.target.value)}
+          />
+        </label>
+      </div>
+    </>
+  );
+}
+
+/** What a right-click landed on, which decides what the menu offers. */
+type MenuTarget =
+  | { kind: "canvas" }
+  | { kind: "node"; node: CanvasNode }
+  | { kind: "edge"; edge: CanvasEdge };
+
+interface MenuActions {
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onColorChange: (color: string, keepOpen?: boolean) => void;
+  onStickyColorChange: (color: string) => void;
+  onAddTextNode: () => void;
+  onAddStickyNote: () => void;
+  onAddImage: () => void;
+  onAddWebPage: () => void;
+  onAddFolder: () => void;
+  onOpen: () => void;
+  onCopyAddress: () => void;
+  onChangeAddress: () => void;
+  onShowWholeNote: () => void;
+  onEditLabel: () => void;
+  onRemoveLabel: () => void;
+  onEdgeEnds: (from: CanvasEnd, to: CanvasEnd) => void;
+  onClose: () => void;
+}
+
 /** Context menu */
 function CanvasContextMenu({
   x,
   y,
-  nodeId,
-  nodeType,
-  nodeColor,
-  onDelete,
-  onColorChange,
-  onStickyColorChange,
-  onDuplicate,
-  onAddTextNode,
-  onAddStickyNote,
-  onAddImage,
-  onClose,
+  target,
+  actions,
 }: {
   x: number;
   y: number;
-  nodeId: string | null;
-  nodeType?: string;
-  nodeColor?: string;
-  onDelete: () => void;
-  onColorChange: (color: string) => void;
-  onStickyColorChange: (color: string) => void;
-  onDuplicate: () => void;
-  onAddTextNode: () => void;
-  onAddStickyNote: () => void;
-  onAddImage: () => void;
-  onClose: () => void;
+  target: MenuTarget;
+  actions: MenuActions;
 }) {
+  const { onClose } = actions;
   useEffect(() => {
     const handleClick = () => onClose();
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, [onClose]);
 
+  const node = target.kind === "node" ? target.node : null;
+  const edge = target.kind === "edge" ? target.edge : null;
+  const ends = edge ? edgeEnds(edge) : null;
+  const endChoices: { label: string; from: CanvasEnd; to: CanvasEnd }[] = [
+    { label: "No Arrows", from: "none", to: "none" },
+    { label: "One Arrow", from: "none", to: "arrow" },
+    { label: "Arrows at Both Ends", from: "arrow", to: "arrow" },
+  ];
+
   return (
     <div className="canvas-context-menu" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
-      {nodeId && (
+      {node && (
         <>
-          <button className="canvas-context-item" onClick={onDuplicate}>
+          {node.type === "link" && (
+            <>
+              <button className="canvas-context-item" onClick={actions.onOpen}>
+                Open in Browser
+              </button>
+              <button className="canvas-context-item" onClick={actions.onCopyAddress}>
+                Copy Address
+              </button>
+              <button className="canvas-context-item" onClick={actions.onChangeAddress}>
+                Change Address...
+              </button>
+              <div className="canvas-context-divider" />
+            </>
+          )}
+          {node.type === "file" && (
+            <>
+              <button className="canvas-context-item" onClick={actions.onOpen}>
+                Open
+              </button>
+              {node.subpath && fileCardKind(node.file || "") === "note" && (
+                <button className="canvas-context-item" onClick={actions.onShowWholeNote}>
+                  Show Whole Note
+                </button>
+              )}
+              <div className="canvas-context-divider" />
+            </>
+          )}
+          <button className="canvas-context-item" onClick={actions.onDuplicate}>
             Duplicate
           </button>
           <div className="canvas-context-divider" />
           {/* Show sticky-specific color picker for sticky nodes */}
-          {nodeType === "sticky" ? (
+          {node.type === "sticky" ? (
             <>
               <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
                 Sticky Color
@@ -726,50 +806,74 @@ function CanvasContextMenu({
                 {Object.entries(STICKY_COLORS).map(([name, hex]) => (
                   <div
                     key={name}
-                    className={`canvas-sticky-color-dot${nodeColor === name ? " active" : ""}`}
+                    className={`canvas-sticky-color-dot${node.color === name ? " active" : ""}`}
                     style={{ background: hex }}
-                    onClick={() => onStickyColorChange(name)}
+                    onClick={() => actions.onStickyColorChange(name)}
                   />
                 ))}
               </div>
             </>
-          ) : nodeType !== "drawing" ? (
-            <>
-              <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)" }}>
-                Color
-              </div>
-              <div className="canvas-context-submenu">
-                {NODE_COLORS.map((c) => (
-                  <div
-                    key={c || "none"}
-                    className={`canvas-color-dot${nodeColor === c ? " active" : ""}`}
-                    style={{
-                      background: c
-                        ? { red: "#e55", orange: "#e93", yellow: "#ec5", green: "#5b5", blue: "#58c", purple: "#a6e" }[c]
-                        : "var(--bg-hover)",
-                    }}
-                    onClick={() => onColorChange(c)}
-                  />
-                ))}
-              </div>
-            </>
+          ) : node.type !== "drawing" && node.type !== "unknown" ? (
+            <ColorRow
+              current={node.color || ""}
+              onPick={(color) => actions.onColorChange(color)}
+              onPickOwn={(color) => actions.onColorChange(color, true)}
+            />
           ) : null}
           <div className="canvas-context-divider" />
-          <button className="canvas-context-item danger" onClick={onDelete}>
+          <button className="canvas-context-item danger" onClick={actions.onDelete}>
             Delete
           </button>
         </>
       )}
-      {!nodeId && (
+      {edge && ends && (
         <>
-          <button className="canvas-context-item" onClick={onAddTextNode}>
+          <button className="canvas-context-item" onClick={actions.onEditLabel}>
+            {edge.label ? "Edit Label" : "Add Label"}
+          </button>
+          {edge.label && (
+            <button className="canvas-context-item" onClick={actions.onRemoveLabel}>
+              Remove Label
+            </button>
+          )}
+          <div className="canvas-context-divider" />
+          {endChoices.map((choice) => (
+            <button
+              key={choice.label}
+              className={`canvas-context-item${ends.from === choice.from && ends.to === choice.to ? " active" : ""}`}
+              onClick={() => actions.onEdgeEnds(choice.from, choice.to)}
+            >
+              {choice.label}
+            </button>
+          ))}
+          <div className="canvas-context-divider" />
+          <ColorRow
+            current={edge.color || ""}
+            onPick={(color) => actions.onColorChange(color)}
+            onPickOwn={(color) => actions.onColorChange(color, true)}
+          />
+          <div className="canvas-context-divider" />
+          <button className="canvas-context-item danger" onClick={actions.onDelete}>
+            Delete
+          </button>
+        </>
+      )}
+      {target.kind === "canvas" && (
+        <>
+          <button className="canvas-context-item" onClick={actions.onAddTextNode}>
             Add Text Node
           </button>
-          <button className="canvas-context-item" onClick={onAddStickyNote}>
+          <button className="canvas-context-item" onClick={actions.onAddStickyNote}>
             Add Sticky Note
           </button>
-          <button className="canvas-context-item" onClick={onAddImage}>
+          <button className="canvas-context-item" onClick={actions.onAddImage}>
             Add Image
+          </button>
+          <button className="canvas-context-item" onClick={actions.onAddWebPage}>
+            Add Web Page
+          </button>
+          <button className="canvas-context-item" onClick={actions.onAddFolder}>
+            Add Notes from a Folder
           </button>
         </>
       )}
@@ -860,8 +964,15 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   const [isPanning, setIsPanning] = useState(false);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string | null } | null>(null);
-  const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  // Asking for a web address: for a new card (and where to put it), or to change the address of one.
+  const [addressPrompt, setAddressPrompt] = useState<{ nodeId: string | null; at?: { x: number; y: number } } | null>(null);
+  // The list of a note's headings, opened from a note card.
+  const [headingMenu, setHeadingMenu] = useState<{ nodeId: string; x: number; y: number; headings: string[] } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string | null; edgeId?: string } | null>(null);
+  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
+  // A short message about what was just done, such as how many cards were added.
+  const [notice, setNotice] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ w: 800, h: 600 });
 
   // Tool mode state
@@ -901,53 +1012,38 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   const nodeDragRef = useRef<{ nodeId: string; startX: number; startY: number; nodePositions: Map<string, { x: number; y: number }> } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(false);
+  // True while there is a change that has not been written yet. Looking at a
+  // canvas must not rewrite its file.
+  const dirtyRef = useRef(false);
+  // Where the pointer last was over the canvas, so a pasted address lands there.
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   // One-shot guard so we auto "zoom to fit" only on the initial open of a
   // canvas, not on every edit. Reset when the opened file changes.
   const didFitRef = useRef(false);
-  // True once the viewport has been measured for real (not the initial
+  // The viewport's size once it has been measured for real (not the initial
   // default size) — fitting before this frames for the wrong dimensions.
-  const measuredRef = useRef(false);
+  const measuredRef = useRef<{ w: number; h: number } | null>(null);
+  // The canvas as it was read from the file, which is what the first fit frames.
+  const loadedDataRef = useRef<CanvasData | null>(null);
 
   // ─── Load canvas data ───
   useEffect(() => {
     loadedRef.current = false;
     didFitRef.current = false;
+    dirtyRef.current = false;
     async function load() {
       if (!window.electronAPI) return;
       const content = await window.electronAPI.readFile(filePath);
-      if (content !== null) {
-        const data = parseCanvas(content);
-        setCanvasData(data);
-      } else {
-        setCanvasData({ nodes: [], edges: [] });
-      }
+      const data: CanvasData = content !== null ? parseCanvas(content, vaultPath) : { nodes: [], edges: [] };
+      setCanvasData(data);
+      loadedDataRef.current = data;
       loadedRef.current = true;
     }
     load();
     setSelectedNodeIds(new Set());
     setSelectedEdgeId(null);
     setEditingNodeId(null);
-  }, [filePath]);
-
-  // ─── Load file previews for file nodes ───
-  useEffect(() => {
-    async function loadPreviews() {
-      if (!window.electronAPI) return;
-      const fileNodes = canvasData.nodes.filter((n) => n.type === "file" && n.filePath);
-      for (const node of fileNodes) {
-        if (node.filePath && !filePreviews[node.filePath]) {
-          const content = await window.electronAPI.readFile(node.filePath);
-          if (content !== null) {
-            setFilePreviews((prev) => ({
-              ...prev,
-              [node.filePath!]: content.slice(0, 300),
-            }));
-          }
-        }
-      }
-    }
-    loadPreviews();
-  }, [canvasData.nodes, filePreviews]);
+  }, [filePath, vaultPath]);
 
   // ─── Observe viewport size ───
   useEffect(() => {
@@ -956,7 +1052,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) measuredRef.current = true;
+        if (width > 0 && height > 0) measuredRef.current = { w: width, h: height };
         setViewportSize({ w: width, h: height });
       }
     });
@@ -968,8 +1064,10 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   const scheduleSave = useCallback(
     (data: CanvasData) => {
       if (!loadedRef.current) return;
+      dirtyRef.current = true;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
+        dirtyRef.current = false;
         onSave(serializeCanvas(data));
       }, 500);
     },
@@ -1027,6 +1125,8 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       setSelectedNodeIds(new Set());
       setSelectedEdgeId(null);
       setEditingNodeId(null);
+      setEditingEdgeId(null);
+      setHeadingMenu(null);
       dragStartRef.current = { x: e.clientX, y: e.clientY, panX, panY };
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
@@ -1035,6 +1135,8 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
   const handleViewportPointerMove = useCallback(
     (e: React.PointerEvent) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+
       // Freehand drawing
       if (isDrawing) {
         const world = screenToWorld(e.clientX, e.clientY);
@@ -1124,25 +1226,39 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
       if (isDraggingNode) {
         setIsDraggingNode(false);
+        const drag = nodeDragRef.current;
         nodeDragRef.current = null;
-        // Recalculate edge sides after move
-        updateCanvas((prev) => ({
-          ...prev,
-          edges: prev.edges.map((edge) => recalcEdgeSides(edge, prev.nodes)),
-        }));
+        // The cards that ended up somewhere else. A plain click moves nothing,
+        // and must not count as a change to the canvas.
+        const moved = new Set<string>();
+        if (drag) {
+          for (const n of canvasData.nodes) {
+            const start = drag.nodePositions.get(n.id);
+            if (start && (start.x !== n.x || start.y !== n.y)) moved.add(n.id);
+          }
+        }
+        if (moved.size > 0) {
+          // Recalculate the sides of the edges on the cards that moved
+          updateCanvas((prev) => ({
+            ...prev,
+            edges: recalcEdgesFor(prev.edges, prev.nodes, moved),
+          }));
+        }
       }
 
       if (drawingEdge) {
         // Find node under cursor
         const world = screenToWorld(e.clientX, e.clientY);
-        const targetNode = canvasData.nodes.find(
-          (n) =>
-            n.id !== drawingEdge.fromNode &&
-            world.x >= n.x &&
-            world.x <= n.x + n.width &&
-            world.y >= n.y &&
-            world.y <= n.y + n.height
-        );
+        const under = (n: CanvasNode) =>
+          n.id !== drawingEdge.fromNode &&
+          world.x >= n.x &&
+          world.x <= n.x + n.width &&
+          world.y >= n.y &&
+          world.y <= n.y + n.height;
+        // A card inside a group is what was aimed at, not the group around it.
+        const targetNode =
+          canvasData.nodes.find((n) => n.type !== "group" && under(n)) ??
+          canvasData.nodes.find((n) => n.type === "group" && under(n));
         if (targetNode) {
           const fromNode = canvasData.nodes.find((n) => n.id === drawingEdge.fromNode);
           if (fromNode) {
@@ -1153,10 +1269,10 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
                 (edge.fromNode === targetNode.id && edge.toNode === drawingEdge.fromNode)
             );
             if (!exists) {
-              const fromSide = drawingEdge.fromSide as "top" | "bottom" | "left" | "right";
+              const fromSide = drawingEdge.fromSide as CanvasSide;
               // Determine best toSide
               const opposite: Record<string, string> = { top: "bottom", bottom: "top", left: "right", right: "left" };
-              const toSide = (opposite[fromSide] || "left") as "top" | "bottom" | "left" | "right";
+              const toSide = (opposite[fromSide] || "left") as CanvasSide;
               const newEdge = createEdge(drawingEdge.fromNode, targetNode.id, fromSide, toSide);
               // Recalculate sides
               const recalced = recalcEdgeSides(newEdge, canvasData.nodes);
@@ -1172,11 +1288,18 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
       if (resizing) {
         setResizing(null);
-        // Recalculate edge sides
-        updateCanvas((prev) => ({
-          ...prev,
-          edges: prev.edges.map((edge) => recalcEdgeSides(edge, prev.nodes)),
-        }));
+        const node = canvasData.nodes.find((n) => n.id === resizing.nodeId);
+        const changed =
+          node &&
+          (node.x !== resizing.origX || node.y !== resizing.origY ||
+            node.width !== resizing.origW || node.height !== resizing.origH);
+        if (changed) {
+          // Recalculate the sides of the edges on the card that was resized
+          updateCanvas((prev) => ({
+            ...prev,
+            edges: recalcEdgesFor(prev.edges, prev.nodes, new Set([resizing.nodeId])),
+          }));
+        }
       }
     },
     [isDrawing, isPanning, isDraggingNode, drawingEdge, resizing, canvasData.nodes, canvasData.edges, screenToWorld, updateCanvas, drawStrokeColor, drawStrokeWidth]
@@ -1251,6 +1374,40 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     [selectedNodeIds, editingNodeId, canvasData.nodes]
   );
 
+  /** Open what a card points at: its file in the app, or its web page in the browser. */
+  const openCard = useCallback(
+    (nodeId: string) => {
+      const node = canvasData.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      if (node.type === "link") {
+        // The app's opener takes http and https addresses and nothing else.
+        if (node.url && /^https?:\/\//i.test(node.url)) window.electronAPI?.openExternal(node.url);
+        return;
+      }
+      const path = resolveCanvasFile(node.file, vaultPath);
+      if (path) onFileSelect(path);
+    },
+    [canvasData.nodes, vaultPath, onFileSelect]
+  );
+
+  /**
+   * The path a picked image is kept under. A canvas only holds paths inside
+   * the vault, so that it still works on another machine; an image from
+   * elsewhere is first copied into the vault's attachment folder. null when
+   * that copy could not be made.
+   */
+  const imageInVault = useCallback(
+    async (picked: string): Promise<string | null> => {
+      const inside = canvasFileFor(picked, vaultPath);
+      if (inside) return inside;
+      const name = picked.split(/[\\/]/).pop() || "image";
+      const copy = `${getAttachmentsDir(vaultPath)}/${generateAttachmentName(name)}`;
+      const copied = await window.electronAPI.copyFile(picked, copy);
+      return copied ? canvasFileFor(copy, vaultPath) : null;
+    },
+    [vaultPath]
+  );
+
   const handleNodeDoubleClick = useCallback(
     (nodeId: string) => {
       const node = canvasData.nodes.find((n) => n.id === nodeId);
@@ -1258,8 +1415,8 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
       if (node.type === "text" || node.type === "group" || node.type === "sticky") {
         setEditingNodeId(nodeId);
-      } else if (node.type === "file" && node.filePath) {
-        onFileSelect(node.filePath);
+      } else if (node.type === "file" || node.type === "link") {
+        openCard(nodeId);
       } else if (node.type === "image") {
         // Double-click image to change it via file dialog
         (async () => {
@@ -1267,14 +1424,17 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           try {
             const result = await window.electronAPI.showOpenDialog({
               properties: ["openFile"],
-              filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"] }],
+              filters: [{ name: "Images", extensions: IMAGE_EXTENSIONS }],
             });
             if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+              const file = await imageInVault(result.filePaths[0]);
+              if (!file) {
+                setNotice("The image could not be copied into the vault.");
+                return;
+              }
               updateCanvas((prev) => ({
                 ...prev,
-                nodes: prev.nodes.map((n) =>
-                  n.id === nodeId ? { ...n, imagePath: result.filePaths[0] } : n
-                ),
+                nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, file } : n)),
               }));
             }
           } catch {
@@ -1283,7 +1443,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
         })();
       }
     },
-    [canvasData.nodes, onFileSelect, updateCanvas]
+    [canvasData.nodes, openCard, imageInVault, updateCanvas]
   );
 
   const handleTextChange = useCallback(
@@ -1332,6 +1492,31 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       setSelectedNodeIds(new Set());
     },
     []
+  );
+
+  /** Double-click an edge to type its label. */
+  const handleEdgeDoubleClick = useCallback((edgeId: string) => {
+    setSelectedEdgeId(edgeId);
+    setSelectedNodeIds(new Set());
+    setEditingEdgeId(edgeId);
+  }, []);
+
+  const handleEdgeContextMenu = useCallback((edgeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedEdgeId(edgeId);
+    setSelectedNodeIds(new Set());
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId: null, edgeId });
+  }, []);
+
+  const updateEdge = useCallback(
+    (edgeId: string, change: (edge: CanvasEdge) => CanvasEdge) => {
+      updateCanvas((prev) => ({
+        ...prev,
+        edges: prev.edges.map((edge) => (edge.id === edgeId ? change(edge) : edge)),
+      }));
+    },
+    [updateCanvas]
   );
 
   // ─── Resize ───
@@ -1423,6 +1608,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       }
     }
     updateCanvas((prev) => ({
+      ...prev,
       nodes: [...prev.nodes, ...newNodes],
       edges: [...prev.edges, ...newEdges],
     }));
@@ -1431,8 +1617,15 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
   // ─── Color change ───
   const changeSelectedColor = useCallback(
-    (color: string) => {
-      if (contextMenu?.nodeId) {
+    (color: string, keepOpen?: boolean) => {
+      if (contextMenu?.edgeId) {
+        updateCanvas((prev) => ({
+          ...prev,
+          edges: prev.edges.map((edge) =>
+            edge.id === contextMenu.edgeId ? { ...edge, color: color || undefined } : edge
+          ),
+        }));
+      } else if (contextMenu?.nodeId) {
         updateCanvas((prev) => ({
           ...prev,
           nodes: prev.nodes.map((n) =>
@@ -1440,16 +1633,21 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           ),
         }));
       }
-      setContextMenu(null);
+      // The colour chooser reports each colour tried; the menu waits for the last.
+      if (!keepOpen) setContextMenu(null);
     },
     [contextMenu, updateCanvas]
   );
+
+  const overlayOpen = showFilePicker || showFolderPicker || addressPrompt !== null || headingMenu !== null;
 
   // ─── Keyboard shortcuts ───
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't capture when editing text
-      if (editingNodeId) return;
+      if (editingNodeId || editingEdgeId) return;
+      // A dialog over the canvas has the keyboard: Escape closes it, not the canvas.
+      if (overlayOpen) return;
 
       if (e.key === "Delete" || e.key === "Backspace") {
         if (document.activeElement === document.body || document.activeElement === viewportRef.current) {
@@ -1471,8 +1669,12 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           setCurrentDrawPoints([]);
           drawPointsRef.current = [];
         } else if (onClose) {
-          // Nothing selected — save and close
-          onSave(serializeCanvas(canvasData));
+          // Nothing selected — save what has not been written yet, and close
+          if (dirtyRef.current) {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            dirtyRef.current = false;
+            onSave(serializeCanvas(canvasData));
+          }
           onClose();
         }
       }
@@ -1496,7 +1698,10 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNodeId, deleteSelected, duplicateSelected, canvasData.nodes, selectedNodeIds]);
+  }, [
+    editingNodeId, editingEdgeId, overlayOpen, deleteSelected, duplicateSelected, canvasData,
+    selectedNodeIds, selectedEdgeId, drawingEdge, isDrawing, contextMenu, activeTool, onClose, onSave,
+  ]);
 
   // ─── Toolbar actions ───
   const addTextNode = useCallback((atX?: number, atY?: number) => {
@@ -1526,21 +1731,25 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       // Use Electron dialog to pick an image file
       const result = await window.electronAPI.showOpenDialog({
         properties: ["openFile"],
-        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"] }],
+        filters: [{ name: "Images", extensions: IMAGE_EXTENSIONS }],
       });
       if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
-        const imagePath = result.filePaths[0];
-        const cx = atX ?? (-panX + viewportSize.w / 2) / zoom;
-        const cy = atY ?? (-panY + viewportSize.h / 2) / zoom;
-        const node = createImageNode(cx - 150, cy - 120, imagePath);
-        updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
-        setSelectedNodeIds(new Set([node.id]));
+        const file = await imageInVault(result.filePaths[0]);
+        if (!file) {
+          setNotice("The image could not be copied into the vault.");
+        } else {
+          const cx = atX ?? (-panX + viewportSize.w / 2) / zoom;
+          const cy = atY ?? (-panY + viewportSize.h / 2) / zoom;
+          const node = createImageNode(cx - 150, cy - 120, file);
+          updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
+          setSelectedNodeIds(new Set([node.id]));
+        }
       }
     } catch {
       // Silently fail if dialog not available
     }
     setActiveTool("select");
-  }, [panX, panY, zoom, viewportSize, updateCanvas]);
+  }, [panX, panY, zoom, viewportSize, updateCanvas, imageInVault]);
 
   /** Change the color of a sticky note via context menu */
   const handleStickyColorChange = useCallback(
@@ -1559,15 +1768,72 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   );
 
   const handleFilePickerSelect = useCallback(
-    (selectedFilePath: string) => {
+    (file: string) => {
       const cx = (-panX + viewportSize.w / 2) / zoom;
       const cy = (-panY + viewportSize.h / 2) / zoom;
-      const node = createFileNode(cx - 130, cy - 60, selectedFilePath);
+      const card = createFileNode(0, 0, file);
+      const node = { ...card, x: cx - card.width / 2, y: cy - card.height / 2 };
       updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
       setSelectedNodeIds(new Set([node.id]));
       setShowFilePicker(false);
     },
     [panX, panY, zoom, viewportSize, updateCanvas]
+  );
+
+  /** Add a web page card, in the middle of the view unless a place is given. */
+  const addLinkNode = useCallback(
+    (url: string, at?: { x: number; y: number }) => {
+      const cx = at?.x ?? (-panX + viewportSize.w / 2) / zoom;
+      const cy = at?.y ?? (-panY + viewportSize.h / 2) / zoom;
+      const card = createLinkNode(0, 0, url);
+      const node = { ...card, x: cx - card.width / 2, y: cy - card.height / 2 };
+      updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, node] }));
+      setSelectedNodeIds(new Set([node.id]));
+      setSelectedEdgeId(null);
+    },
+    [panX, panY, zoom, viewportSize, updateCanvas]
+  );
+
+  /** The address typed into the prompt: a new card, or a new address for the card it was opened from. */
+  const handleAddressSubmit = useCallback(
+    (url: string) => {
+      if (!addressPrompt) return;
+      const { nodeId, at } = addressPrompt;
+      if (nodeId) {
+        updateCanvas((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, url } : n)),
+        }));
+      } else {
+        addLinkNode(url, at);
+      }
+      setAddressPrompt(null);
+    },
+    [addressPrompt, addLinkNode, updateCanvas]
+  );
+
+  /** Show the whole note on a card, or only what is under one of its headings. */
+  const handleHeadingPick = useCallback(
+    (heading: string | null) => {
+      if (!headingMenu) return;
+      const { nodeId } = headingMenu;
+      const subpath = heading === null ? undefined : headingSubpath(heading);
+      updateCanvas((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, subpath } : n)),
+      }));
+      setHeadingMenu(null);
+    },
+    [headingMenu, updateCanvas]
+  );
+
+  const handleHeadingMenu = useCallback(
+    (nodeId: string, at: { x: number; y: number }, headings: string[]) => {
+      setContextMenu(null);
+      // A second press on the same card's button closes the list again.
+      setHeadingMenu((open) => (open?.nodeId === nodeId ? null : { nodeId, x: at.x, y: at.y, headings }));
+    },
+    []
   );
 
   const addGroupNode = useCallback(() => {
@@ -1604,19 +1870,14 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     setPanY(0);
   }, []);
 
-  const zoomToFit = useCallback(() => {
-    if (canvasData.nodes.length === 0) {
+  /** Zoom and pan so that all of the given cards are in view. */
+  const fitNodes = useCallback((nodes: CanvasNode[]) => {
+    const bounds = canvasBounds(nodes);
+    if (!bounds) {
       resetZoom();
       return;
     }
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const n of canvasData.nodes) {
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.width);
-      maxY = Math.max(maxY, n.y + n.height);
-    }
+    const { minX, minY, maxX, maxY } = bounds;
 
     const pad = 80;
     const worldW = maxX - minX + pad * 2;
@@ -1632,7 +1893,60 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     setZoom(fitZoom);
     setPanX(fitPanX);
     setPanY(fitPanY);
-  }, [canvasData.nodes, viewportSize, resetZoom]);
+  }, [viewportSize, resetZoom]);
+
+  const zoomToFit = useCallback(() => fitNodes(canvasData.nodes), [fitNodes, canvasData.nodes]);
+
+  /** Add a card for each note in a folder, beside what is already on the canvas. */
+  const handleFolderSelect = useCallback(
+    (folder: string, files: string[]) => {
+      setShowFolderPicker(false);
+      const notes = notesInFolder(files, folder);
+      const centre = {
+        x: (-panX + viewportSize.w / 2) / zoom,
+        y: (-panY + viewportSize.h / 2) / zoom,
+      };
+      const { added, skipped } = cardsForFiles(canvasData.nodes, notes, centre);
+      const already =
+        skipped === 0 ? "" : skipped === 1 ? " 1 was already on the canvas." : ` ${skipped} were already on the canvas.`;
+      if (added.length === 0) {
+        setNotice(notes.length === 0 ? "That folder has no notes." : `No notes added.${already}`);
+        return;
+      }
+      updateCanvas((prev) => ({ ...prev, nodes: [...prev.nodes, ...added] }));
+      setSelectedNodeIds(new Set(added.map((n) => n.id)));
+      setSelectedEdgeId(null);
+      // Bring the new cards into view, along with the rest.
+      fitNodes([...canvasData.nodes, ...added]);
+      setNotice(`Added ${added.length} ${added.length === 1 ? "note" : "notes"}.${already}`);
+    },
+    [panX, panY, zoom, viewportSize, canvasData.nodes, updateCanvas, fitNodes]
+  );
+
+  // ─── Paste a web address to make a card of it ───
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (editingNodeId || editingEdgeId || overlayOpen) return;
+      // Text pasted into a field anywhere in the app is that field's.
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused && (focused.tagName === "INPUT" || focused.tagName === "TEXTAREA" || focused.isContentEditable)) return;
+      if (focused && focused !== document.body && !containerRef.current?.contains(focused)) return;
+      const url = pastedWebUrl(e.clipboardData?.getData("text/plain") ?? "");
+      if (!url) return;
+      e.preventDefault();
+      const pointer = lastPointerRef.current;
+      addLinkNode(url, pointer ? screenToWorld(pointer.x, pointer.y) : undefined);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [editingNodeId, editingEdgeId, overlayOpen, addLinkNode, screenToWorld]);
+
+  // ─── Clear a notice after a few seconds ───
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // On first open, frame the whole canvas (zoom to fit) once the file has
   // loaded and the viewport has been measured — instead of the fixed 1:1 / 0,0
@@ -1640,8 +1954,14 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   useEffect(() => {
     // Wait for both the file to load AND the viewport to be measured for real,
     // otherwise zoomToFit frames for the default 800x600 and nodes land off-screen.
-    if (didFitRef.current || !loadedRef.current || !measuredRef.current) return;
+    const measured = measuredRef.current;
+    if (didFitRef.current || !loadedRef.current || !measured) return;
     if (viewportSize.w <= 0 || viewportSize.h <= 0) return;
+    // This can run late, for a render made before the file or the size had
+    // arrived, and would then frame an empty canvas or the default size. Fit
+    // only when what this render holds is the file and the measured size.
+    if (canvasData !== loadedDataRef.current) return;
+    if (viewportSize.w !== measured.w || viewportSize.h !== measured.h) return;
     didFitRef.current = true;
     zoomToFit();
   }, [canvasData, viewportSize, zoomToFit]);
@@ -1673,21 +1993,30 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     return [...groups, ...others, ...drawings];
   }, [canvasData.nodes]);
 
-  const selectedNodeColor = useMemo(() => {
-    if (contextMenu?.nodeId) {
-      const node = canvasData.nodes.find((n) => n.id === contextMenu.nodeId);
-      return node?.color || "";
+  const menuTarget = useMemo<MenuTarget | null>(() => {
+    if (!contextMenu) return null;
+    if (contextMenu.edgeId) {
+      const edge = canvasData.edges.find((e) => e.id === contextMenu.edgeId);
+      return edge ? { kind: "edge", edge } : null;
     }
-    return "";
-  }, [contextMenu, canvasData.nodes]);
+    if (contextMenu.nodeId) {
+      const node = canvasData.nodes.find((n) => n.id === contextMenu.nodeId);
+      return node ? { kind: "node", node } : null;
+    }
+    return { kind: "canvas" };
+  }, [contextMenu, canvasData]);
 
-  const selectedNodeType = useMemo(() => {
-    if (contextMenu?.nodeId) {
-      const node = canvasData.nodes.find((n) => n.id === contextMenu.nodeId);
-      return node?.type || "";
-    }
-    return "";
-  }, [contextMenu, canvasData.nodes]);
+  // The edge whose label is being typed, and where on the canvas its label sits.
+  const labelEditor = useMemo(() => {
+    const edge = canvasData.edges.find((e) => e.id === editingEdgeId);
+    const from = edge && canvasData.nodes.find((n) => n.id === edge.fromNode);
+    const to = edge && canvasData.nodes.find((n) => n.id === edge.toNode);
+    if (!edge || !from || !to) return null;
+    const sides = edgeSides(edge, from, to);
+    return { edge, at: edgeGeometry(from, to, sides.from, sides.to).middle };
+  }, [editingEdgeId, canvasData]);
+
+  const headingMenuNode = headingMenu ? canvasData.nodes.find((n) => n.id === headingMenu.nodeId) : undefined;
 
   const bgPosX = panX % (24 * zoom);
   const bgPosY = panY % (24 * zoom);
@@ -1719,14 +2048,16 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
         >
           {/* SVG edges layer */}
           <svg className="canvas-edges-svg">
-            <EdgeMarkerDefs />
             {canvasData.edges.map((edge) => (
               <EdgeLine
                 key={edge.id}
                 edge={edge}
                 nodes={canvasData.nodes}
                 selected={selectedEdgeId === edge.id}
+                hideLabel={editingEdgeId === edge.id}
                 onClick={handleEdgeClick}
+                onDoubleClick={handleEdgeDoubleClick}
+                onContextMenu={handleEdgeContextMenu}
               />
             ))}
             {drawingEdgeSvg}
@@ -1754,11 +2085,28 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
             }
             if (node.type === "file") {
               return (
-                <FileNodeView
+                <FileCard
                   key={node.id}
                   node={node}
                   selected={isSelected}
-                  preview={node.filePath ? filePreviews[node.filePath] || "" : ""}
+                  vaultPath={vaultPath}
+                  onOpen={openCard}
+                  onHeadingMenu={handleHeadingMenu}
+                  onPointerDown={handleNodePointerDown}
+                  onDoubleClick={handleNodeDoubleClick}
+                  onAnchorPointerDown={handleAnchorPointerDown}
+                  onResizePointerDown={handleResizePointerDown}
+                  onContextMenu={handleNodeContextMenu}
+                />
+              );
+            }
+            if (node.type === "link") {
+              return (
+                <LinkCard
+                  key={node.id}
+                  node={node}
+                  selected={isSelected}
+                  onOpen={() => openCard(node.id)}
                   onPointerDown={handleNodePointerDown}
                   onDoubleClick={handleNodeDoubleClick}
                   onAnchorPointerDown={handleAnchorPointerDown}
@@ -1774,6 +2122,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
                   node={node}
                   selected={isSelected}
                   editingLabel={editingNodeId === node.id}
+                  vaultPath={vaultPath}
                   onPointerDown={handleNodePointerDown}
                   onDoubleClick={handleNodeDoubleClick}
                   onLabelChange={handleLabelChange}
@@ -1806,6 +2155,7 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
                   key={node.id}
                   node={node}
                   selected={isSelected}
+                  vaultPath={vaultPath}
                   onPointerDown={handleNodePointerDown}
                   onDoubleClick={handleNodeDoubleClick}
                   onAnchorPointerDown={handleAnchorPointerDown}
@@ -1825,8 +2175,44 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
                 />
               );
             }
+            if (node.type === "unknown") {
+              return (
+                <UnknownNodeView
+                  key={node.id}
+                  node={node}
+                  selected={isSelected}
+                  onPointerDown={handleNodePointerDown}
+                  onAnchorPointerDown={handleAnchorPointerDown}
+                  onResizePointerDown={handleResizePointerDown}
+                  onContextMenu={handleNodeContextMenu}
+                />
+              );
+            }
             return null;
           })}
+
+          {/* The box an edge's label is typed in, where the label sits */}
+          {labelEditor && (
+            <input
+              className="canvas-edge-label-input"
+              style={{ left: labelEditor.at.x, top: labelEditor.at.y }}
+              autoFocus
+              value={labelEditor.edge.label || ""}
+              placeholder="Label"
+              onChange={(e) => {
+                const label = e.target.value || undefined;
+                updateEdge(labelEditor.edge.id, (edge) => ({ ...edge, label }));
+              }}
+              onBlur={() => setEditingEdgeId(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Escape") {
+                  e.stopPropagation();
+                  setEditingEdgeId(null);
+                }
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          )}
 
           {/* Live freehand stroke (while drawing) */}
           {isDrawing && currentDrawPoints.length >= 2 && (
@@ -1901,6 +2287,28 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M4 1h5l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3" />
             <path d="M9 1v4h4" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {/* Web page */}
+        <button
+          className="canvas-toolbar-btn"
+          onClick={() => setAddressPrompt({ nodeId: null })}
+          title="Add web page"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.2" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M1.8 8h12.4M8 1.8c2 2.2 2 10.2 0 12.4M8 1.8c-2 2.2-2 10.2 0 12.4" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {/* A card for each note in a folder */}
+        <button
+          className="canvas-toolbar-btn"
+          onClick={() => setShowFolderPicker(true)}
+          title="Add notes from a folder"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M1.5 4a1 1 0 011-1h3l1.5 1.5h6.5a1 1 0 011 1V12a1 1 0 01-1 1h-11a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            <path d="M8 7v3.5M6.25 8.75h3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
         </button>
         {/* Group */}
@@ -2008,39 +2416,99 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       />
 
       {/* Context menu */}
-      {contextMenu && (
+      {contextMenu && menuTarget && (
         <CanvasContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          nodeId={contextMenu.nodeId}
-          nodeType={selectedNodeType}
-          nodeColor={selectedNodeColor}
-          onDelete={() => {
-            deleteSelected();
-            setContextMenu(null);
+          target={menuTarget}
+          actions={{
+            onDelete: () => {
+              deleteSelected();
+              setContextMenu(null);
+            },
+            onColorChange: changeSelectedColor,
+            onStickyColorChange: handleStickyColorChange,
+            onDuplicate: () => {
+              duplicateSelected();
+              setContextMenu(null);
+            },
+            onAddTextNode: () => {
+              const world = screenToWorld(contextMenu.x, contextMenu.y);
+              addTextNode(world.x, world.y);
+              setContextMenu(null);
+            },
+            onAddStickyNote: () => {
+              const world = screenToWorld(contextMenu.x, contextMenu.y);
+              addStickyNode(world.x, world.y);
+              setContextMenu(null);
+            },
+            onAddImage: () => {
+              const world = screenToWorld(contextMenu.x, contextMenu.y);
+              addImageNode(world.x, world.y);
+              setContextMenu(null);
+            },
+            onAddWebPage: () => {
+              setAddressPrompt({ nodeId: null, at: screenToWorld(contextMenu.x, contextMenu.y) });
+              setContextMenu(null);
+            },
+            onAddFolder: () => {
+              setShowFolderPicker(true);
+              setContextMenu(null);
+            },
+            onOpen: () => {
+              if (contextMenu.nodeId) openCard(contextMenu.nodeId);
+              setContextMenu(null);
+            },
+            onCopyAddress: () => {
+              const url = menuTarget.kind === "node" ? menuTarget.node.url : undefined;
+              if (url) navigator.clipboard?.writeText(url).catch(() => {});
+              setContextMenu(null);
+            },
+            onChangeAddress: () => {
+              setAddressPrompt({ nodeId: contextMenu.nodeId });
+              setContextMenu(null);
+            },
+            onShowWholeNote: () => {
+              const { nodeId } = contextMenu;
+              updateCanvas((prev) => ({
+                ...prev,
+                nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, subpath: undefined } : n)),
+              }));
+              setContextMenu(null);
+            },
+            onEditLabel: () => {
+              if (contextMenu.edgeId) setEditingEdgeId(contextMenu.edgeId);
+              setContextMenu(null);
+            },
+            onRemoveLabel: () => {
+              if (contextMenu.edgeId) updateEdge(contextMenu.edgeId, (edge) => ({ ...edge, label: undefined }));
+              setContextMenu(null);
+            },
+            onEdgeEnds: (from, to) => {
+              // Only what differs from the file format's own default is kept on the edge.
+              if (contextMenu.edgeId) {
+                updateEdge(contextMenu.edgeId, (edge) => ({
+                  ...edge,
+                  fromEnd: from === "arrow" ? "arrow" : undefined,
+                  toEnd: to === "none" ? "none" : undefined,
+                }));
+              }
+              setContextMenu(null);
+            },
+            onClose: () => setContextMenu(null),
           }}
-          onColorChange={changeSelectedColor}
-          onStickyColorChange={handleStickyColorChange}
-          onDuplicate={() => {
-            duplicateSelected();
-            setContextMenu(null);
-          }}
-          onAddTextNode={() => {
-            const world = screenToWorld(contextMenu.x, contextMenu.y);
-            addTextNode(world.x, world.y);
-            setContextMenu(null);
-          }}
-          onAddStickyNote={() => {
-            const world = screenToWorld(contextMenu.x, contextMenu.y);
-            addStickyNode(world.x, world.y);
-            setContextMenu(null);
-          }}
-          onAddImage={() => {
-            const world = screenToWorld(contextMenu.x, contextMenu.y);
-            addImageNode(world.x, world.y);
-            setContextMenu(null);
-          }}
-          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* The headings of a note card's note */}
+      {headingMenu && (
+        <HeadingMenu
+          x={headingMenu.x}
+          y={headingMenu.y}
+          headings={headingMenu.headings}
+          current={headingMenuNode?.subpath}
+          onPick={handleHeadingPick}
+          onClose={() => setHeadingMenu(null)}
         />
       )}
 
@@ -2052,6 +2520,28 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           onClose={() => setShowFilePicker(false)}
         />
       )}
+
+      {/* Folder picker */}
+      {showFolderPicker && (
+        <FolderPicker
+          vaultPath={vaultPath}
+          onSelect={handleFolderSelect}
+          onClose={() => setShowFolderPicker(false)}
+        />
+      )}
+
+      {/* Web address prompt */}
+      {addressPrompt && (
+        <AddressPrompt
+          title={addressPrompt.nodeId ? "Change address" : "Add web page"}
+          action={addressPrompt.nodeId ? "Change" : "Add"}
+          initial={canvasData.nodes.find((n) => n.id === addressPrompt.nodeId)?.url ?? ""}
+          onSubmit={handleAddressSubmit}
+          onClose={() => setAddressPrompt(null)}
+        />
+      )}
+
+      {notice && <div className="canvas-notice" role="status">{notice}</div>}
     </div>
   );
 }

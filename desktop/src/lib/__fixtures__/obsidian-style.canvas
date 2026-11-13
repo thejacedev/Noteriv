@@ -1,0 +1,18 @@
+{
+	"nodes":[
+		{"id":"a0f3c1d2e4b5a697","type":"group","x":-420,"y":-320,"width":900,"height":620,"color":"4","label":"Research","background":"Attachments/board.png","backgroundStyle":"cover"},
+		{"id":"b1e2d3c4f5a6b798","type":"text","text":"# Question\n\nWhat do we **know** so far?","x":-380,"y":-260,"width":260,"height":160,"color":"1"},
+		{"id":"c2d3e4f5a6b7c899","type":"file","file":"Projects/Field notes.md","subpath":"#Findings","x":-60,"y":-260,"width":400,"height":400,"color":"#2e7d32"},
+		{"id":"d3e4f5a6b7c8d90a","type":"file","file":"Attachments/chart.png","x":-380,"y":-60,"width":260,"height":200},
+		{"id":"e4f5a6b7c8d9e01b","type":"link","url":"https://jsoncanvas.org/spec/1.0/","x":380,"y":-260,"width":400,"height":300,"color":"5","styleAttributes":{"border":"dotted"}},
+		{"id":"f5a6b7c8d9e0f12c","type":"file","file":"Papers/Survey.pdf","subpath":"#page=3","x":380,"y":80,"width":400,"height":520},
+		{"id":"06b7c8d9e0f1023d","type":"text","text":"Loose thought","x":-380,"y":360,"width":250,"height":60}
+	],
+	"edges":[
+		{"id":"17c8d9e0f102134e","fromNode":"b1e2d3c4f5a6b798","fromSide":"right","toNode":"c2d3e4f5a6b7c899","toSide":"left","label":"answered by"},
+		{"id":"28d9e0f10213245f","fromNode":"c2d3e4f5a6b7c899","fromSide":"right","fromEnd":"arrow","toNode":"e4f5a6b7c8d9e01b","toSide":"left","toEnd":"arrow","color":"6","label":"cites"},
+		{"id":"39e0f1021324356a","fromNode":"d3e4f5a6b7c8d90a","fromSide":"bottom","toNode":"06b7c8d9e0f1023d","toSide":"top","toEnd":"none","color":"#ff8800","pathfindingMethod":"square"},
+		{"id":"4af102132435467b","fromNode":"e4f5a6b7c8d9e01b","toNode":"f5a6b7c8d9e0f12c"}
+	],
+	"metadata":{"version":"1.0-1.0","frontmatter":{}}
+}

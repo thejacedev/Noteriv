@@ -697,3 +697,378 @@
 .canvas-sticky-color-dot.active {
   border-color: #fff;
 }
+
+/* ─── Group label and handles ─── */
+/* The label sits above the group's frame, so the group must not clip it. */
+.canvas-node.canvas-node-group {
+  overflow: visible;
+}
+
+/* ─── Layers drawn over the cards ─── */
+/* The layer the cards sit in has no size of its own, so "100%" of it is
+   nothing, and a browser does not draw an SVG that is zero wide. One pixel is
+   enough: what is drawn spills out of it. */
+.canvas-transform > .canvas-edges-svg,
+.canvas-transform > .canvas-drawing-live-svg {
+  width: 1px;
+  height: 1px;
+}
+
+/* ─── Edge ends and labels ─── */
+.canvas-edge-arrowhead {
+  stroke: none;
+  pointer-events: none;
+}
+
+.canvas-edge-arrowhead.selected,
+.canvas-edge-line:hover ~ .canvas-edge-arrowhead {
+  fill: var(--accent);
+}
+
+/* A rim in the canvas colour keeps a label readable where it crosses its line. */
+.canvas-edge-label {
+  paint-order: stroke;
+  stroke: var(--bg-primary);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.canvas-edge-label-input {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: 150px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+  outline: none;
+  user-select: text;
+}
+
+/* ─── Controls shared by the newer cards ─── */
+.canvas-card-button {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.canvas-card-button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.canvas-card-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.canvas-card-button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.canvas-card-status {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ─── Web Page Card ─── */
+.canvas-link-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.canvas-link-site {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  color: var(--text-muted);
+}
+
+.canvas-link-site svg {
+  flex-shrink: 0;
+}
+
+.canvas-link-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.canvas-link-url {
+  flex: 1;
+  min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* ─── File Card ─── */
+.canvas-card-part {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.canvas-card-tools {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.canvas-card-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.canvas-card-tool:hover:not(:disabled) {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.canvas-card-tool.active {
+  color: var(--accent);
+}
+
+.canvas-card-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.canvas-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+/* A note's rendered text. The card scrolls, so the text itself is not cut off. */
+.canvas-card-note.embed-content {
+  max-height: none;
+  overflow: visible;
+  padding: 10px 12px;
+  word-break: break-word;
+}
+
+.canvas-card-note a,
+.canvas-card-note .md-wikilink {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.canvas-card-image {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.canvas-card-pdf {
+  position: relative;
+}
+
+.canvas-card-pdf canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+}
+
+.canvas-card-status-over {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.canvas-card-caption {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.canvas-card-media,
+.canvas-card-other {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+}
+
+.canvas-card-media audio {
+  width: 100%;
+}
+
+.canvas-card-media video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 4px;
+}
+
+.canvas-card-other-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* A card of a kind this version cannot show */
+.canvas-node-unknown {
+  border-style: dashed;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ─── Menus ─── */
+.canvas-context-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The dot that opens the colour chooser */
+.canvas-color-own {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#e55, #ec5, #5b5, #58c, #a6e, #e55);
+}
+
+.canvas-color-own input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.canvas-heading-menu {
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.canvas-heading-menu .canvas-context-item {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Dialogs: web address, folders ─── */
+.canvas-prompt {
+  gap: 10px;
+  padding: 16px;
+}
+
+.canvas-prompt-title {
+  padding: 12px 14px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.canvas-prompt .canvas-prompt-title {
+  padding: 0;
+}
+
+.canvas-prompt-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  user-select: text;
+}
+
+.canvas-prompt-input:focus {
+  border-color: var(--accent);
+}
+
+.canvas-prompt-error {
+  font-size: 12px;
+  color: var(--red, #e55);
+}
+
+.canvas-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.canvas-picker-empty {
+  padding: 16px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ─── Notice ─── */
+.canvas-notice {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 110;
+  max-width: 80%;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
