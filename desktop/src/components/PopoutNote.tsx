@@ -74,6 +74,11 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
     });
     const name = path.split(/[\\/]/).pop()?.replace(NOTE, "") || "Note";
     document.title = `${name} - Noteriv`;
+    // The window's own title bar is the system's, not the page's: it has to be told.
+    const tauri = (window as unknown as {
+      __TAURI__?: { window?: { getCurrentWindow?: () => { setTitle(title: string): Promise<void> } } };
+    }).__TAURI__;
+    void tauri?.window?.getCurrentWindow?.().setTitle(`${name} - Noteriv`).catch(() => {});
     return () => {
       cancelled = true;
     };
