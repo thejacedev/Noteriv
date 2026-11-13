@@ -15,6 +15,7 @@ import { processTocLine } from "./renderers/toc";
 import { extractHeadings } from "@/lib/toc-utils";
 import { onCodeBlockProcessorsChange } from "@/lib/markdown-code-block-registry";
 import { onEmbedDataChange } from "./renderers/embeds";
+import { isCommentFence } from "@/lib/comments";
 import type { BlockContext, InlineReplacement } from "./types";
 
 /** Dispatched when a plugin registers or removes a code-block processor. */
@@ -115,11 +116,44 @@ function getVisibleRange(view: EditorView, buffer: number = 50): { from: number;
   };
 }
 
+/**
+ * The lines that belong to a block comment: two lines holding only `%%` and
+ * everything between them. Fenced code is skipped, where `%%` is just text.
+ */
+function findCommentLines(doc: EditorState["doc"]): Set<number> {
+  const lines = new Set<number>();
+  let fence: string | null = null;
+  let open: number | null = null;
+  for (let i = 1; i <= doc.lines; i++) {
+    const text = doc.line(i).text;
+    if (open === null) {
+      const fenceMatch = text.match(/^\s{0,3}(`{3,}|~{3,})/);
+      if (fenceMatch) {
+        const marker = fenceMatch[1][0];
+        if (fence === null) fence = marker;
+        else if (fence === marker) fence = null;
+        continue;
+      }
+      if (fence !== null) continue;
+    }
+    if (isCommentFence(text)) {
+      if (open === null) {
+        open = i;
+      } else {
+        for (let n = open; n <= i; n++) lines.add(n);
+        open = null;
+      }
+    }
+  }
+  return lines;
+}
+
 function buildDecorations(
   view: EditorView,
   codeTracker: CodeBlockTracker,
   htmlTracker: HtmlBlockTracker,
-  cachedHeadings: { level: number; text: string; line: number }[] | null
+  cachedHeadings: { level: number; text: string; line: number }[] | null,
+  commentLines: Set<number>
 ): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const cursorLines = getCursorLines(view.state);
@@ -141,6 +175,13 @@ function buildDecorations(
   for (let i = visible.from; i <= visible.to; i++) {
     const line = doc.line(i);
     const text = line.text;
+
+    // A block comment is shown as written, dimmed, and never rendered. The
+    // reading view hides `.md-comment-line`.
+    if (commentLines.has(i)) {
+      builder.add(line.from, line.from, Decoration.line({ class: "md-comment-line" }));
+      continue;
+    }
 
     // Code blocks are special — they span multiple lines
     const codeResult = codeTracker.process(
@@ -216,6 +257,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
     private codeTracker: CodeBlockTracker;
     private htmlTracker: HtmlBlockTracker;
     private cachedHeadings: { level: number; text: string; line: number }[] | null = null;
+    private commentLines: Set<number> = new Set();
     private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
     private unsubscribeProcessors: () => void;
     private unsubscribeEmbeds: () => void;
@@ -226,7 +268,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       this.codeTracker = new CodeBlockTracker();
       this.htmlTracker = new HtmlBlockTracker();
       this.runPreScans(view);
-      this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
+      this.decorations = buildDecorations(view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
       // Re-render open code blocks when a plugin is enabled or disabled.
       // Deferred because a registration can happen mid-update (e.g. from a
       // processor), and coalesced since a plugin may register several languages.
@@ -264,13 +306,14 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         text: h.text,
         line: h.line,
       }));
+      this.commentLines = findCommentLines(doc);
     }
 
     update(update: ViewUpdate) {
       if (update.docChanged) {
         // Document changed — re-scan block structure and rebuild
         this.runPreScans(update.view);
-        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
       } else if (
         update.selectionSet ||
         update.viewportChanged ||
@@ -279,7 +322,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         )
       ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
-        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings);
+        this.decorations = buildDecorations(update.view, this.codeTracker, this.htmlTracker, this.cachedHeadings, this.commentLines);
       }
     }
   },

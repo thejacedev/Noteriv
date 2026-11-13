@@ -306,6 +306,23 @@ export const markdownRenderTheme = EditorView.baseTheme({
     color: "var(--accent)",
     fontSize: "0.85em",
   },
+  // Comments: there for the writer, so shown, but out of the way
+  "& .md-comment": {
+    color: "var(--text-muted)",
+    fontStyle: "italic",
+  },
+  "& .md-comment-line": {
+    color: "var(--text-muted)",
+    fontStyle: "italic",
+  },
+  "& .md-footnote-inline": {
+    color: "var(--text-secondary)",
+    fontSize: "0.78em",
+    verticalAlign: "super",
+    lineHeight: "1",
+  },
+  "& .md-footnote-inline::before": { content: '"["' },
+  "& .md-footnote-inline::after": { content: '"]"' },
   "& .md-footnote-ref": {
     color: "var(--accent)",
     fontWeight: "600",

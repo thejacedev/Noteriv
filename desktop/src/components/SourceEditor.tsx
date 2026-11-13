@@ -13,6 +13,7 @@ import { isAppHotkey } from "@/lib/hotkeys";
 import { replaceDocument } from "@/lib/replace-document";
 import { tags } from "@lezer/highlight";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
+import { folding, multipleCursors } from "@/lib/editor-extensions";
 
 const sourceHighlight = HighlightStyle.define([
   { tag: tags.heading1, color: "var(--accent)", fontWeight: "bold", fontSize: "1.2em" },
@@ -70,10 +71,12 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
         lineNumbers(),
         highlightActiveLine(),
         drawSelection(),
+        multipleCursors(),
         closeBrackets(),
         historyConfig.current.of(history()),
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
+        folding("gutter"),
         syntaxHighlighting(sourceHighlight),
         sourceTheme,
         search({ top: true }),

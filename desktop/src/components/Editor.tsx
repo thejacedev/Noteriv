@@ -20,6 +20,7 @@ import {
 } from "./markdown";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 import { setEditorViewForImages } from "./markdown/renderers/images";
+import { folding, multipleCursors } from "@/lib/editor-extensions";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"]);
 
@@ -51,10 +52,12 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, clas
       doc: content,
       extensions: [
         drawSelection(),
+        multipleCursors(),
         closeBrackets(),
         historyConfig.current.of(history()),
         ...(vaultPath ? [wikilinkAutocompletion(vaultPath)] : []),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
+        folding(),
         syntaxHighlighting(mdHighlightStyle),
         editorTheme,
         markdownRenderTheme,

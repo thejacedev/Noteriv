@@ -14,6 +14,7 @@ import {
   renderAllLines,
   mathExtension,
 } from "./markdown";
+import { folding } from "@/lib/editor-extensions";
 
 interface ReadOnlyViewProps {
   content: string;
@@ -35,6 +36,7 @@ export default function ReadOnlyView({ content, onChange, onViewReady, className
 
     const extensions = [
       markdown({ base: markdownLanguage, codeLanguages: languages }),
+      folding(),
       syntaxHighlighting(mdHighlightStyle),
       editorTheme,
       markdownRenderTheme,
@@ -48,6 +50,9 @@ export default function ReadOnlyView({ content, onChange, onViewReady, className
         ".cm-cursor": { display: "none !important" },
         ".cm-activeLine": { background: "transparent !important" },
         ".cm-content": { cursor: "text" },
+        // Comments are for the writer; a reader does not see them.
+        ".md-comment": { display: "none" },
+        ".md-comment-line": { display: "none" },
       }),
     ];
 

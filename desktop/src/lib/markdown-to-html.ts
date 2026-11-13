@@ -6,11 +6,14 @@
  */
 
 import { renderTocHTML } from "@/lib/toc-utils";
+import { stripComments } from "./comments";
 
 /**
  * Convert a markdown string to HTML.
  */
-export function markdownToHTML(md: string): string {
+export function markdownToHTML(source: string): string {
+  // Comments are for the writer: they do not reach a published page or a PDF.
+  const md = stripComments(source);
   const lines = md.split("\n");
   const html: string[] = [];
   let i = 0;
@@ -141,6 +144,9 @@ function inlineFormat(text: string): string {
 
   // Inline code (must come first to prevent inner formatting)
   result = result.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Inline footnotes: ^[text written in place]
+  result = result.replace(/\^\[([^\]\n]+)\]/g, '<sup class="footnote-inline">[$1]</sup>');
 
   // Drawing embeds: ![[filename.drawing]]
   result = result.replace(

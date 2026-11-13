@@ -43,6 +43,10 @@ import { trashFile, cleanupOldTrash } from "@/lib/trash-utils";
 import { insertTocPlaceholder, generateTocBlock, updateTocBlocks, hasTocBlock } from "@/lib/toc-utils";
 import { splitWikiTarget, findAnchorLine, findLinkedNote, linkKey, type WikiAnchor } from "@/lib/wiki-link-utils";
 import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
+import { countWords, plural } from "@/lib/text-stats";
+import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex } from "@/lib/vault-index";
+import { unfoldAll } from "@codemirror/language";
+import { foldAllHeadingsAndLists } from "@/lib/editor-extensions";
 import { insertAtCursor } from "@/lib/editor-commands";
 import {
   HotkeyBinding,
@@ -701,6 +705,7 @@ export default function Home() {
   useEffect(() => {
     if (appState !== "app" || !window.electronAPI?.onVaultChanged) return;
     const unsub = window.electronAPI.onVaultChanged((changedPath: string) => {
+      invalidateVaultIndex();
       setSidebarRefresh((n) => n + 1);
       setTabs((prev) => {
         const changedIdentity = pathIdentity(changedPath, platform);
@@ -1623,13 +1628,20 @@ export default function Home() {
       e.stopImmediatePropagation();
       e.preventDefault();
 
-      window.electronAPI.listAllFiles(activeVault.path).then((files) => {
+      const vaultPath = activeVault.path;
+      window.electronAPI.listAllFiles(vaultPath).then(async (files) => {
         // By name or by path inside the vault. Renaming a note rewrites the
         // links to it by the same rule, so the two stay in one place.
-        const findNote = (name: string) =>
+        const byName = (name: string) =>
           findLinkedNote(files, name) ??
           // Dataview results link by the note's full path.
           files.find((f) => linkKey(f.filePath) === linkKey(name));
+        // A link may use one of a note's aliases. The index is only read
+        // when the name itself matches nothing, so most clicks do not wait for it.
+        const needsAliases =
+          !byName(linkTarget) && !(linkTarget.includes("#") && byName(splitWikiTarget(linkTarget).file));
+        const index = needsAliases ? await loadVaultIndex(vaultPath) : [];
+        const findNote = (name: string) => byName(name) ?? findNoteByAlias(index, name);
 
         // The whole target first, so a note whose name contains "#" still opens.
         let filePath = findNote(linkTarget)?.filePath ?? null;
@@ -1855,6 +1867,8 @@ export default function Home() {
 
   const handleCommandExecute = useCallback((action: HotkeyAction) => {
     const view = editorViewRef.current;
+    // The editor on screen: the reading view has its own.
+    const shownView = () => (viewMode === "view" ? readViewRef.current : editorViewRef.current);
     const actions: Record<HotkeyAction, () => void> = {
       save: handleSave,
       saveAs: handleSaveAs,
@@ -1940,9 +1954,11 @@ export default function Home() {
       splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
       closeSplit: handleCloseSplit,
       knowledgeIngest: () => openKnowledgeIngest(),
+      foldAll: () => { const v = shownView(); if (v) foldAllHeadingsAndLists(v); },
+      unfoldAll: () => { const v = shownView(); if (v) unfoldAll(v); },
     };
     actions[action]?.();
-  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit, openKnowledgeIngest]);
+  }, [handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, handleSplitRight, handleCloseSplit, openKnowledgeIngest, viewMode]);
 
   // ============================================================
   // Recent commands handler
@@ -2033,8 +2049,6 @@ export default function Home() {
     if (showSettings || showKnowledgeIngest) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const view = editorViewRef.current;
-
       // Support both the main keyboard and numpad variants. Tauri does not
       // provide browser zoom controls, so these adjust the editor font size.
       const primaryModifier = e.ctrlKey || e.metaKey;
@@ -2046,100 +2060,12 @@ export default function Home() {
         return;
       }
 
-      // Map actions to handlers
-      const actions: Record<HotkeyAction, () => void> = {
-        // File
-        save: handleSave,
-        saveAs: handleSaveAs,
-        newFile: handleNewFile,
-        newFolder: handleNewFolder,
-        openFile: handleOpenFile,
-        closeTab: () => { if (activeTab) closeTab(activeTab); },
-        closeAllTabs: handleCloseAllTabs,
-        closeOtherTabs: handleCloseOtherTabs,
-        deleteFile: handleDeleteFile,
-        // Navigation
-        nextTab: () => {
-          if (tabs.length < 2) return;
-          const idx = tabs.findIndex((t) => t.filePath === activeTab);
-          setActiveTab(tabs[(idx + 1) % tabs.length].filePath);
-        },
-        prevTab: () => {
-          if (tabs.length < 2) return;
-          const idx = tabs.findIndex((t) => t.filePath === activeTab);
-          setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length].filePath);
-        },
-        quickOpen: () => setShowQuickOpen(true),
-        commandPalette: () => setShowCommandPalette(true),
-        // Search
-        findInFile: () => {}, // Handled by CodeMirror
-        findInVault: () => setShowVaultSearch(true),
-        // View
-        toggleSidebar: handleToggleSidebar,
-        toggleViewMode: () => setViewMode((m) => m === "live" ? "view" : m === "view" ? "source" : "live"),
-        toggleFullscreen: handleToggleFullscreen,
-        zenMode: handleZenMode,
-        settings: () => setShowSettings(true),
-        // Edit
-        undo: () => {}, // Handled by CodeMirror
-        redo: () => {}, // Handled by CodeMirror
-        // Formatting
-        toggleBold: () => { if (view) wrapSelection(view, "**", "**"); },
-        toggleItalic: () => { if (view) wrapSelection(view, "*", "*"); },
-        toggleCode: () => { if (view) wrapSelection(view, "`", "`"); },
-        toggleStrikethrough: () => { if (view) wrapSelection(view, "~~", "~~"); },
-        insertLink: () => { if (view) editorInsertLink(view); },
-        insertImage: () => { if (view) editorInsertImage(view); },
-        insertHorizontalRule: () => { if (view) editorInsertHR(view); },
-        insertCodeBlock: () => { if (view) editorInsertCodeBlock(view); },
-        insertBlockquote: () => { if (view) editorInsertBlockquote(view); },
-        insertTaskList: () => { if (view) editorInsertTaskList(view); },
-        insertTable: () => { if (view) editorInsertTable(view); },
-        // Sync
-        gitSync: handleGitSync,
-        // Daily notes
-        dailyNote: handleDailyNote,
-        // Outline
-        toggleOutline: () => setShowOutline((o) => !o),
-        // New features
-        graphView: () => setShowGraphView(true),
-        toggleBacklinks: () => setShowBacklinks((b) => !b),
-        toggleTags: () => setShowTagPane((t) => !t),
-        insertTemplate: () => setShowTemplatePicker(true),
-        toggleBookmark: () => { if (activeTab) setBookmarks((b) => toggleBookmark(b, activeTab)); },
-        randomNote: async () => { if (activeVault) { const f = await getRandomNote(activeVault.path); if (f) openFile(f); } },
-        noteComposer: () => setShowNoteComposer(true),
-        fileRecovery: () => setShowFileRecovery(true),
-        exportPDF: () => { if (currentTab && !currentTab.kind) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
-        audioRecorder: () => setShowAudioRecorder(true),
-        attachments: () => setShowAttachments(true),
-        slidePresentation: () => setShowSlidePresentation(true),
-        pluginManager: () => setShowPluginManager(true),
-        cssSnippets: () => setShowCSSSnippets(true),
-        calendarView: () => setShowCalendarView(true),
-        vaultInsights: () => setShowVaultInsights(true),
-        newBoard: handleNewBoard,
-        newCanvas: handleNewCanvas,
-        insertDrawing: handleNewDrawing,
-        insertToc: handleInsertToc,
-        updateToc: handleUpdateToc,
-        insertDataview: handleInsertDataview,
-        focusMode: handleFocusMode,
-        publishNote: handlePublish,
-        flashcardReview: () => setShowFlashcards(true),
-        startCollab: () => setShowCollab(true),
-        openPdfViewer: () => {
-          if (activeTab && isPdfFile(activeTab)) openFile(activeTab);
-        },
-        exportPdfAnnotations: () => {},
-        openTrash: () => setShowTrash(true),
-        togglePinTab: () => { if (activeTab) handleTogglePin(activeTab); },
-        noteHistory: () => { if (currentTab) setShowNoteHistory(true); },
-        timeScrubber: () => { if (currentTab) setShowTimeScrubber(true); },
-        toggleLint: () => setShowLintPanel((l) => !l),
-        splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
-        closeSplit: handleCloseSplit,
-        knowledgeIngest: () => openKnowledgeIngest(),
+      // The same handlers the command palette runs, so a shortcut and its
+      // command cannot drift apart. Only the palette itself differs: it is
+      // already open when it runs a command, and a shortcut has to open it.
+      const run = (action: HotkeyAction) => {
+        if (action === "commandPalette") setShowCommandPalette(true);
+        else handleCommandExecute(action);
       };
 
       for (const binding of hotkeys) {
@@ -2149,7 +2075,7 @@ export default function Home() {
 
         if (matchesHotkey(e, binding.keys)) {
           e.preventDefault();
-          actions[binding.action]?.();
+          run(binding.action);
           return;
         }
       }
@@ -2164,7 +2090,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [appState, hotkeys, handleSave, handleSaveAs, handleNewFile, handleNewFolder, handleOpenFile, activeTab, tabs, closeTab, showSettings, showKnowledgeIngest, handleCloseAllTabs, handleCloseOtherTabs, handleDeleteFile, handleGitSync, handleToggleFullscreen, handleToggleSidebar, handleZenMode, handleDailyNote, activeVault, openFile, content, currentTab, handleNewBoard, handleNewDrawing, handleInsertToc, handleUpdateToc, handleInsertDataview, handleFocusMode, handlePublish, pdfFile, handleTogglePin, adjustEditorFontSize, openKnowledgeIngest, runPluginCommand]);
+  }, [appState, hotkeys, showSettings, showKnowledgeIngest, handleCommandExecute, adjustEditorFontSize, runPluginCommand]);
 
   // Electron menu events
   useEffect(() => {
@@ -2581,6 +2507,7 @@ export default function Home() {
             )}
             {currentTab && !currentTab.kind && (
               <>
+                <span>{plural(countWords(content), "word", "words")}</span>
                 <span>{content.split("\n").length} lines</span>
                 <span>{content.length} chars</span>
               </>

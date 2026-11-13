@@ -39,6 +39,7 @@ import { inlineMathRenderer } from "./math";
 import { tagRenderer } from "./tags";
 import { inlineHtmlRenderer } from "./html";
 import { inlineRenderers } from "./inline";
+import { commentRenderer, inlineFootnoteRenderer } from "./comments";
 
 /**
  * Register all built-in renderers.
@@ -59,7 +60,9 @@ export function registerBuiltinRenderers() {
   registerBlockRenderer(definitionListRenderer);
 
   // Inline renderers — sorted by priority
+  registerInlineRenderer(commentRenderer);        // 1
   registerInlineRenderer(inlineHtmlRenderer);     // 3
+  registerInlineRenderer(inlineFootnoteRenderer); // 4
   registerInlineRenderer(footnoteRefRenderer);    // 5
   registerInlineRenderer(embedRenderer);          // 7
   registerInlineRenderer(wikilinkRenderer);       // 8

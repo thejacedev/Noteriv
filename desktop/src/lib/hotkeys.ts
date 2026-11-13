@@ -82,6 +82,8 @@ export type HotkeyAction =
   | "splitEditor"
   | "closeSplit"
   | "vaultInsights"
+  | "foldAll"
+  | "unfoldAll"
   // Knowledge
   | "knowledgeIngest";
 
@@ -190,6 +192,8 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
   { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
+  { action: "foldAll", label: "Fold All Headings and Lists", keys: "", category: "View" },
+  { action: "unfoldAll", label: "Unfold All Headings and Lists", keys: "", category: "View" },
   // Knowledge
   { action: "knowledgeIngest", label: "Knowledge: Ingest Source", keys: "", category: "Knowledge" },
 ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { loadVaultIndex } from "@/lib/vault-index";
 
 interface QuickOpenFile {
   filePath: string;
@@ -22,10 +23,16 @@ export default function QuickOpen({ vaultPath, onSelect, onClose }: QuickOpenPro
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Aliases by file path, so a note can be found by its other names.
+  const [aliases, setAliases] = useState<Map<string, string[]>>(new Map());
+
   // Load all files on mount
   useEffect(() => {
     if (!window.electronAPI) return;
     window.electronAPI.listAllFiles(vaultPath).then(setFiles);
+    loadVaultIndex(vaultPath).then((index) => {
+      setAliases(new Map(index.filter((n) => n.aliases.length > 0).map((n) => [n.filePath, n.aliases])));
+    });
   }, [vaultPath]);
 
   // Filter files as query changes
@@ -40,12 +47,21 @@ export default function QuickOpen({ vaultPath, onSelect, onClose }: QuickOpenPro
       .filter(
         (f) =>
           f.fileName.toLowerCase().includes(lower) ||
-          f.relativePath.toLowerCase().includes(lower)
+          f.relativePath.toLowerCase().includes(lower) ||
+          (aliases.get(f.filePath) ?? []).some((a) => a.toLowerCase().includes(lower))
       )
       .slice(0, 50);
     setFiltered(matches);
     setSelectedIdx(0);
-  }, [query, files]);
+  }, [query, files, aliases]);
+
+  /** The alias that matched, when the name and path did not. */
+  const matchedAlias = (f: QuickOpenFile): string | null => {
+    const lower = query.trim().toLowerCase();
+    if (!lower) return null;
+    if (f.fileName.toLowerCase().includes(lower) || f.relativePath.toLowerCase().includes(lower)) return null;
+    return (aliases.get(f.filePath) ?? []).find((a) => a.toLowerCase().includes(lower)) ?? null;
+  };
 
   // Focus input
   useEffect(() => {
@@ -110,6 +126,7 @@ export default function QuickOpen({ vaultPath, onSelect, onClose }: QuickOpenPro
             >
               <span className="palette-item-name">{f.fileName}</span>
               <span className="palette-item-path">
+                {matchedAlias(f) ? `also called ${matchedAlias(f)} · ` : ""}
                 {f.relativePath.replace(/\.(md|markdown)$/i, "")}
               </span>
             </button>
