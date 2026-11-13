@@ -795,7 +795,7 @@ export default function SettingsModal({
 
       <div className="st-divider" />
       <div className="st-group-label">Git Sync</div>
-      <Row label="Auto sync interval" desc="Periodically sync with Git or WebDAV in the background.">
+      <Row label="Auto sync interval" desc="Periodically sync in the background.">
         <select
           className="st-select"
           value={settings.gitSyncInterval}
@@ -806,7 +806,7 @@ export default function SettingsModal({
           ))}
         </select>
       </Row>
-      <Row label="Sync on save" desc="Sync with Git or WebDAV every time you manually save a file.">
+      <Row label="Sync on save" desc="Sync every time you manually save a file.">
         <Toggle checked={settings.syncOnSave} onChange={(v) => update({ syncOnSave: v })} />
       </Row>
       <Row label="Pull on open" desc="Fetch the latest changes from remote when opening a vault.">
@@ -847,7 +847,7 @@ export default function SettingsModal({
       {/* Folder config */}
       {settings.extraSyncProvider === "folder" && (
         <>
-          <Row label="Target folder" desc="Path to the cloud drive sync folder on your system.">
+          <Row label="Target folder" desc="A folder for this vault only, inside your cloud drive's folder. Two-way sync brings every note and attachment in it into the vault.">
             <input
               type="text"
               className="st-text-input"
@@ -856,7 +856,7 @@ export default function SettingsModal({
               placeholder="/home/user/Google Drive/Notes"
             />
           </Row>
-          <Row label="Direction" desc="Which way files should sync.">
+          <Row label="Direction" desc="Two-way also carries deletions across; a deleted file is kept in a trash on the side it is removed from.">
             <select
               className="st-select"
               value={settings.folderSync.direction}

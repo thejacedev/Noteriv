@@ -30,13 +30,13 @@ const SYNC_EXTS: &[&str] = &[
 ];
 
 /// Folders that are never synced, on either side.
-const SKIP_DIRS: &[&str] = &[".git", ".noteriv", "node_modules", ".obsidian", ".trash"];
+pub(crate) const SKIP_DIRS: &[&str] = &[".git", ".noteriv", "node_modules", ".obsidian", ".trash"];
 
 /// Bumped when the record's meaning changes; an older record is then ignored.
-const RECORD_VERSION: u32 = 1;
+pub(crate) const RECORD_VERSION: u32 = 1;
 
 /// The record is written out after this many changes, and at the end of a run.
-const SAVE_EVERY: usize = 20;
+pub(crate) const SAVE_EVERY: usize = 20;
 
 // ============================================================
 // Configuration
@@ -59,7 +59,7 @@ fn default_root() -> String {
 // Paths and addresses
 // ============================================================
 
-fn is_synced_file(rel: &str) -> bool {
+pub(crate) fn is_synced_file(rel: &str) -> bool {
     Path::new(rel)
         .extension()
         .and_then(|e| e.to_str())
@@ -69,7 +69,7 @@ fn is_synced_file(rel: &str) -> bool {
 
 /// A relative path is only used if it cannot point outside the vault. The
 /// names come from the server as well as from disk, so this is checked.
-fn safe_rel(rel: &str) -> bool {
+pub(crate) fn safe_rel(rel: &str) -> bool {
     if rel.is_empty() || rel.contains('\\') || rel.contains('\0') {
         return false;
     }
@@ -84,7 +84,7 @@ fn safe_rel(rel: &str) -> bool {
     })
 }
 
-fn local_path(vault: &Path, rel: &str) -> PathBuf {
+pub(crate) fn local_path(vault: &Path, rel: &str) -> PathBuf {
     let mut p = vault.to_path_buf();
     for seg in rel.split('/') {
         p.push(seg);
@@ -162,7 +162,7 @@ fn rel_under(path: &str, base: &str) -> Option<String> {
     Some(rest.to_string())
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -179,7 +179,7 @@ pub(crate) struct LocalFile {
     pub size: u64,
 }
 
-fn stat_local(path: &Path) -> Option<LocalFile> {
+pub(crate) fn stat_local(path: &Path) -> Option<LocalFile> {
     let meta = fs::metadata(path).ok()?;
     if !meta.is_file() {
         return None;
@@ -202,7 +202,7 @@ fn stat_local(path: &Path) -> Option<LocalFile> {
 /// must never be skipped: a note that is merely unreadable right now, on a
 /// drive that hiccuped or a folder whose permissions changed, would otherwise
 /// look like one the user deleted, and be deleted from the server.
-fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, String> {
+pub(crate) fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, String> {
     fn unreadable(path: &Path, e: std::io::Error) -> String {
         format!(
             "\"{}\" could not be read ({e}), so nothing was synced.",
@@ -270,7 +270,7 @@ fn list_local(vault: &Path) -> Result<BTreeMap<String, LocalFile>, String> {
 /// Write `bytes` to `rel`, unless the file on disk no longer looks the way it
 /// did when this run listed it (`expected`; `None` means it was not there).
 /// Returns the file's new state, or `None` if it was left alone.
-fn write_local_if_unchanged(
+pub(crate) fn write_local_if_unchanged(
     vault: &Path,
     rel: &str,
     bytes: &[u8],
@@ -302,7 +302,7 @@ fn write_local_if_unchanged(
 /// Move a file into the vault's trash, in the layout the app's Trash view
 /// reads, so a note removed on another device can still be restored here.
 /// Returns false if the file changed since this run listed it and was kept.
-fn move_to_trash_if_unchanged(
+pub(crate) fn move_to_trash_if_unchanged(
     vault: &Path,
     rel: &str,
     expected: &LocalFile,
@@ -337,7 +337,7 @@ fn move_to_trash_if_unchanged(
 
 /// "Folder/Note.md" becomes "Folder/Note (conflict 2026-11-12 14-30-05).md",
 /// with a number added if that name is taken too.
-fn conflict_rel(rel: &str, stamp: &str, taken: &dyn Fn(&str) -> bool) -> String {
+pub(crate) fn conflict_rel(rel: &str, stamp: &str, taken: &dyn Fn(&str) -> bool) -> String {
     let (dir, name) = match rel.rfind('/') {
         Some(i) => (&rel[..=i], &rel[i + 1..]),
         None => ("", rel),
@@ -762,7 +762,7 @@ pub(crate) struct FileRecord {
     pub hash: String,
 }
 
-fn content_hash(bytes: &[u8]) -> String {
+pub(crate) fn content_hash(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -773,7 +773,7 @@ fn content_hash(bytes: &[u8]) -> String {
 /// touched, by a backup tool or a Git checkout. Read those and compare
 /// fingerprints: if the content is what was synced, note the new time and move
 /// on, so it is neither uploaded again nor counted as one side of a conflict.
-fn settle_touched_files(
+pub(crate) fn settle_touched_files(
     vault: &Path,
     local: &BTreeMap<String, LocalFile>,
     record: &mut SyncRecord,
@@ -812,7 +812,7 @@ fn record_path(record_dir: &Path, vault: &str, remote: &str) -> PathBuf {
 
 /// A record that is missing, unreadable, from an older version, or written for
 /// another vault or server counts as no record at all.
-fn load_record(path: &Path, vault: &str, remote: &str) -> Option<SyncRecord> {
+pub(crate) fn load_record(path: &Path, vault: &str, remote: &str) -> Option<SyncRecord> {
     let text = fs::read_to_string(path).ok()?;
     let record: SyncRecord = serde_json::from_str(&text).ok()?;
     if record.version != RECORD_VERSION || record.vault != vault || record.remote != remote {
@@ -821,7 +821,7 @@ fn load_record(path: &Path, vault: &str, remote: &str) -> Option<SyncRecord> {
     Some(record)
 }
 
-fn save_record(path: &Path, record: &SyncRecord) -> Result<(), String> {
+pub(crate) fn save_record(path: &Path, record: &SyncRecord) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -1153,7 +1153,7 @@ impl Run<'_> {
     }
 }
 
-fn action_rel(action: &Action) -> &str {
+pub(crate) fn action_rel(action: &Action) -> &str {
     match action {
         Action::Upload(r)
         | Action::Download(r)

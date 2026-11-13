@@ -772,7 +772,7 @@ export default function Home() {
   useEffect(() => {
     const minutes = settings.gitSyncInterval;
     const hasGit = Boolean(syncGitRemote);
-    const hasWebdav = settings.extraSyncProvider === "webdav";
+    const hasExtra = settings.extraSyncProvider !== "none";
     if (appState !== "app" || showKnowledgeIngest || !syncVaultPath || minutes <= 0) return;
     if (!autoSyncApplies(syncGitRemote, settings.extraSyncProvider)) return;
     const vaultPath = syncVaultPath;
@@ -786,8 +786,8 @@ export default function Home() {
           gitReady = status.isRepo && Boolean(status.remote);
         } catch {}
       }
-      // WebDAV syncs on the timer whether or not Git is set up.
-      if (gitReady || hasWebdav) performSyncRef.current();
+      // A folder or WebDAV provider syncs on the timer whether or not Git is set up.
+      if (gitReady || hasExtra) performSyncRef.current();
     }, minutes * 60_000);
     return () => clearInterval(interval);
   }, [appState, syncVaultPath, syncGitRemote, settings.gitSyncInterval, settings.extraSyncProvider, showKnowledgeIngest]);

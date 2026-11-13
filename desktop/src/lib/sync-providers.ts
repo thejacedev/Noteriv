@@ -13,12 +13,12 @@ export interface WebDAVSyncConfig {
 }
 
 /**
- * Whether the vault syncs on the timer and on save. A WebDAV vault does,
- * with or without a Git remote. A vault that only uses folder sync does not:
- * folder sync copies every file on each run, so on its own it stays manual.
+ * Whether the vault syncs on the timer and on save: it does when it has
+ * anywhere to sync to. A vault can sync through a folder or WebDAV without
+ * ever having a Git remote.
  */
 export function autoSyncApplies(gitRemote: string | null | undefined, extraProvider: SyncProviderType): boolean {
-  return Boolean(gitRemote) || extraProvider === "webdav";
+  return Boolean(gitRemote) || extraProvider !== "none";
 }
 
 export const DEFAULT_FOLDER_CONFIG: FolderSyncConfig = {
@@ -48,7 +48,7 @@ export const SYNC_PROVIDERS: SyncProviderInfo[] = [
   {
     type: "folder",
     name: "Cloud Drive (Folder)",
-    description: "Google Drive, Dropbox, OneDrive, iCloud — sync to their local folder",
+    description: "Google Drive, Dropbox, OneDrive, iCloud: sync with a folder of its own inside theirs",
   },
   {
     type: "webdav",
@@ -58,7 +58,7 @@ export const SYNC_PROVIDERS: SyncProviderInfo[] = [
 ];
 
 export const FOLDER_DIRECTIONS: { label: string; value: FolderSyncConfig["direction"] }[] = [
-  { label: "Two-way (push & pull)", value: "both" },
-  { label: "Push only (local → folder)", value: "push" },
-  { label: "Pull only (folder → local)", value: "pull" },
+  { label: "Two-way (changes and deletions)", value: "both" },
+  { label: "Push only (vault → folder, never deletes)", value: "push" },
+  { label: "Pull only (folder → vault, never deletes)", value: "pull" },
 ];

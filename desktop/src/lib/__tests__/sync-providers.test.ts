@@ -2,20 +2,17 @@ import { describe, expect, it } from "vitest";
 import { autoSyncApplies } from "../sync-providers";
 
 describe("autoSyncApplies", () => {
-  it("is true for a vault with a Git remote, whatever else it uses", () => {
+  it("is true for a vault with a Git remote", () => {
     expect(autoSyncApplies("git@github.com:me/notes.git", "none")).toBe(true);
     expect(autoSyncApplies("git@github.com:me/notes.git", "folder")).toBe(true);
   });
 
-  it("is true for a vault that only syncs through WebDAV", () => {
-    // These never synced on the timer or on save before: both checks asked for a Git remote.
+  it("is true for a vault that only syncs through WebDAV or a folder", () => {
+    // Both checks used to ask for a Git remote, so these never synced on the timer or on save.
     expect(autoSyncApplies(null, "webdav")).toBe(true);
-    expect(autoSyncApplies(undefined, "webdav")).toBe(true);
+    expect(autoSyncApplies(undefined, "folder")).toBe(true);
     expect(autoSyncApplies("", "webdav")).toBe(true);
-  });
-
-  it("is false for a vault that only uses folder sync, which stays manual", () => {
-    expect(autoSyncApplies(null, "folder")).toBe(false);
+    expect(autoSyncApplies("", "folder")).toBe(true);
   });
 
   it("is false when nothing is set up", () => {
