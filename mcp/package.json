@@ -6,16 +6,26 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "noteriv-mcp": "./index.js"
+    "noteriv-mcp": "index.js"
   },
-  "keywords": ["mcp", "noteriv", "notes", "vault", "ai", "claude"],
+  "keywords": [
+    "mcp",
+    "noteriv",
+    "notes",
+    "vault",
+    "ai",
+    "claude"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thejacedev/Noteriv"
+    "url": "git+https://github.com/thejacedev/Noteriv.git"
   },
   "homepage": "https://github.com/thejacedev/Noteriv#readme",
-  "files": ["index.js", "server.json"],
+  "files": [
+    "index.js",
+    "server.json"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   }
