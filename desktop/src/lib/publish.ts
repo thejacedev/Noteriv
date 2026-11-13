@@ -3,7 +3,7 @@
  * using the user's current theme colors.
  */
 
-import { markdownToHTML } from "./markdown-to-html";
+import { markdownToHTML, wikiLinksForExport } from "./markdown-to-html";
 
 /** Read the current theme's CSS variables from the document */
 function getCurrentThemeColors(): Record<string, string> {
@@ -23,7 +23,7 @@ function getCurrentThemeColors(): Record<string, string> {
 
 /** Generate a complete standalone HTML page from markdown content using current theme */
 export function generatePublishHTML(markdown: string, title: string): string {
-  const body = markdownToHTML(markdown);
+  const body = wikiLinksForExport(markdownToHTML(markdown));
   const c = getCurrentThemeColors();
 
   const bg = c["bg-primary"] || "#1e1e2e";

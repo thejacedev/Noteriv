@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { findLinkedNoteFrom } from "@/lib/wiki-link-utils";
+import { findLinkedFile, findLinkedNoteFrom } from "@/lib/wiki-link-utils";
+import { isExcludedPath } from "@/lib/file-list";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
-import { findMentions, linkMention, outgoingLinks, possibleLinks, type TextRange } from "@/lib/mentions";
+import { findMentions, linkMention, markdownFileLinks, outgoingLinks, possibleLinks, type TextRange } from "@/lib/mentions";
 import { excludedPatterns } from "@/lib/vault-prefs";
 import { loadLinkIndex, peekLinkIndex, writeLink } from "@/lib/vault-links";
 
@@ -34,6 +35,9 @@ interface Mention {
 }
 
 type Section = "linked" | "unlinked" | "outgoing" | "possible";
+
+/** The length at which the search shortens a line (`MAX_LINE_CHARS` in search.rs). */
+const LONG_LINE = 400;
 
 /**
  * The note a link's file part points at: by name, by path, or by an alias.
@@ -77,8 +81,9 @@ export default function BacklinksPanel({
       setLoading(true);
       try {
         const notes = await loadVaultIndex(vaultPath, { fresh: reloadTick > 0 });
-        // The Link buttons write links, which takes the list of every file.
-        loadLinkIndex(vaultPath).catch(() => {});
+        // Every file of the vault: the Link buttons write links with it, and
+        // an ordinary markdown link is read against it.
+        const allFiles = await loadLinkIndex(vaultPath).catch(() => null);
         const self = notes.find((n) => n.filePath === filePath);
         if (cancelled) return;
         setIndex(notes);
@@ -110,8 +115,19 @@ export default function BacklinksPanel({
                     line: i + 1,
                     text: line.trim().slice(0, 160),
                   });
-                  break;
+                  return;
                 }
+              }
+              // The same for an ordinary markdown link, read from that note's folder.
+              const selfRel = self.relativePath;
+              if (allFiles && markdownFileLinks(line).some((l) => allFiles.markdown(n.relativePath, l.path) === selfRel)) {
+                linkedFound.push({
+                  filePath: n.filePath,
+                  noteName: n.name,
+                  relativePath: n.relativePath,
+                  line: i + 1,
+                  text: line.trim().slice(0, 160),
+                });
               }
             });
           })
@@ -166,18 +182,42 @@ export default function BacklinksPanel({
 
   const self = useMemo(() => index.find((n) => n.filePath === filePath) ?? null, [index, filePath]);
 
-  // The links this note makes, and whether each leads anywhere.
+  // Every file of the vault, so a link to a picture or a PDF is not shown as leading nowhere.
+  const [vaultFiles, setVaultFiles] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI?.listVaultFiles?.(vaultPath).then((files) => {
+      if (!cancelled) setVaultFiles(files.filter((f) => !/\.(md|markdown)$/i.test(f)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [vaultPath, reloadTick]);
+
+  // The links this note makes, and whether each leads anywhere: to a note, or to another file.
   const outgoing = useMemo(
     () =>
-      outgoingLinks(content).map((link) => ({ ...link, note: resolve(index, self?.relativePath ?? "", link.target) })),
-    [content, index, self]
+      outgoingLinks(content).map((link) => {
+        if (link.markdown) {
+          // A markdown link's path starts from this note's folder; the list of every file reads it.
+          const found = peekLinkIndex(vaultPath, Infinity)?.markdown(self?.relativePath ?? "", link.target) ?? null;
+          return { ...link, opens: found ? `${vaultPath}/${found}` : null, where: found };
+        }
+        const note = resolve(index, self?.relativePath ?? "", link.target);
+        const file = note ? null : findLinkedFile(vaultFiles, link.target);
+        const opens = note ? note.filePath : file ? `${vaultPath}/${file}` : null;
+        return { ...link, opens, where: note ? note.relativePath : file };
+      }),
+    [content, index, self, vaultFiles, vaultPath]
   );
 
   // Other notes' names in this note's text that are not links yet.
   const possible = useMemo(() => {
     if (!self) return [];
+    // Notes left out of search and link suggestions are not suggested here either.
+    const excluded = excludedPatterns();
     const names = index
-      .filter((n) => n.filePath !== filePath)
+      .filter((n) => n.filePath !== filePath && !isExcludedPath(n.relativePath, excluded))
       .flatMap((n) => [n.name, ...n.aliases].map((name) => ({ name, noteName: n.name, notePath: n.relativePath })));
     return possibleLinks(content, names, 60);
   }, [content, index, self, filePath]);
@@ -198,14 +238,17 @@ export default function BacklinksPanel({
       const text = await window.electronAPI.readFile(mention.filePath);
       if (text === null) return;
       const lines = text.split("\n");
-      // Only if the line is still what the search showed.
-      if (lines[mention.line - 1] !== mention.text) {
+      // Only if the line is still what the search showed. The search cuts a
+      // very long line short, so such a line only has to begin the same way.
+      const line = lines[mention.line - 1] ?? "";
+      const cut = [...mention.text].length >= LONG_LINE;
+      if (cut ? !line.startsWith(mention.text) : line !== mention.text) {
         setReloadTick((t) => t + 1);
         return;
       }
       // Written in the other note, in the link format chosen in Settings.
       const files = await loadLinkIndex(vaultPath, 0);
-      lines[mention.line - 1] = linkMention(mention.text, mention.range, self.name, (shown) =>
+      lines[mention.line - 1] = linkMention(line, mention.range, self.name, (shown) =>
         writeLink(files, vaultPath, mention.filePath, self.relativePath, { alias: shown })
       );
       await window.electronAPI.writeFile(mention.filePath, lines.join("\n"));
@@ -323,12 +366,12 @@ export default function BacklinksPanel({
             <div className="bl-empty">This note links to nothing.</div>
           ) : (
             outgoing.map((link) => (
-              <div key={link.target.toLowerCase()} className="bl-row">
+              <div key={`${link.markdown ? "md:" : ""}${link.target.toLowerCase()}`} className="bl-row">
                 <button
-                  className={`bl-snippet${link.note ? "" : " bl-unresolved"}`}
-                  onClick={() => link.note && onFileOpen(link.note.filePath)}
-                  disabled={!link.note}
-                  title={link.note ? link.note.relativePath : "No note or file with this name"}
+                  className={`bl-snippet${link.opens ? "" : " bl-unresolved"}`}
+                  onClick={() => link.opens && onFileOpen(link.opens)}
+                  disabled={!link.opens}
+                  title={link.where ?? "No note or file with this name"}
                 >
                   <span className="bl-snippet-text">{link.target}</span>
                   {link.count > 1 && <span className="bl-line-num">×{link.count}</span>}

@@ -88,8 +88,11 @@ export function lintMarkdown(
         // [[Note#Heading]] points at Note; [[#Heading]] stays in this note.
         const target = splitWikiTarget(wlMatch[1]).file.toLowerCase();
         if (!target) continue;
+        // A link may name its note by a path ("Folder/Note", "../Note"); the
+        // list holds names, so the last part of the path is what is looked up.
+        const name = target.replace(/\\/g, "/").split("/").pop()!.replace(/\.(md|markdown)$/, "");
         const exists =
-          fileList.some((f) => f.toLowerCase() === target) ||
+          fileList.some((f) => f.toLowerCase() === target || f.toLowerCase() === name) ||
           aliases.some((a) => a.toLowerCase() === target);
         if (!exists) {
           warnings.push({

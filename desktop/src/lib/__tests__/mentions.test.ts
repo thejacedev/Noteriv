@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findMentions, linkMention, outgoingLinks, possibleLinks } from "../mentions";
+import { findMentions, linkMention, markdownFileLinks, outgoingLinks, possibleLinks } from "../mentions";
 
 describe("findMentions", () => {
   it("finds a name written as plain text, ignoring case", () => {
@@ -72,5 +72,20 @@ describe("possibleLinks", () => {
   it("stops at the limit", () => {
     const content = Array.from({ length: 50 }, () => "roadmap").join("\n");
     expect(possibleLinks(content, names, 10)).toHaveLength(10);
+  });
+});
+
+describe("markdown links to files", () => {
+  it("finds the ones that could be files and reads their paths decoded", () => {
+    const line = "See [a](Other%20note.md#Part), ![p](./img/x.png \"t\"), [web](https://x.y/z.md), [top](#Heading) and [m](mailto:a@b.c).";
+    expect(markdownFileLinks(line).map((l) => l.path)).toEqual(["Other note.md", "./img/x.png"]);
+  });
+
+  it("lists them among a note's outgoing links, apart from wiki links of the same name", () => {
+    const content = "[[Plan]] and [plan](Plan.md) and again [p](Plan.md).\n`[code](Plan.md)`\n";
+    expect(outgoingLinks(content)).toEqual([
+      { target: "Plan", line: 1, count: 1 },
+      { target: "Plan.md", line: 1, count: 2, markdown: true },
+    ]);
   });
 });

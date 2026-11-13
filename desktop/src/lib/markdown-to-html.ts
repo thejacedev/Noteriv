@@ -370,3 +370,34 @@ function parseTableRow(line: string): string[] {
     .split("|")
     .map((cell) => cell.trim());
 }
+
+/**
+ * For an export. The converter leaves `[[wiki links]]` as they are written,
+ * because inside the app they are turned into links the app can open. A
+ * page that leaves the app has nothing to open them with: there a link
+ * becomes its text and an embedded picture becomes a picture. Code is left
+ * alone.
+ */
+export function wikiLinksForExport(html: string): string {
+  const attr = (text: string) => text.replace(/"/g, "&quot;");
+  return html
+    .split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part.replace(/(!?)\[\[([^\]|<>]+)(?:\|([^\]<>]+))?\]\]/g, (_all, bang: string, target: string, alias?: string) => {
+            const hash = target.indexOf("#");
+            const file = (hash >= 0 ? target.slice(0, hash) : target).trim();
+            const part = hash >= 0 ? target.slice(hash + 1).replace(/^\^/, "").trim() : "";
+            const name = (file.split("/").pop() || file).replace(/\.(md|markdown)$/i, "");
+            if (bang && /\.(png|jpe?g|gif|svg|webp|bmp|avif)$/i.test(file)) {
+              return `<img src="${attr(file)}" alt="${attr(name)}">`;
+            }
+            // After a picture the part behind the bar is a size, not a name.
+            const shown = alias && !(bang && /^\d+(x\d+)?$/.test(alias.trim())) ? alias.trim() : "";
+            const label = shown || (name && part ? `${name} › ${part}` : name || part);
+            return `<span class="wikilink">${label}</span>`;
+          })
+    )
+    .join("");
+}

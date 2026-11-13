@@ -219,7 +219,7 @@ fn millis(time: std::io::Result<std::time::SystemTime>) -> Option<u64> {
 }
 
 /// Read one note. `rel` is its path inside the vault with `/`.
-fn read_note(path: &Path, rel: &str) -> Option<NoteMeta> {
+fn read_note(path: &Path, rel: &str, files: &crate::links::Index) -> Option<NoteMeta> {
     let content = fs::read_to_string(path).ok()?;
     let stat = fs::metadata(path).ok()?;
     let mtime = millis(stat.modified()).unwrap_or(0);
@@ -246,13 +246,30 @@ fn read_note(path: &Path, rel: &str) -> Option<NoteMeta> {
         ..NoteMeta::default()
     };
     scan_body(body, &mut meta);
+    // Ordinary markdown links to files of the vault count as links too. Each
+    // is recorded as the path it leads to, which is a form every reader of
+    // the index resolves the same way wherever the note is.
+    for target in crate::links::markdown_targets(files, rel, body) {
+        let lower = target.to_ascii_lowercase();
+        let shown = if lower.ends_with(".markdown") {
+            &target[..target.len() - 9]
+        } else if lower.ends_with(".md") {
+            &target[..target.len() - 3]
+        } else {
+            target.as_str()
+        };
+        if !meta.links.iter().any(|link| link.eq_ignore_ascii_case(shown)) {
+            meta.links.push(shown.to_string());
+        }
+    }
     Some(meta)
 }
 
 /// Every note in the vault, in the order the app lists notes in.
 pub(crate) fn index_vault(vault: &Path) -> Vec<NoteMeta> {
-    crate::links::list_vault(vault)
-        .into_iter()
+    let all = crate::links::list_vault(vault);
+    let files = crate::links::Index::new(&all);
+    all.iter()
         .filter(|rel| {
             let lower = rel.to_ascii_lowercase();
             lower.ends_with(".md") || lower.ends_with(".markdown")
@@ -262,7 +279,7 @@ pub(crate) fn index_vault(vault: &Path) -> Vec<NoteMeta> {
             for part in rel.split('/') {
                 path.push(part);
             }
-            read_note(&path, &rel)
+            read_note(&path, rel, &files)
         })
         .collect()
 }
@@ -275,6 +292,26 @@ mod tests {
         let mut meta = NoteMeta::default();
         scan_body(body, &mut meta);
         meta
+    }
+
+    #[test]
+    fn ordinary_markdown_links_are_indexed_as_the_files_they_lead_to() {
+        let vault = std::env::temp_dir().join(format!("noteriv-index-md-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&vault);
+        std::fs::create_dir_all(vault.join("Projects")).unwrap();
+        std::fs::write(vault.join("Plan.md"), "# Plan\n").unwrap();
+        std::fs::write(vault.join("photo.png"), "png").unwrap();
+        std::fs::write(
+            vault.join("Projects/Alpha.md"),
+            "Up to [the plan](../Plan.md), a picture ![p](/photo.png), a wiki link [[Plan]] and [a page](https://example.com).\n",
+        )
+        .unwrap();
+
+        let notes = index_vault(&vault);
+        let alpha = notes.iter().find(|n| n.relative_path == "Projects/Alpha.md").unwrap();
+        // The wiki link as written, then each markdown link once as a path; "Plan" is not listed twice.
+        assert_eq!(alpha.links, ["Plan", "photo.png"]);
+        let _ = std::fs::remove_dir_all(&vault);
     }
 
     #[test]

@@ -577,6 +577,85 @@ struct MarkdownHit<'a> {
     encoded: bool,
 }
 
+/// The files of the vault that the markdown links in a note point at:
+/// `[text](Other.md)` and `![](photo.png)`, each as a path inside the vault,
+/// once, in the order they are first met. Links in code are examples and
+/// are left out, as they are when a rename rewrites links.
+///
+/// The vault index adds these to a note's wiki links, so a vault written
+/// with ordinary markdown links has its backlinks and its graph too.
+pub(crate) fn markdown_targets(index: &Index, note: &str, content: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    if !content.contains("](") {
+        return found;
+    }
+    let mut fence: Option<(char, usize)> = None;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        let marker = trimmed.chars().next().filter(|c| *c == '`' || *c == '~');
+        let run = marker.map_or(0, |m| trimmed.chars().take_while(|c| *c == m).count());
+        if let Some((open, length)) = fence {
+            if marker == Some(open) && run >= length && trimmed[run..].trim().is_empty() {
+                fence = None;
+            }
+            continue;
+        }
+        if indent <= 3 && run >= 3 && (marker != Some('`') || !trimmed[run..].contains('`')) {
+            fence = marker.map(|m| (m, run));
+            continue;
+        }
+
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'`' => {
+                    // Inline code: skip to the closing run of the same length.
+                    let run = bytes[i..].iter().take_while(|b| **b == b'`').count();
+                    let mut j = i + run;
+                    let mut close = None;
+                    while j < bytes.len() {
+                        if bytes[j] == b'`' {
+                            let n = bytes[j..].iter().take_while(|b| **b == b'`').count();
+                            if n == run {
+                                close = Some(j + n);
+                                break;
+                            }
+                            j += n;
+                        } else {
+                            j += 1;
+                        }
+                    }
+                    i = close.unwrap_or(i + run);
+                }
+                b']' if bytes.get(i + 1) == Some(&b'(') => {
+                    let start = i + 2;
+                    let Some(end) = destination_end(line, start).filter(|end| *end > start) else {
+                        i += 2;
+                        continue;
+                    };
+                    let dest = &line[start..end];
+                    let place = parse_destination(dest);
+                    let hit = index.markdown(note, &dest[place.from..place.to]);
+                    match hit {
+                        Some(hit) => {
+                            if !found.iter().any(|f| f == hit.file) {
+                                found.push(hit.file.to_string());
+                            }
+                            i = end + 1;
+                        }
+                        // Not a link to a file: look again after its first ")".
+                        None => i = line[start..].find(')').map_or(end, |k| start + k) + 1,
+                    }
+                }
+                _ => i += 1,
+            }
+        }
+    }
+    found
+}
+
 // ============================================================
 // One rename
 // ============================================================
@@ -1183,6 +1262,31 @@ mod tests {
     }
 
     // ── The resolver ──
+
+    #[test]
+    fn the_markdown_links_of_a_note_are_listed_as_the_files_they_lead_to() {
+        let index = Index::new(&files(&[
+            "Plan.md",
+            "Projects/Alpha.md",
+            "Projects/Notes/Deep.md",
+            "attachments/photo one.png",
+        ]));
+        let text = [
+            "See [alpha](Alpha.md), [again](./Alpha.md#Goals) and [deep](Notes/Deep.md \"title\").",
+            "Up: [plan](../Plan.md). A picture: ![p](/attachments/photo%20one.png)",
+            "Not files: [web](https://example.com/a.md) [mail](mailto:a@b.c) [here](#Heading) [gone](Missing.md)",
+            "`[code](Plan.md)` stays an example.",
+            "```",
+            "[fenced](Plan.md)",
+            "```",
+        ]
+        .join("\n");
+        assert_eq!(
+            markdown_targets(&index, "Projects/Beta.md", &text),
+            ["Projects/Alpha.md", "Projects/Notes/Deep.md", "Plan.md", "attachments/photo one.png"]
+        );
+        assert!(markdown_targets(&index, "Plan.md", "No links here, only [[Alpha]].").is_empty());
+    }
 
     #[test]
     fn notes_resolve_the_way_the_frontend_resolves_them() {

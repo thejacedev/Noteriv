@@ -5,6 +5,8 @@
  * plain text: a whole word or phrase, outside any link and outside code.
  */
 
+import { isExternalPath, parseDestination, percentDecode } from "./link-resolve";
+
 export interface TextRange {
   from: number;
   to: number;
@@ -109,6 +111,8 @@ export interface OutgoingLink {
   line: number;
   /** How many times the note links to it. */
   count: number;
+  /** Written as an ordinary markdown link, `[text](target)`, whose path is read from the note's own folder. */
+  markdown?: boolean;
 }
 
 /** The notes and files a note links to, each once, in order of first appearance. */
@@ -131,8 +135,33 @@ export function outgoingLinks(content: string): OutgoingLink[] {
       if (existing) existing.count++;
       else found.set(key, { target, line: index + 1, count: 1 });
     }
+    // Ordinary markdown links to files: [text](Other.md), ![](photo.png).
+    for (const link of markdownFileLinks(line)) {
+      if (code.some((s) => link.at >= s.from && link.at < s.to)) continue;
+      const key = `](${link.path.toLowerCase()}`;
+      const existing = found.get(key);
+      if (existing) existing.count++;
+      else found.set(key, { target: link.path, line: index + 1, count: 1, markdown: true });
+    }
   });
   return [...found.values()];
+}
+
+/**
+ * The markdown links on a line that could lead to a file of the vault: not
+ * a web or mail address, and not a heading of the same note. `path` is the
+ * file part, decoded, the way the resolver reads it.
+ */
+export function markdownFileLinks(line: string): { path: string; at: number }[] {
+  const links: { path: string; at: number }[] = [];
+  const regex = /\]\(((?:[^()]|\([^()]*\))+?)\)/g;
+  let match;
+  while ((match = regex.exec(line)) !== null) {
+    const written = parseDestination(match[1]).path;
+    if (!written || isExternalPath(written)) continue;
+    links.push({ path: percentDecode(written) ?? written, at: match.index });
+  }
+  return links;
 }
 
 export interface PossibleLink {

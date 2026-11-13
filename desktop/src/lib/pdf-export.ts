@@ -2,7 +2,7 @@
  * PDF Export — converts markdown to styled HTML and triggers the browser print dialog.
  */
 
-import { markdownToHTML } from "./markdown-to-html";
+import { markdownToHTML, wikiLinksForExport } from "./markdown-to-html";
 
 /**
  * Print stylesheet for PDF export.
@@ -177,7 +177,7 @@ export async function exportToPDF(
   content: string,
   title: string
 ): Promise<void> {
-  const htmlContent = markdownToHTML(content);
+  const htmlContent = wikiLinksForExport(markdownToHTML(content));
 
   const displayTitle = title.replace(/\.(md|markdown)$/i, "");
 
