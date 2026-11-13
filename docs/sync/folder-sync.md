@@ -110,7 +110,7 @@ Folder sync carries these file types, in every folder of the vault that you have
 
 - Always: notes and text (`.md`, `.markdown`, `.txt`) and vault files (`.canvas`, `.drawing`, `.base`, `.json`, `.csv`, `.css`, `.yaml`, `.yml`)
 - Unless you turn them off: images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp`, `.avif`) and PDFs (`.pdf`)
-- Only if you turn them on: audio (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`) and video (`.mp4`, `.webm`, `.mov`, `.mkv`)
+- Only if you turn them on: audio (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`) and video (`.mp4`, `.mov`, `.mkv`). A `.webm` file syncs with either one
 
 Other file types stay where they are. The folders `.git`, `.obsidian`, `.trash` and `node_modules` are never synced, on either side. Neither is `.noteriv`, apart from three settings files that you can choose to add.
 

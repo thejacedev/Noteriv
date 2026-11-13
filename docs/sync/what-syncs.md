@@ -19,8 +19,8 @@ The options are in Settings > Sync, under **Additional Sync Provider**. They app
 |---|---|---|
 | Images | On | Syncs `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp` and `.avif` files |
 | PDFs | On | Syncs `.pdf` files |
-| Audio | Off | Syncs `.mp3`, `.wav`, `.m4a`, `.ogg` and `.flac` files |
-| Video | Off | Syncs `.mp4`, `.webm`, `.mov` and `.mkv` files |
+| Audio | Off | Syncs `.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac` and `.webm` files |
+| Video | Off | Syncs `.mp4`, `.mov`, `.mkv` and `.webm` files |
 | Vault settings | Off | Syncs the vault's bookmarks, property types and saved layouts. See [Vault Settings](#vault-settings) |
 | Folders to leave out | Empty | Leaves the folders you list out of sync. See [Folders to Leave Out](#folders-to-leave-out) |
 
@@ -73,7 +73,7 @@ Once a sync has run without the files, Noteriv keeps no record of them. When you
 
 **Audio** and **Video** are off until you turn them on, because these files are large. When you turn one on, the next sync picks up every file of that kind, on both sides, as described above.
 
-Recordings made with the Audio Recorder are saved as `.webm` files. `.webm` counts as video here, so recordings sync when **Video** is on, not when **Audio** is on.
+A `.webm` file can hold sound or video, so it syncs when either **Audio** or **Video** is on. Recordings made with the Audio Recorder are saved as `.webm` files, which means they sync with **Audio**.
 
 ## Folders to Leave Out
 
@@ -130,7 +130,7 @@ These three files are not treated like notes. When one of them changed on both s
 
 Whatever was only in the other file is gone: a bookmark you added on the other device, for example. No notice is shown.
 
-The same rule applies the first time a device syncs with the option on. If the device already has one of these files and it differs from the copy on the other side, one replaces the other in the same way. If a device has bookmarks or layouts you want to keep, copy the three files somewhere safe before you turn the option on for another device.
+The same rule applies the first time a device syncs with the option on, if it already has one of these files and the copy on the other side differs. The bookmarks file is written only when the bookmarks change, so a device does not count as the newer one for having opened the vault.
 
 ### With Encryption
 

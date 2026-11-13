@@ -17,7 +17,7 @@ Noteriv checks for the following issues in the current file:
 
 ### Broken Wiki-Links (Error)
 
-Every `[[target]]` wiki-link in the file is checked against the vault's file list. If the target does not match any existing file (case-insensitive basename comparison), the lint panel reports an error.
+Every `[[target]]` wiki-link in the file is checked against the names and [aliases](./wiki-links.md#note-aliases) of the notes in the vault, without regard to case. If the target matches none of them, the lint panel reports an error. A link written as a path, such as `[[Projects/Plan]]`, is checked by its last part, so it is not reported as broken (after 2.4.13). Ordinary markdown links, such as `[text](Note.md)`, are not checked.
 
 ```
 Line 15, Col 3: Broken wiki-link: [[nonexistent-note]]
@@ -161,7 +161,7 @@ The linter is aware of fenced code blocks. Tags, wiki-links, and headings inside
 
 ### Wiki-Links
 
-Broken wiki-link detection depends on the vault's file list being available. The linter receives a list of all filenames (without extensions) and checks each wiki-link target against it. If the file list is not available (e.g., the vault has not finished loading), wiki-link checks are skipped.
+Broken wiki-link detection depends on the vault's file list being available. The linter receives the names of all notes (without extensions) and their aliases, and checks each wiki-link target against them. If the file list is not available (e.g., the vault has not finished loading), wiki-link checks are skipped.
 
 ### Tags
 

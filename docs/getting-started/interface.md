@@ -133,6 +133,7 @@ Some file types and features open specialized views in the editor area instead o
 - **Graph view** (`Ctrl+G`) -- An interactive force-directed graph showing how notes connect through wiki-links.
 - **Calendar view** -- A month calendar that shows daily notes and tasks with due dates.
 - **Slide presentation** -- Present any note as slides, split by `---` horizontal rules.
+- **Web page reader** -- The "Open the Web Page Reader" command shows the readable article of a web page in place of the tab in front, and can save it as a note. It is a reader, not a browser: the page is never run. See [Web Page Reader](../features/web-reader.md).
 
 ## Status bar
 

@@ -5,7 +5,7 @@ order: 2
 
 # Graph View
 
-The graph view visualizes the connections between your notes as a force-directed network diagram. Every note in your vault becomes a node, and every `[[wiki-link]]` between notes becomes an edge. The result is an interactive map of your knowledge base that lets you see how ideas relate, spot isolated notes, and navigate between topics spatially.
+The graph view visualizes the connections between your notes as a force-directed network diagram. Every note in your vault becomes a node, and every link between notes becomes an edge. The result is an interactive map of your knowledge base that lets you see how ideas relate, spot isolated notes, and navigate between topics spatially.
 
 The graph can show the whole vault or only the notes around the one you have open. A settings panel in the graph filters what is drawn, colours notes in groups, and changes how the graph looks and moves.
 
@@ -25,7 +25,7 @@ The graph opens as a full-screen overlay on top of the editor. Press `Escape` or
 When you open the graph, Noteriv reads the links of every `.md` and `.markdown` file in the active vault. For each note it:
 
 1. Creates a **node** using the file name (without the `.md` extension) as the label.
-2. Takes the `[[wiki-link]]` and `![[embed]]` references in the note. Links inside code blocks and inline code are not counted.
+2. Takes the links in the note. A link is a `[[wiki-link]]`, an `![[embed]]`, or a markdown link such as `[text](Folder/Note.md)` that leads to a file in the vault (markdown links after 2.4.13). Links inside code blocks and inline code are not counted.
 3. Creates a directed **edge** from the note to each note it links to.
 
 A link is matched to a note by name, by path inside the vault, or by one of the note's [aliases](../features/wiki-links.md#note-aliases). Links are resolved case-insensitively. If your file contains `[[Meeting Notes]]` and a file named `meeting notes.md` exists, they are connected. A one-way link has an arrowhead at its target. When both notes link to each other, the relationship is drawn with arrowheads at both ends. Repeated links in the same direction are collapsed into one relationship.

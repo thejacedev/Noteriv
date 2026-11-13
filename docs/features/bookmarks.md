@@ -92,7 +92,9 @@ Bookmarks are stored per vault, in the file `.noteriv/bookmarks.json` inside the
 
 Notes, folders and headings are stored by their path from the top of the vault, so the bookmarks work wherever the vault folder is. A bookmarks file that holds full paths is still read.
 
-To have the same bookmarks on every device, switch on **Vault settings** for folder sync or WebDAV sync. Read [Vault Settings](../sync/what-syncs.md#vault-settings) first: when two devices have different bookmarks files, one replaces the other whole and no copy is kept, and that includes the first sync of a second device.
+To have the same bookmarks on every device, switch on **Vault settings** for folder sync or WebDAV sync. When two devices have changed their bookmarks, the newer file replaces the other whole; nothing is merged. See [Vault Settings](../sync/what-syncs.md#vault-settings) for the rule, and for how push-only and pull-only folder sync differ.
+
+The file is written only when the bookmarks change. A vault that has never had a bookmark has no `bookmarks.json`.
 
 ## Renaming, Moving and Deleting
 

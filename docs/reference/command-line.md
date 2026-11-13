@@ -214,8 +214,11 @@ Creates a note in Noteriv and opens it.
 
 Where the note goes:
 
-- With a name, the note is made at [that path](#a-note-to-make) from the top of the vault. A name with no folder in it puts the note at the top of the vault.
-- With no name, the note is called `Untitled.md`, or `Untitled 2.md`, `Untitled 3.md` and so on if that is taken. It goes in the folder set by [New notes go](../features/file-settings.md#where-new-notes-go). If that setting is **Beside the open note**, the top of the vault is used.
+- With a name that has a folder in it, such as `Projects/Alpha`, the note is made at [that path](#a-note-to-make) from the top of the vault.
+- With a name that has no folder in it, the note goes in the folder set by [New notes go](../features/file-settings.md#where-new-notes-go).
+- With no name, the note is called `Untitled.md`, or `Untitled 2.md`, `Untitled 3.md` and so on if that is taken. It goes in the same folder.
+
+If the setting is **Beside the open note**, the folder of the note open in the app is used when the request is for the vault that is open. For another vault, or with no note open, the top of the vault is used.
 
 When a note with that name is already there:
 
@@ -261,7 +264,7 @@ Creates a note named by the date and time, such as `202611131045.md`, and opens 
 |---|---|
 | `--content TEXT` | The text of the note |
 
-The note goes in the folder set by [New notes go](../features/file-settings.md#where-new-notes-go). If that setting is **Beside the open note**, the top of the vault is used.
+The note goes in the folder set by [New notes go](../features/file-settings.md#where-new-notes-go), with the same rule for **Beside the open note** as [`new`](#new).
 
 ```bash
 noteriv unique --content "Call back about the invoice"

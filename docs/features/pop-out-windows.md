@@ -61,9 +61,9 @@ The window uses the theme, the accent colour and the editor font, font size and 
 
 A pop-out window saves by itself. It writes the note to its file a little under a second after you stop typing. The bar shows `Saving…` while there is something to save, and `Saved` when the file is up to date.
 
-Wait for `Saved` before you close the window. Text typed in the last moment before closing may not have been written yet.
+A save that is still waiting is made at once when the window loses focus, for example when you click another window. If you close the window within that second without leaving it first, the last words typed may not be written. Wait for `Saved` if you want to be sure.
 
-If the note cannot be written, the bar says `The note could not be saved.`
+Before each save, the window checks that the file is still what it last read. If it is not, the save is refused: see the next section.
 
 ## Changes Made Elsewhere
 
@@ -71,12 +71,29 @@ While a pop-out window is visible and has nothing waiting to be saved, it reads 
 
 It works in the other direction too: a tab in the main window that has no unsaved changes takes up what a pop-out window saves.
 
-Two cases to watch for:
+### When a Save Is Refused
 
-- **Typing in two places at once.** A pop-out window does not take up outside changes while it has unsaved typing of its own, and it then saves its own text over the file. Edit a note in one window at a time.
-- **Renaming, moving or deleting the note.** A pop-out window stays on the path the note had when the window opened. It does not follow a note that is renamed or moved in the main window. Close the pop-out window before you do that. If you type in it afterwards, the note is written again under its old name.
+A pop-out window does not write over a change it has not seen. If the file changed, moved or went away between the window's last read and its save, the save is not made, the window stops saving, and the bar shows a message with two buttons:
 
-If the note is already gone when the window opens, the bar says `This note is no longer there.`
+| Message | When |
+|---|---|
+| `This note was changed somewhere else. What you typed here is not saved.` | The file holds something other than what the window last read: the main window, a sync or another program wrote it |
+| `This note could not be saved. It may have been moved or deleted.` | The file is not at its path any more, or could not be written |
+
+| Button | What it does |
+|---|---|
+| **Load the other version** | Shows the note as it is on disk now. What you typed in this window since its last save is given up |
+| **Save mine anyway** | Writes what is in this window over the file, whatever it holds. If the note was moved or deleted, this makes a note at the old path again |
+
+Nothing is saved from this window until you pick one of the two.
+
+A pop-out window stays on the path the note had when the window opened. It does not follow a note that is renamed or moved in the main window. If the note is gone when the window opens, or when you choose **Load the other version**, the bar says `This note is no longer there.`
+
+## Following Links
+
+Clicking a `[[wiki-link]]` to another note shows that note in the same window, in place of the one that was there. Anything waiting to be saved is saved first. If that save is refused, the window stays on the note.
+
+The link is matched against note names and paths. The part after `#` is not used, so the note opens at its top, and a link written with an alias is not followed.
 
 ## Closing
 

@@ -143,6 +143,7 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Save Workspace Layout | -- |
 | Open the Note in a New Window | -- |
 | Move the Note to a New Window | -- |
+| Open the Web Page Reader | -- |
 
 ### Edit
 

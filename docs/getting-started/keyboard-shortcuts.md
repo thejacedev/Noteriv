@@ -243,6 +243,7 @@ Many commands do not have a default keyboard shortcut but can be accessed throug
 | Import Notes from Another App | Bring in notes from Evernote, Notion, Google Keep and other apps |
 | Open the Note in a New Window | Show the current note in a pop-out window |
 | Move the Note to a New Window | Show the current note in a pop-out window and close its tab |
+| Open the Web Page Reader | Show the web page reader in place of the tab in front |
 
 To bind any of these to a keyboard shortcut, open Settings (`Ctrl+,`), go to the Shortcuts section, find the action, and press the key combination you want to assign.
 

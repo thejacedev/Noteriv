@@ -58,6 +58,13 @@ The buttons change to **Done** and **Import again**. The file list is read again
 
 **Import again** runs the same import a second time. Nothing is replaced, so the notes are imported again under numbered names.
 
+If the import ran but wrote nothing, the dialog says so and the buttons stay **Cancel** and **Import**:
+
+| Message | When |
+|---|---|
+| `Nothing was imported: no notes were found in what you chose.` | The export was read, and there was no note in it to write. This happens, for example, when every page in the export is empty |
+| `Nothing was imported.` followed by how many items were left out | Every item was left out, for example because every note is in the trash. The list under the sentence gives the reason for each |
+
 If the import could not be done, the reason is shown in place of the sentence. The buttons stay **Cancel** and **Import**. See [When an import is refused](#when-an-import-is-refused).
 
 ## Where the notes go

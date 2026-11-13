@@ -112,8 +112,9 @@ If the text cannot be read as a base, the reason is shown under the box and in p
 
 Things to know:
 
-- **Save** is only shown while the text is on show. If you hide the text with changes in it, they are kept, and the `Not saved` label stays. Show the text again to save.
-- Changes that are not saved are lost when you switch to another tab or close the base. There is no warning.
+- A base that reads correctly is saved by itself, a little under a second after you stop typing. Text that cannot be read as a base is not saved while you type, so a half-written line does not replace the file.
+- When you leave the tab, by switching to another tab or closing the base, whatever is not saved yet is written to the file as it is, whether or not it reads as a base. Nothing you typed is lost on a change of tab.
+- **Save** is only shown while the text is on show. If you hide the text with changes in it, they are kept, and the `Not saved` label stays until they are saved.
 - The tab reads the file when it opens. It does not pick up a change made to the file somewhere else while it is open.
 
 ### How Values Are Shown
@@ -586,7 +587,7 @@ These are known for every row. The last column is the heading a column gets when
 | `file.ctime` | When the note was created, as a date with a time. Where the system does not record this, the modified time | created time |
 | `file.mtime` | When the note was last modified, as a date with a time | modified time |
 | `file.tags` | The note's tags, from its text and from the `tags` property | file tags |
-| `file.links` | The `[[links]]` and `![[embeds]]` in the text of the note | links |
+| `file.links` | The `[[links]]` and `![[embeds]]` in the text of the note, and its markdown links to files in the vault | links |
 | `file.embeds` | Always an empty list. Embeds are in `file.links` | embeds |
 | `file.backlinks` | Links to the files that link to this one | backlinks |
 | `file.properties` | All of the note's frontmatter, as one mapping | properties |
@@ -596,7 +597,7 @@ Any other name after `file.` gives the error `There is no file property called "
 
 Things to know:
 
-- `file.links`, `file.backlinks` and `file.hasLink()` only see links written as `[[…]]` in the text of a note. A link inside a frontmatter property is not counted, and neither is a link inside code.
+- `file.links`, `file.backlinks` and `file.hasLink()` see the links in the text of a note: `[[…]]` links, embeds, and markdown links such as `[text](Folder/Note.md)` that lead to a file in the vault. A link inside a frontmatter property is not counted, and neither is a link inside code.
 - `tags` on its own is the `tags` property of the frontmatter. `file.tags` also holds the tags written in the text. To test for a tag, `file.hasTag("book")` covers both, and nested tags too.
 
 ### Empty Values
@@ -1037,7 +1038,7 @@ A cell that failed is sorted last, is grouped under `None`, and counts as empty 
 - **`file.embeds`** is always empty.
 - **Links in properties** are not counted by `file.links`, `file.backlinks` or `file.hasLink()`.
 - **Files that are not notes** have no size or dates.
-- **Opening a link from a base's tab.** A file's name always opens the file. A link in another column opens when it is written as a path from the top of the vault, or names a note at the top of the vault. Inside a note, links in a base are found by name, the way [wiki-links](../features/wiki-links.md) are.
+- **Opening a link.** A file's name always opens the file. A link in another column is found the way a [wiki-link](../features/wiki-links.md#how-resolution-works) is, by name as well as by path, in a base's tab and inside a note. The part after `#` is not used: the file opens at its top.
 - **Date formats** use English month and weekday names.
 - **Long frontmatter.** Frontmatter longer than 64 KiB is not read, and the note is listed with no properties.
 - **Refreshing** is by hand, with the **Refresh** button.
@@ -1167,7 +1168,7 @@ views:
 ## Tips
 
 - **Start from Create New Base.** The file it makes is a working base. Change one key at a time with **Edit as text** and watch the view.
-- **Save before you leave the tab.** Text that is not saved is lost when you switch tabs.
+- **Watch the `Not saved` label.** It stays while the text does not read as a base. Fix the line the message names, and the base saves itself.
 - **Quote a statement when in doubt.** Single quotes around a filter or formula keep YAML from reading it its own way.
 - **Filter on the extension** to keep images and other files out of a base: `file.ext == "md"`.
 - **Use `file.hasTag()` for tags.** It sees tags in the text and in the frontmatter, and nested tags.

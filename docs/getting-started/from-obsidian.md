@@ -31,6 +31,8 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | `[[Note]]` and `[[Note\|alias]]` links | Work, including links by name to notes in other folders |
 | `[[Note#Heading]]` and `[[Note#^block]]` links | Open the note at that heading or block (from 2.4.9) |
 | `aliases` in frontmatter | A link or an embed written with an alias finds the note, and link suggestions and Quick Open find the note by its aliases (after 2.4.13). See [Note Aliases](/features/wiki-links#note-aliases) |
+| Markdown links to notes, such as `[text](Folder/Note.md)`, `[text](../Note.md)` and `[text](Note.md#Heading)` | Open the note or file on a click, at the heading, block or PDF page (after 2.4.13). They count as links in the links panel, the graph and bases, and are updated when a file is renamed or moved. A path is looked for from the top of the vault, then from the note's folder; `./` and `../` start at the note's folder and `/` at the top of the vault. See [Markdown Links](/features/wiki-links#markdown-links) |
+| Link format settings: "New link format" and "Use \[\[Wikilinks\]\]" | Both are in Settings > General, with the same three path choices and a switch for wiki-links (after 2.4.13). They apply to links Noteriv adds from now on: link suggestions, the Link buttons in the links panel, the Attachment Manager and the Audio Recorder. Links already in your notes are not converted. See [Link Format](/features/wiki-links#link-format) |
 | `![[Note]]`, `![[Note#Heading]]` and `![[Note#^block]]` embeds | Shown inline when the embed is on a line of its own (from 2.4.10). Inside a sentence it stays a link |
 | `![[image.png]]` and `![[image.png\|160]]` embeds | The image is shown, found by name anywhere in the vault (from 2.4.10) |
 | `![[audio.mp3]]` and `![[video.mp4]]` embeds | A player is shown in the note (after 2.4.13) |
@@ -47,7 +49,7 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | `%%comments%%`, inline and as a block | Dimmed in live mode, hidden in view mode, and left out of published pages and PDFs (after 2.4.13). See [Comments](/editor/comments) |
 | LaTeX math and Mermaid diagrams | Work |
 | `.canvas` files | Open in the canvas view. Noteriv reads and writes JSON Canvas (after 2.4.13): text, file, web page and group cards are shown, with connections and their labels, arrows and colours. File cards show the note, image, PDF page or player. Fields Noteriv does not use are written back as they were. See [Canvas](/views/canvas#opening-a-canvas-from-another-app) |
-| Links updated when a note is renamed or moved | Done for notes, attachments and folders renamed in the desktop app (after 2.4.13). See [Renaming and Moving Notes](/features/wiki-links#renaming-and-moving-notes) |
+| Links updated when a note is renamed or moved | Done for notes, attachments and folders renamed in the desktop app (after 2.4.13). Wiki-links, embeds and markdown links are all followed, and each keeps the form it was written in. See [Renaming and Moving Notes](/features/wiki-links#renaming-and-moving-notes) |
 | Search operators: `file:`, `path:`, `content:`, `tag:`, `line:()`, `section:()`, `block:()`, `task:`, `[property]`, `/regex/`, `OR`, `-` | Work in Vault Search (after 2.4.13). See [Search Queries](/features/search#search-queries) |
 | `query` code blocks | Show search results in the note (after 2.4.13). See [Search Results in a Note](/features/search#search-results-in-a-note) |
 | Backlinks, unlinked mentions and outgoing links | In the [links panel](/features/wiki-links#links-panel), which also lists possible links (after 2.4.13) |
@@ -59,6 +61,7 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | Pinned commands in the command palette | Work (after 2.4.13). See [Pinning Commands](/features/command-palette#pinning-commands) |
 | Workspaces | Saved under a name with **Manage Workspace Layouts** (after 2.4.13). Workspaces saved in Obsidian are not read. See [Workspace Layouts](/features/workspaces) |
 | Pop-out windows | **Open the Note in a New Window** and **Move the Note to a New Window** (after 2.4.13). The window is a small live-mode editor with no tabs, sidebar or panels. See [Pop-Out Windows](/features/pop-out-windows) |
+| Web viewer | A reader, not a viewer (after 2.4.13). Obsidian's Web viewer shows the live page. Noteriv fetches the page's HTML and shows the article from it, as text and pictures, and never runs the page: no scripts, no forms, no signing in, no video. It can save the page as a note. Run **Open the Web Page Reader**, or turn on **Open web links in the reader** in Settings > General. See [Web Page Reader](/features/web-reader) |
 | `obsidian://` links | `noteriv://` links with the actions `open`, `new`, `daily`, `unique` and `search`, and the short form `noteriv://vault/Vault/Note` (after 2.4.13). A link cannot replace a note, and the app asks before a link creates a note or adds to one. See [Command Line and Links](/reference/command-line#links) |
 
 ## What does not carry over yet

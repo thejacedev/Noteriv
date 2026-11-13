@@ -95,7 +95,7 @@ WebDAV sync carries these file types, in every folder of the vault that you have
 
 - Always: notes and text (`.md`, `.markdown`, `.txt`) and vault files (`.canvas`, `.drawing`, `.base`, `.json`, `.csv`, `.css`, `.yaml`, `.yml`)
 - Unless you turn them off: images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.bmp`, `.avif`) and PDFs (`.pdf`)
-- Only if you turn them on: audio (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`) and video (`.mp4`, `.webm`, `.mov`, `.mkv`)
+- Only if you turn them on: audio (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`) and video (`.mp4`, `.mov`, `.mkv`). A `.webm` file syncs with either one
 
 Other file types stay on the device. The folders `.git`, `.obsidian`, `.trash` and `node_modules` are never synced. Neither is `.noteriv`, apart from three settings files that you can choose to add.
 
@@ -270,7 +270,7 @@ In an encrypted folder, Noteriv only takes a file from the server if its key ope
 
 A refused file is tried again on every sync, so the message comes back until you delete or replace the file on the server.
 
-The reverse is refused as well. If no password is set and the folder has no key file, a file on the server that starts the way an encrypted file does is not written into the vault:
+The reverse is refused as well. If no password is set and the folder has no key file, a file on the server that Noteriv encrypted is not written into the vault. This is the case when the key file of an encrypted folder has gone missing. A note that only happens to begin with the same letters as an encrypted file is an ordinary note and syncs as usual.
 
 ```text
 1 file could not be synced. Note.md: The copy on the server is encrypted, and this vault is not set up to read it, so it was left alone.

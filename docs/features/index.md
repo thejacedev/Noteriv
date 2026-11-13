@@ -77,6 +77,10 @@ Save the open notes, the split, the file list and the side panels under a name, 
 
 Open a note in a small window of its own, next to the main window.
 
+### [Web Page Reader](./web-reader.md)
+
+Read a web page inside Noteriv as an article and save it as a note. The reader fetches the page's HTML and shows its text and pictures. It is not a browser: the page is never run, so scripts, forms and sign-ins are left out.
+
 ## History and Recovery
 
 ### [File Recovery](./file-recovery.md)

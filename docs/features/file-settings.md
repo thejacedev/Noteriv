@@ -15,7 +15,7 @@ These settings decide where new notes go, where attachments are saved, which fil
 | Deleted files | Move to Noteriv's trash, Move to the system trash | Move to Noteriv's trash |
 | Excluded files | One pattern per line | Empty |
 
-The same section has **Reveal the open note**, described in [File List](./file-list.md#reveal-the-open-note).
+The same section has **Reveal the open note**, described in [File List](./file-list.md#reveal-the-open-note), **New link format** and **Use \[\[Wikilinks\]\]**, described under [Link Format](./wiki-links.md#link-format), and **Open web links in the reader**, described in [Web Page Reader](./web-reader.md).
 
 ## Where New Notes Go
 
@@ -34,6 +34,8 @@ The setting is used by:
 - **New File** (`Ctrl+N`), the new-file button in the sidebar header and the new-note button in the ribbon. The note is called `Untitled`, or `Untitled 2`, `Untitled 3` and so on if that name is taken.
 - **Create New Unique Note**, described below.
 - **Create New Base**, which makes a `.base` file. See [Bases](../views/bases.md).
+- On the [command line](../reference/command-line.md), `noteriv unique`, and `noteriv new` with no name or with a name that has no folder in it. The `noteriv://` links that do the same follow it too.
+- **Save to vault** in the [web page reader](./web-reader.md). There, **Beside the open note** counts as the top of the vault.
 
 It is not used when you right-click a folder in the file list and choose **New File**. That note is created in the folder you clicked.
 
@@ -59,6 +61,13 @@ The note is created where **New notes go** says. The command has no default shor
 - An image you add to a [canvas](../views/canvas.md) from outside the vault. It is copied into this folder.
 
 Write a folder inside the vault, such as `attachments` or `files/media`. If the box is empty, `attachments` is used.
+
+How the link to an attachment is written depends on where it comes from:
+
+| Added by | What is put in the note |
+|---|---|
+| The Attachment Manager, the Audio Recorder | A link in the format chosen under [Link Format](./wiki-links.md#link-format). With the default settings a picture, a sound file or a video is embedded as `![[photo.png]]`, and a PDF or any other file is linked as `[[paper.pdf]]`. Versions up to 2.4.13 write `![photo.png](attachments/photo.png)` |
+| Dropping an image onto the editor | `![](attachments/photo.png)`, with the attachment folder at the start of the path |
 
 Things to know:
 

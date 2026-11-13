@@ -51,7 +51,7 @@ Image syntax (`![alt](url)`) is replaced with the actual image, rendered inline 
 
 ### Links
 
-`[text](url)` links are rendered as clickable styled text. The URL portion is hidden on non-cursor lines. You can `Ctrl+Click` a link to open it in your default browser or navigate to it if it is an internal wiki-link.
+`[text](url)` links are rendered as clickable styled text. The URL portion is hidden on non-cursor lines. Click a web link to open it in your default browser, or in the [web page reader](../features/web-reader.md) if you have turned that on. Click a link whose address is a path, such as `[the plan](Projects/Plan.md)`, to open that note or file (after 2.4.13). See [Markdown Links](../features/wiki-links.md#markdown-links).
 
 ### Wiki-Links
 

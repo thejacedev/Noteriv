@@ -126,6 +126,16 @@ KaTeX supports a wide range of LaTeX commands including fractions (`\frac`), int
 [Noteriv Website](https://www.noteriv.com)
 ```
 
+### Markdown Links to Notes
+
+```markdown
+[the plan](Projects/Plan.md)
+[its scope](Projects/Plan.md#Scope)
+[a neighbour](./Other.md)
+```
+
+In the desktop app (after 2.4.13), a markdown link whose address is a path opens that note or file. The path is looked for from the top of the vault and then from the folder of the note the link is in; `./` and `../` start at the note's folder, and `/` at the top of the vault. See [Markdown Links](/features/wiki-links#markdown-links).
+
 ### Wiki-Links
 
 ```markdown
