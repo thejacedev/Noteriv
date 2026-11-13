@@ -46,6 +46,8 @@ base64 = "0.22"
 sha2 = "0.10"
 urlencoding = "2"
 url = "2"
+# Web reader: pages that are not UTF-8
+encoding_rs = "0.8"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }

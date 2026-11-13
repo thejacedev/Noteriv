@@ -221,6 +221,10 @@ interface ElectronAPI {
   clipperSetEnabled: (enabled: boolean) => Promise<void>;
   onClipperClipped: (callback: (filePath: string) => void) => () => void;
 
+  // Web reader
+  /** Fetch a web page's HTML for the reader. A failure is a result with `ok` false, not a rejection. */
+  webFetchPage: (url: string) => Promise<import("@/lib/web-reader").WebPage>;
+
   // Updater
   updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string }>;
   updaterDownload: () => Promise<boolean>;

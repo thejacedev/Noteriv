@@ -9,6 +9,7 @@ mod commands_misc;
 mod commands_shell;
 mod commands_sync;
 mod commands_vault;
+mod commands_web;
 mod commands_window;
 mod commands_workspace;
 mod importers;
@@ -181,6 +182,8 @@ pub fn run() {
             // clipper
             commands_misc::clipper_get_port,
             commands_misc::clipper_set_enabled,
+            // web reader
+            commands_web::web_fetch_page,
             // updater (thin wrappers around plugin)
             updater_cmds::updater_check,
             updater_cmds::updater_download,

@@ -137,6 +137,9 @@ pub const SHIM_JS: &str = r#"
       clipperSetEnabled: function (enabled) { return invoke("clipper_set_enabled", { enabled: enabled }); },
       onClipperClipped: function (cb) { return on("clipper:clipped", cb); },
 
+      // ---- web reader
+      webFetchPage: function (url) { return invoke("web_fetch_page", { url: url }); },
+
       // ---- updater
       updaterCheck: function () { return invoke("updater_check"); },
       updaterDownload: function () { return invoke("updater_download"); },

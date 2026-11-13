@@ -1,0 +1,319 @@
+/* ─── Web reader ───
+   A tab that shows the readable part of a web page. Theme variables only, so
+   it follows light and dark themes. The article's own text uses the app's
+   `.markdown-preview` styles; what is here is the frame around it. */
+
+.wv-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ── Address bar and buttons ── */
+
+.wv-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.wv-icon-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.wv-icon-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.wv-icon-btn:disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wv-address-form {
+  flex: 1;
+  min-width: 80px;
+  display: flex;
+}
+
+.wv-address {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.wv-address:focus {
+  border-color: var(--accent);
+}
+
+.wv-address[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.wv-address::placeholder {
+  color: var(--text-muted);
+}
+
+.wv-btn {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.wv-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.wv-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wv-btn-primary {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.wv-btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.wv-icon-btn:focus-visible,
+.wv-btn:focus-visible,
+.wv-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Messages ── */
+
+.wv-notice {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* Under the address bar, across the whole tab. */
+.wv-root > .wv-notice {
+  flex: none;
+  margin: 0;
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+
+.wv-notice-error {
+  color: var(--text-primary);
+  border-left: 3px solid var(--red);
+}
+
+/* ── The page ── */
+
+.wv-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.wv-state {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 18vh 24px 48px;
+  text-align: center;
+}
+
+.wv-state-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wv-state-text {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.wv-state-url {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.wv-state-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.wv-progress {
+  width: 120px;
+  height: 2px;
+  margin: 0 auto 16px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: wv-progress 1.2s linear infinite;
+}
+
+@keyframes wv-progress {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wv-progress { animation: none; }
+}
+
+/* A column narrow enough to read comfortably, in the middle of the tab. */
+.wv-column {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 28px 48px;
+}
+
+.wv-head {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wv-site {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.wv-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.wv-byline {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* The article is a guest. Nothing in it is laid out against, or painted
+   over, anything outside this box, whatever markup it turns out to hold. */
+.wv-content {
+  contain: layout paint;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+
+.wv-content > :first-child {
+  margin-top: 0;
+}
+
+.wv-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.wv-content figure {
+  margin: 1.25rem 0;
+}
+
+.wv-content figure img {
+  display: block;
+  margin: 0 auto;
+}
+
+.wv-content figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.85em;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* A wide table scrolls inside the column instead of stretching it. */
+.wv-content table {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.wv-content pre {
+  white-space: pre;
+}
+
+.wv-foot {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.wv-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.wv-link:hover {
+  text-decoration: underline;
+}
