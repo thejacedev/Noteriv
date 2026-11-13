@@ -116,7 +116,9 @@ Noteriv can display and manage various attachment file types within your vault:
 | Video | `.mp4`, `.webm` | Played with the built-in video player |
 | Other | Any extension | Listed in the attachment manager, opened with the system default application |
 
-Attachments are typically stored in an `attachments/` folder within your vault, but they can be placed anywhere. Reference them in markdown using standard image syntax or relative links.
+Attachments are typically stored in an `attachments/` folder within your vault, but they can be placed anywhere. Reference them in markdown using standard image syntax or relative links. The folder the Attachment Manager uses is set in Settings > General: see [Attachment Folder](../features/file-settings.md#attachment-folder).
+
+Sound, video and PDF files can also be embedded in a note with `![[file]]`, and a wiki-link to a file opens it: see [Embedding](../features/wiki-links.md#embedding-with).
 
 ## The .noteriv Directory
 
@@ -149,6 +151,7 @@ your-vault/
     plugin-config.json    # Which plugins are enabled
     snippet-config.json   # Which CSS snippets are enabled
     flashcard-reviews.json  # Spaced repetition review data
+    bookmarks.json        # Bookmarks and bookmark groups
 ```
 
 ### Configuration Files
@@ -189,6 +192,29 @@ Stores spaced repetition review data for all flashcards in the vault. Each card 
   }
 }
 ```
+
+#### bookmarks.json
+
+Stores the vault's [bookmarks](../features/bookmarks.md) and the groups they are sorted into. It is written after 2.4.13; earlier versions do not keep bookmarks in a file.
+
+```json
+{
+  "items": [
+    { "kind": "file", "target": "/home/you/Notes/Projects/Plan.md", "group": "Work" },
+    { "kind": "folder", "target": "/home/you/Notes/Projects" },
+    { "kind": "search", "target": "tag:#work task-todo:call" },
+    { "kind": "heading", "target": "/home/you/Notes/Projects/Plan.md#Next steps" }
+  ],
+  "groups": ["Work"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `kind` | `file`, `folder`, `search` or `heading` |
+| `target` | The full path of a file or folder, the text of a search, or a file's full path followed by `#` and the heading text |
+| `group` | The group the bookmark is in. Left out when it is in no group |
+| `groups` | The group names, in the order they are shown. A group can be empty |
 
 ### Themes Directory
 

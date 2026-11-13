@@ -11,7 +11,7 @@ On macOS, `Ctrl` is replaced by `Cmd` throughout.
 
 ## Customizing shortcuts
 
-All shortcuts can be changed in Settings (`Ctrl+,`). Navigate to the Hotkeys section to see every action and its current binding. Click on a shortcut to record a new key combination. Changes take effect immediately and persist across sessions.
+All shortcuts can be changed in Settings (`Ctrl+,`). Navigate to the Shortcuts section to see every action and its current binding. Click on a shortcut to record a new key combination. Changes take effect immediately and persist across sessions.
 
 If you rebind a shortcut, the command palette and this documentation will reflect your custom binding. To reset a shortcut to its default, clear the binding in Settings.
 
@@ -35,7 +35,7 @@ If you rebind a shortcut, the command palette and this documentation will reflec
 
 **Close tab** closes the active tab. If the file has unsaved changes, you are prompted to save or discard them. Pinned tabs are protected from close operations -- you must unpin them first, or use `Ctrl+W` directly on the pinned tab.
 
-**Bookmark** adds the current note to your bookmarks panel for quick access. Press the same shortcut again to remove the bookmark. Bookmarked notes appear in the bookmarks panel in the sidebar.
+**Bookmark** adds the current note to your bookmarks panel for quick access. Press the same shortcut again to remove the bookmark. Folders, searches and headings can be bookmarked too: see [Bookmarks](../features/bookmarks.md).
 
 **Pin tab** prevents a tab from being closed by "Close All Tabs" or "Close Other Tabs". Pinned tabs are sorted to the left end of the tab bar and persist across sessions.
 
@@ -54,7 +54,7 @@ If you rebind a shortcut, the command palette and this documentation will reflec
 
 **Quick open** is a fuzzy file finder that searches across all notes in your vault. Start typing any part of a filename to filter results. It matches against the full file path, so you can type folder names to narrow results. Press Enter to open the selected file.
 
-**Command palette** lists every available action in Noteriv, organized by category (File, Navigation, Search, View, Edit, Formatting, Sync). Each entry shows its keyboard shortcut if one is assigned. Start typing to filter commands. Recently used commands appear at the top of the list when the search field is empty, putting your most frequent actions within easy reach.
+**Command palette** lists every available action in Noteriv, organized by category (File, Navigation, Search, View, Edit, Formatting, Sync). Each entry shows its keyboard shortcut if one is assigned. Start typing to filter commands. Recently used commands appear at the top of the list when the search field is empty, putting your most frequent actions within easy reach. Commands you pin are listed above them.
 
 **Daily note** opens (or creates) a note for today's date. The note is named with the current date (e.g., `2026-03-20.md`) and placed in the root of your vault or in a configured daily notes folder.
 
@@ -203,7 +203,7 @@ Many commands do not have a default keyboard shortcut but can be accessed throug
 | Blockquote | Insert a blockquote |
 | Task List | Insert a task list |
 | Insert Table | Insert a markdown table |
-| Toggle Backlinks | Show or hide the backlinks panel |
+| Toggle Backlinks | Show or hide the links panel (backlinks, unlinked mentions, outgoing links, possible links) |
 | Toggle Tag Pane | Show or hide the tag pane |
 | Note Composer | Open the note merge/split tool |
 | File Recovery | Browse and restore file snapshots |
@@ -227,5 +227,23 @@ Many commands do not have a default keyboard shortcut but can be accessed throug
 | Export PDF Annotations | Export annotations to markdown |
 | Open Trash | Browse and restore deleted notes |
 | Note History | View the change history for the current note |
+| Open Local Graph | Open the graph on the current note and the notes around it |
+| Bookmark the Heading Under the Cursor | Add or remove a bookmark for the heading the cursor is under |
+| Create New Unique Note | Create a note named by the date and time, such as `202611131045` |
+| Toggle Footnotes | Show or hide the footnotes panel |
+| Reveal the Open Note in the File List | Open the file list at the current note |
+| Collapse All Folders | Close every folder in the file list |
+| Fold All Headings and Lists | Fold the headings and lists of the current note |
+| Unfold All Headings and Lists | Unfold everything that is folded in the current note |
 
-To bind any of these to a keyboard shortcut, open Settings (`Ctrl+,`), go to the Hotkeys section, find the action, and press the key combination you want to assign.
+To bind any of these to a keyboard shortcut, open Settings (`Ctrl+,`), go to the Shortcuts section, find the action, and press the key combination you want to assign.
+
+## Mouse shortcuts in the editor
+
+These are not commands and cannot be rebound:
+
+| Action | Result |
+|---|---|
+| `Alt+Click` | Add a cursor. See [Multiple Cursors](../editor/multiple-cursors.md) |
+| `Shift+Alt` and drag | Select a rectangle, with one selection on each line |
+| Click the arrow beside a heading or list item | Fold or unfold it. See [Folding](../editor/folding.md) |

@@ -13,7 +13,7 @@ Noteriv is more than a text editor. In addition to the Markdown editor, it provi
 
 The graph view renders your entire vault as a force-directed network diagram. Notes become nodes, and wiki-links between them become edges. The visualization helps you spot clusters of related ideas, discover orphan notes that lack connections, and navigate your knowledge base spatially rather than hierarchically.
 
-Open it with `Ctrl+G` or from the ribbon.
+Open it with `Ctrl+G` or from the ribbon. A settings panel in the graph filters what is drawn, colours notes in groups, and switches to a local graph of the note you have open.
 
 See [Graph View](./graph-view.md) for details.
 

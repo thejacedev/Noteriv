@@ -66,9 +66,25 @@ Blockquotes are rendered with a left border and indented text. Nested blockquote
 
 Footnote references (`[^1]`) appear as superscript numbers that link to footnote definitions at the bottom of the document. Clicking a footnote reference scrolls to its definition, and the definition includes a back-link to return to the reference point.
 
+An inline footnote, written as `^[text]`, is shown where it is written, small and raised, in square brackets. See [Footnotes](../features/footnotes.md).
+
 ### Embedded Content
 
 If you use Noteriv's embed syntax (`![[note]]`), the embedded note's content is rendered inline within the parent document, visually distinguished with a border and background.
+
+Sound and video files embedded with `![[file.mp3]]` or `![[clip.mp4]]` get a player, and an embedded PDF is a card that opens the file. See [Embedding](../features/wiki-links.md#embedding-with).
+
+### Comments
+
+Comments, written as `%%text%%` or as a block between two `%%` lines, are hidden in view mode. See [Comments](./comments.md).
+
+### Search Results
+
+A fenced code block with the language `query` shows the results of that search. See [Search Results in a Note](../features/search.md#search-results-in-a-note).
+
+### Folding
+
+A heading or a list item with something under it shows an arrow to its left while the pointer is on the line. Click the arrow to fold or unfold it. See [Folding](./folding.md).
 
 ### Frontmatter
 

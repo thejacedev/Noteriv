@@ -81,7 +81,8 @@ My Notes/
 │   ├── plugins/           Installed plugins
 │   ├── themes/            Custom themes
 │   ├── snippets/          CSS snippets
-│   └── trash/             Soft-deleted notes (restorable)
+│   ├── trash/             Soft-deleted notes (restorable)
+│   └── bookmarks.json     Bookmarks and bookmark groups
 ├── Daily/                 Daily notes folder
 │   ├── 2026-03-18.md
 │   ├── 2026-03-19.md
@@ -105,12 +106,12 @@ All of this is standard files and folders. You can create, rename, move, and del
 
 Inside a vault, you can organize your notes however you like:
 
-- **Create files** with `Ctrl+N` or by right-clicking in the sidebar.
+- **Create files** with `Ctrl+N` or by right-clicking in the sidebar. Where `Ctrl+N` puts the note is a setting: see [File Settings](../features/file-settings.md#where-new-notes-go).
 - **Create folders** with `Ctrl+Shift+N` or by right-clicking in the sidebar.
 - **Rename** files and folders by right-clicking and selecting "Rename" or by pressing F2.
 - **Move** files by dragging them in the sidebar from one folder to another.
-- **Reorder** files within a folder by dragging them up or down. The custom order is saved per-vault.
-- **Delete** files by right-clicking and selecting "Delete" or "Move to Trash". Soft-deleted files go to `.noteriv/trash/` and can be restored from the Trash panel.
+- **Reorder** files within a folder by dragging them up or down. The custom order is saved per-vault. You can also sort the list by name or date: see [File List](../features/file-list.md#sort-order).
+- **Delete** files by right-clicking and selecting "Delete" or "Move to Trash". Soft-deleted files go to `.noteriv/trash/` and can be restored from the Trash panel. To send deleted files to your computer's own trash instead, see [Deleted Files](../features/file-settings.md#deleted-files).
 - **Multi-select** files with `Ctrl+Click` (toggle individual files) or `Shift+Click` (select a range). Then right-click to merge, delete, or move the selection in bulk.
 
 ## Deleting a vault

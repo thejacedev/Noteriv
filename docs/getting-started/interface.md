@@ -83,6 +83,7 @@ The primary sidebar content is the file tree, which shows all files and folders 
 - **Click** a folder to expand or collapse it.
 - **Drag files** between folders to move them.
 - **Drag files** within a folder to reorder them. The custom sort order is saved per-vault.
+- **Sort** the list by name, modified time or created time with the sort button in the sidebar header, and close every folder with the collapse button beside it. See [File List](../features/file-list.md).
 - **Right-click** for a context menu with options to create, rename, delete, move to trash, copy path, and more.
 - **Ctrl+Click** to select multiple files. **Shift+Click** to select a range. With multiple files selected, right-click to merge them into one note, delete them, or move them in bulk.
 
@@ -92,9 +93,10 @@ The file tree automatically refreshes when files are changed externally, such as
 
 Several panels can appear in the sidebar area, toggled via keyboard shortcuts or the command palette:
 
-- **Bookmarks panel** -- Shows your bookmarked notes for quick access. Toggle with `Ctrl+Shift+B` (the same shortcut also bookmarks the current note).
+- **Bookmarks panel** -- Shows your bookmarked notes, folders, searches and headings, in groups if you make them. It is shown whenever the vault has a bookmark. `Ctrl+Shift+B` bookmarks the current note. See [Bookmarks](../features/bookmarks.md).
 - **Outline panel** -- Displays a table of contents generated from headings in the current note. Click a heading to jump to it. Toggle with `Ctrl+Shift+O`.
-- **Backlinks panel** -- Lists every note that links to the current file via wiki-links. Helpful for discovering connections.
+- **Links panel** -- Lists the notes that link to the current note, the notes that mention it without linking, the notes it links to, and possible links. Open it with the "Toggle Backlinks" command. See [Links Panel](../features/wiki-links.md#links-panel).
+- **Footnotes panel** -- Lists the footnotes of the current note. Click one to jump to it. Open it with the "Toggle Footnotes" command. See [Footnotes](../features/footnotes.md).
 - **Tag pane** -- Shows all tags used across your vault in a hierarchical tree. Click a tag to see all notes that use it.
 - **Trash panel** -- Browse soft-deleted notes and restore them. Deleted notes are kept in `.noteriv/trash/`.
 
@@ -135,11 +137,12 @@ Some file types and features open specialized views in the editor area instead o
 
 The status bar runs along the bottom of the window and shows contextual information:
 
-- **Word count and character count** for the current note.
-- **Line and column** position of the cursor.
-- **File path** of the current note.
-- **Sync status** -- Shows whether the vault is synced, syncing, or has pending changes.
-- **Encoding and line ending** information.
+- **View mode** -- Edit, Source or View.
+- **Vault name and file path** of the current note.
+- **Short messages**, such as how many links a rename updated.
+- **Save state** -- Whether the current note is saved, has unsaved changes, or changed on disk.
+- **Sync status** -- Shows whether the vault is synced, syncing, or has pending changes. Shown when sync is set up.
+- **Word count, line count and character count** for the current note. See [Word Count](../editor/index.md#word-count).
 
 ## Overlays and modals
 

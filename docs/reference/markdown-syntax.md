@@ -150,6 +150,23 @@ The display text is shown in the preview, but the link points to `actual-note-na
 
 An embed on a line of its own shows the other note's content in a box at that place. You can also embed one section, one block, or an image: see [Wiki-links](/features/wiki-links).
 
+```markdown
+![[interview.mp3]]
+![[demo.mp4]]
+![[paper.pdf#page=3]]
+```
+
+In the desktop app, a sound or video file is shown as a player, and a PDF is shown as a card that opens the file, at the page given. See [Embedding](/features/wiki-links#embedding-with).
+
+### Links to Files
+
+```markdown
+[[paper.pdf]]
+[[paper.pdf#page=3]]
+```
+
+In the desktop app, a wiki-link with a file ending opens that file. For a PDF, `#page=` and a number opens it at that page. See [Links to Other Files](/features/wiki-links#links-to-other-files).
+
 ---
 
 ## Images
@@ -471,6 +488,41 @@ Another statement with a reference.[^note]
 ```
 
 Footnote references are rendered as superscript numbers that link to the footnote definition at the bottom of the note. Footnote IDs can be numbers or text.
+
+### Inline Footnotes
+
+```markdown
+The meeting moved to Friday.^[Sam asked for the extra day.]
+```
+
+An inline footnote is written in place, between `^[` and `]`, with no separate definition. In the desktop app it is shown where it is written, small and raised. It has to fit on one line. See [Footnotes](/features/footnotes).
+
+---
+
+## Comments
+
+```markdown
+This sentence is shown. %%This comment is not.%%
+
+%%
+A comment can also be a block
+of several lines.
+%%
+```
+
+Text between `%%` marks is a comment. In the desktop app it is dimmed in live mode, hidden in view mode, and left out of published pages and PDFs. A block comment starts and ends with a line that holds only `%%`. See [Comments](/editor/comments).
+
+---
+
+## Search Queries
+
+````markdown
+```query
+tag:#work task-todo:call
+```
+````
+
+In the desktop app, a code block with the language `query` runs its text as a vault search and shows the matching notes and lines in place. See [Search Results in a Note](/features/search#search-results-in-a-note) for what it shows and [Search Queries](/features/search#search-queries) for the query language.
 
 ---
 

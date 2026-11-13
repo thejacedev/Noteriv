@@ -13,6 +13,18 @@ Place a PDF file inside your vault (or any subfolder) and click it in the file e
 
 PDFs are rendered using [pdf.js](https://mozilla.github.io/pdf.js/), the same engine used by Firefox for its built-in PDF reader. This provides high-fidelity rendering for text, vector graphics, and embedded images.
 
+### Opening a PDF from a Note
+
+A link in a note can open a PDF, and can name a page (after 2.4.13):
+
+```markdown
+See [[paper.pdf]] for the full text, and [[paper.pdf#page=3]] for the table.
+
+![[paper.pdf#page=3]]
+```
+
+Clicking the link opens the PDF in the viewer. With `#page=` and a page number, the viewer scrolls to that page. The embed form, with `!` in front, shows a card in the note with the file name and the page; clicking the card does the same. The PDF is found by its path inside the vault or by its name. See [Links to Other Files](../features/wiki-links.md#links-to-other-files).
+
 ## Navigation
 
 ### Page Scrolling

@@ -77,6 +77,16 @@ Markdown tables are rendered with aligned columns, borders, and header styling. 
 
 Footnote references (`[^1]`) are rendered as superscript links, and footnote definitions are rendered at the bottom of the viewport with a separator line.
 
+An inline footnote, written as `^[text]`, is shown where it is written, small and raised, in square brackets. See [Footnotes](../features/footnotes.md).
+
+### Comments
+
+A comment, written as `%%text%%` or as a block between two `%%` lines, is shown as written, dimmed and in italics. Markdown inside a comment is not rendered. See [Comments](./comments.md).
+
+### Search Results
+
+A fenced code block with the language `query` is replaced by the results of that search. Put the cursor inside the block to see and edit the query. See [Search Results in a Note](../features/search.md#search-results-in-a-note).
+
 ## Cursor Behavior
 
 The cursor line always displays raw Markdown. This is a deliberate design choice:
@@ -90,6 +100,12 @@ When the cursor moves to a new line, the previous line is re-rendered and the ne
 ## Multi-Cursor Support
 
 Live mode works with CodeMirror's multi-cursor feature. Each cursor line shows raw Markdown, and all other lines are rendered. If you have multiple cursors on different lines, all of those lines show raw syntax simultaneously.
+
+`Alt+Click` adds a cursor, and `Shift+Alt` with a drag selects a rectangle. See [Multiple Cursors](./multiple-cursors.md).
+
+## Folding
+
+A heading or a list item with something under it shows an arrow to its left while the pointer is on the line. Click the arrow to fold or unfold it. See [Folding](./folding.md).
 
 ## Performance
 

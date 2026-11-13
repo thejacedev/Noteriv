@@ -78,14 +78,19 @@ Vertical indentation guides are drawn at each indentation level, making it easy 
 
 ## Folding
 
-Source mode supports code folding for sections and blocks:
+Source mode supports folding for sections and blocks. The fold arrows are in the margin, beside the line numbers, and show while the pointer is over the margin:
 
-- **Heading sections**: Click the fold indicator next to a heading to collapse everything between it and the next heading of the same or higher level.
-- **Code blocks**: Fenced code blocks can be folded to a single line showing the language identifier.
-- **Frontmatter**: The YAML frontmatter block can be folded to its opening delimiter.
-- **Lists**: Top-level list items with nested children can be folded.
+- **Heading sections**: Click the arrow next to a heading to collapse everything between it and the next heading of the same or higher level.
+- **Lists**: A list item with lines nested under it can be folded, at any depth.
+- **Other blocks**: A block written over several lines, such as a fenced code block or a table, has an arrow too.
 
-Folded regions show a placeholder indicator. Click it or use `Ctrl+Shift+[` to unfold.
+Folded regions show a `…` placeholder. Click it, or click the arrow again, to unfold. The arrow of a folded line stays visible.
+
+The command palette has "Fold All Headings and Lists" and "Unfold All Headings and Lists" for the whole note. See [Folding](./folding.md).
+
+## Multiple Cursors
+
+`Alt+Click` adds a cursor, and `Shift+Alt` with a drag selects a rectangle. See [Multiple Cursors](./multiple-cursors.md).
 
 ## Word Wrap
 

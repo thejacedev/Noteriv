@@ -71,6 +71,9 @@ Noteriv's markdown parser is designed to be compatible with CommonMark and GitHu
 | Highlight (`==text==`) | Noteriv extension |
 | Superscript (`^text^`), Subscript (`~text~`) | Noteriv extension |
 | Wiki-links (`[[note]]`), Embeds (`![[note]]`) | Noteriv extension |
+| Comments (`%%text%%`) | Noteriv extension |
+| Inline footnotes (`^[text]`) | Noteriv extension |
+| Search blocks (`query` code blocks) | Noteriv extension |
 | Callouts (`> [!type]`) | Noteriv extension |
 | Math (`$...$`, `$$...$$`) | Noteriv extension (KaTeX) |
 | Mermaid diagrams | Noteriv extension |

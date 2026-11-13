@@ -72,6 +72,35 @@ Right-clicking inside the editor opens a context menu with mode switching, split
 
 See [Context Menu](./context-menu.md) for details.
 
+## Folding
+
+Headings and list items can be folded to hide what is under them. An arrow appears beside a line that can be folded, and the command palette has "Fold All Headings and Lists" and "Unfold All Headings and Lists". Folding works in all three view modes.
+
+See [Folding](./folding.md) for details.
+
+## Multiple Cursors
+
+`Alt+Click` adds a cursor, and `Shift+Alt` with a drag selects a rectangle, so you can type in several places at once. This works in live mode and source mode.
+
+See [Multiple Cursors](./multiple-cursors.md) for details.
+
+## Comments
+
+Text between `%%` marks is a comment. It is dimmed in live mode, hidden in view mode, and left out of published pages and PDFs.
+
+See [Comments](./comments.md) for details.
+
+## Word Count
+
+The status bar at the bottom of the window shows the number of words, lines and characters in the open note. It updates as you type.
+
+- A word is a run of letters and digits. Letters joined by a hyphen, an apostrophe or an underscore count as one word, so `well-known` and `isn't` are one word each.
+- Each Chinese, Japanese or Korean character counts as a word, because those scripts do not put spaces between words.
+- The count covers the whole note as written, including frontmatter, code and [comments](./comments.md).
+- The character count includes spaces and line breaks.
+
+The counts are shown for notes. They are not shown for a PDF, a canvas or a drawing, and the status bar is hidden in Zen mode. Versions up to 2.4.13 show lines and characters only.
+
 ## Architecture
 
 Under the hood, the editor is a CodeMirror 6 `EditorView` instance extended with custom plugins:

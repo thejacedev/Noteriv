@@ -13,15 +13,15 @@ This section covers each major feature in detail. If you are new to Noteriv, rea
 
 ### [Wiki-Links](./wiki-links.md)
 
-Connect your notes with `[[double bracket]]` links. Noteriv resolves links by filename (case-insensitive), supports display text aliases and heading anchors, and provides a backlinks panel that shows every note pointing at the one you are reading.
+Connect your notes with `[[double bracket]]` links. Noteriv resolves links by filename (case-insensitive) or by an alias listed in the note's frontmatter, supports display text and heading anchors, and embeds notes, images, sound, video and PDFs with `![[...]]`.
 
 ### [Tags](./tags.md)
 
 Mark notes with `#tag` syntax anywhere in the body. Tags can be hierarchical (`#project/alpha`) and are aggregated in a dedicated tag pane with note counts, filtering, and expand/collapse controls.
 
-### [Backlinks](./wiki-links.md#backlinks-panel)
+### [Links Panel](./wiki-links.md#links-panel)
 
-The backlinks panel scans your entire vault in real time and lists every note that contains a wiki-link to the file you have open. Results are grouped by source file, with line numbers and text snippets.
+The links panel shows how the open note is connected: the notes that link to it, the notes that mention it by name without linking, the notes it links to, and the places in it where another note is named without a link. Results come with line numbers and text snippets, and a mention can be turned into a link with one click.
 
 ## Daily Workflow
 
@@ -35,17 +35,33 @@ Create notes from reusable templates stored in a `Templates/` folder. Variables 
 
 ### [Bookmarks](./bookmarks.md)
 
-Pin frequently used notes so they appear in a dedicated bookmarks panel in the sidebar. Toggle a bookmark on the current file with `Ctrl+Shift+B`.
+Bookmark notes, folders, searches and headings so they appear in a dedicated bookmarks panel, and sort them into groups. Toggle a bookmark on the current file with `Ctrl+Shift+B`.
 
 ## Finding Things
 
 ### [Search](./search.md)
 
-Two search tools: Quick Open (`Ctrl+P`) for fuzzy filename lookup, and Vault Search (`Ctrl+Shift+F`) for full-text search across every note in the vault. Results include line numbers and highlighted matches.
+Two search tools: Quick Open (`Ctrl+P`) for finding a file by name or alias, and Vault Search (`Ctrl+Shift+F`) for full-text search across every note in the vault. Vault Search has a query language with operators such as `tag:`, `path:` and `line:()`, regular expressions and sorting. Results include line numbers and highlighted matches, and a `query` code block shows a search inside a note.
 
 ### [Command Palette](./command-palette.md)
 
-Press `Ctrl+Shift+P` to open a searchable list of every available command. The palette remembers recently used commands and shows keyboard shortcuts next to each entry.
+Press `Ctrl+Shift+P` to open a searchable list of every available command. The palette remembers recently used commands, shows keyboard shortcuts next to each entry, and lets you pin commands to the top.
+
+## Files
+
+### [File List](./file-list.md)
+
+Sort the file list by name, modified time or created time, or keep your own order. Jump to the open note in the list, and close all folders at once.
+
+### [File Settings](./file-settings.md)
+
+Choose where new notes go, which folder the Attachment Manager uses, which files are left out of search and suggestions, and whether deleted files go to Noteriv's trash or the system trash. Also covers unique notes, which are named by the date and time.
+
+## Writing
+
+### [Footnotes](./footnotes.md)
+
+Numbered footnotes, inline footnotes written as `^[text]`, and a panel that lists the footnotes of the open note and jumps to each one.
 
 ## History and Recovery
 

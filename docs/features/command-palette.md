@@ -13,26 +13,46 @@ Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS). The palette opens as a centere
 
 ## Layout
 
-The palette consists of three visual sections:
+The palette consists of four visual sections:
 
 ### Search Input
 
 A text field with a menu icon on the left. As you type, the command list filters instantly. The filter matches against the command's label, category, and internal action name, so you can find a command by any of these attributes.
 
+### Pinned Commands
+
+When the search field is empty, the commands you have pinned are listed first, under a "Pinned" heading. See [Pinning Commands](#pinning-commands).
+
 ### Recent Commands
 
-When the search field is empty, the top of the command list shows a "Recent" section containing the commands you used most recently. This lets you repeat frequent actions with just two keystrokes: `Ctrl+Shift+P` then `Enter`.
+When the search field is empty, the command list shows a "Recent" section containing the commands you used most recently. It comes after the pinned commands, or at the top if you have pinned none. This lets you repeat frequent actions with just two keystrokes: `Ctrl+Shift+P` then `Enter`.
 
-Recent commands are tracked per session and persist across palette opens within the same session. The most recently executed command appears first.
+The five most recently used commands are kept, and they are remembered after the app is closed. The most recently executed command appears first. A command that is pinned is not repeated under "Recent".
 
 ### Command List
 
-Below the recent section (or filling the entire list when a filter is active), commands are grouped by category. Each group has a category header (e.g., "File", "Navigation", "Formatting", "View", "Edit", "Sync") followed by the commands in that category.
+Below the pinned and recent sections (or filling the entire list when a filter is active), commands are grouped by category. Each group has a category header (e.g., "File", "Navigation", "Formatting", "View", "Edit", "Sync") followed by the commands in that category.
 
 Each command row shows:
 
 - **Label.** The human-readable name of the command (e.g., "Toggle Bookmark", "Insert Template").
 - **Keyboard shortcut.** Displayed on the right side of the row, formatted for your platform. On macOS, `Ctrl` is shown as the command symbol. Commands without a shortcut show no badge.
+- **Pin button.** At the right end of the row. It shows when the pointer is on the row or the row is selected, and stays visible on a command that is pinned.
+
+## Pinning Commands
+
+Pinning keeps a command at the top of the palette, so the commands you use most are there as soon as it opens. Versions up to 2.4.13 do not have pinning.
+
+| To | Do this |
+|---|---|
+| Pin a command | Point at its row and click the pin button at the right end |
+| Unpin a command | Click the pin button again. It is filled in on a pinned command |
+
+Clicking the pin button does not run the command, and the palette stays open.
+
+Pinned commands are listed under "Pinned", in the order you pinned them, above "Recent". Both sections are hidden while you are typing in the search field: the filtered list then shows every matching command in its category.
+
+Commands added by plugins can be pinned as well. Pins are remembered after the app is closed. They are kept on this computer and are the same in every vault.
 
 ## Navigation
 
@@ -69,6 +89,7 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Pin/Unpin Tab | `Ctrl+Shift+T` |
 | Open Trash | -- |
 | New Canvas / Whiteboard | -- |
+| Create New Unique Note | -- |
 
 ### Navigation
 
@@ -81,6 +102,8 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Open Daily Note | `Ctrl+D` |
 | Open Random Note | `Ctrl+Shift+R` |
 | Flashcard Review | -- |
+| Bookmark the Heading Under the Cursor | -- |
+| Reveal the Open Note in the File List | -- |
 
 ### Search
 
@@ -108,6 +131,11 @@ The palette includes every action registered in Noteriv. Here is a representativ
 | Toggle Lint Warnings | `Ctrl+Shift+L` |
 | Split Editor | `Ctrl+\` |
 | Close Split | `Ctrl+Shift+\` |
+| Open Local Graph | -- |
+| Toggle Footnotes | -- |
+| Collapse All Folders | -- |
+| Fold All Headings and Lists | -- |
+| Unfold All Headings and Lists | -- |
 
 ### Edit
 
@@ -165,5 +193,6 @@ Keyboard shortcuts for commands can be customized in Settings (`Ctrl+,`). Change
 
 - **Use the palette as a learning tool.** Browse the full list with an empty query to discover commands you did not know existed.
 - **Let recent commands work for you.** If you keep inserting templates, the "Insert Template" command will stay at the top of the recent list, making it a two-key operation.
+- **Pin commands that have no shortcut.** A pinned command is always at the top of the palette, wherever it sits in the full list.
 - **Search by category.** Typing "format" shows all formatting commands grouped together.
 - **Pair with shortcuts.** Once you find yourself using a command frequently via the palette, note its keyboard shortcut and start using that instead for speed.

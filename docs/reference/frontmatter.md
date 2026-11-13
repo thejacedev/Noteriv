@@ -57,6 +57,22 @@ Defines tags for the note. These tags are merged with inline `#tags` found in th
 
 Unlike inline tags, frontmatter tags do not need a `#` prefix. Writing `tags: [project]` is equivalent to having `#project` somewhere in the note body.
 
+### aliases
+
+```yaml
+aliases: [AI, Machine Intelligence]
+```
+
+Or in YAML list format:
+
+```yaml
+aliases:
+  - AI
+  - Machine Intelligence
+```
+
+Gives the note other names. A link written with an alias, such as `[[AI]]`, opens the note, and link suggestions and Quick Open find the note by its aliases. A single name, or several names separated by commas, also works, and `alias` is read the same way. Aliases are compared without regard to case. The field is read by the desktop app; versions up to 2.4.13 do not read it. See [Note Aliases](../features/wiki-links.md#note-aliases).
+
 ### due
 
 ```yaml

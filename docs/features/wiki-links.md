@@ -19,7 +19,7 @@ When Noteriv encounters `[[meeting-notes]]`, it searches your vault for a file w
 
 You do not need to include the file extension. Writing `[[meeting-notes.md]]` also works -- Noteriv strips a trailing `.md` before matching -- but the extension-free form is conventional.
 
-## Display Text Aliases
+## Display Text
 
 If you want the rendered link to show different text from the filename, use the pipe syntax:
 
@@ -29,7 +29,7 @@ Read the [[project-plan|original plan]] before the review.
 
 This renders as a link labeled "original plan" that navigates to the `project-plan.md` file when clicked. The part before the pipe is the target filename; the part after the pipe is the display text.
 
-Aliases are useful when the filename is technical or abbreviated but you want the prose to read naturally.
+Display text is useful when the filename is technical or abbreviated but you want the prose to read naturally. To give a note another name that works in every link, see [Note Aliases](#note-aliases).
 
 ## Heading Anchors
 
@@ -47,9 +47,42 @@ You can combine heading anchors with display text:
 Refer to the [[architecture#caching-strategy|caching section]] in the architecture doc.
 ```
 
+## Note Aliases
+
+An alias is another name for a note. List a note's aliases in its frontmatter, under `aliases`:
+
+```markdown
+---
+aliases: [AI, Machine Intelligence]
+---
+```
+
+A YAML list with one name per line works too, and so does a single name, or several names separated by commas. `alias` is read the same way as `aliases`. Aliases are read by the desktop app; versions up to 2.4.13 do not read them.
+
+With the lines above in a note called `Artificial Intelligence.md`:
+
+| Where | What an alias does |
+|---|---|
+| Links | `[[AI]]` opens the note, and `[[AI#History]]` opens it at that heading |
+| Autocomplete | Typing `[[` and part of an alias offers the note. See [Autocomplete](#autocomplete) |
+| [Quick Open](./search.md#finding-a-note-by-alias) | Typing an alias finds the note |
+| [Links panel](#links-panel) | A link written with an alias counts as a backlink, and an alias written as plain text is an unlinked mention |
+| [Graph view](../views/graph-view.md) | A link written with an alias is drawn as a link to the note |
+
+How aliases are matched:
+
+- Case is ignored: `[[ai]]` works as well as `[[AI]]`.
+- A link is matched against note names first. An alias is only used when no note has that name, so a note called `AI.md` wins over a note with the alias `AI`.
+- If two notes have the same alias, the link goes to the first of them in the file listing.
+- Embeds do not use aliases. `![[AI]]` looks for a note named `AI`; write `![[Artificial Intelligence]]` to embed the note.
+
 ## Autocomplete
 
-Typing `[[` in the editor activates wiki-link autocomplete. As you continue typing, a dropdown appears showing files in your vault whose names match what you have typed so far. The list updates with each keystroke and shows up to 30 results.
+Typing `[[` in the editor activates wiki-link autocomplete. As you continue typing, a dropdown appears showing notes in your vault whose path matches what you have typed so far. The list updates with each keystroke and shows up to 30 notes.
+
+Once you have typed at least one character, aliases that match are offered as well, each marked `alias of` and the note it belongs to. Choosing one inserts `[[Note|alias]]`: the link points at the note and shows the alias as its text.
+
+Notes matched by [Excluded files](./file-settings.md#excluded-files) are not suggested.
 
 The autocomplete data is cached for 5 seconds to keep the experience snappy in large vaults. The cache is refreshed automatically after it expires.
 
@@ -58,7 +91,7 @@ To accept a suggestion:
 - Use the arrow keys to highlight an entry, then press `Enter` or `Tab`.
 - Click a suggestion with the mouse.
 
-The completion inserts the filename and closing `]]` brackets for you, so you do not need to type them manually.
+The completion inserts the note's path and the closing `]]` brackets for you, so you do not need to type them manually.
 
 ## How Resolution Works
 
@@ -97,12 +130,45 @@ Image files can also be embedded this way, by name from anywhere in the vault, w
 ![[diagram.png|320x200]]
 ```
 
+Sound, video and PDF files can be embedded as well (desktop app, after 2.4.13):
+
+```markdown
+![[interview.mp3]]
+![[demo.mp4]]
+![[paper.pdf]]
+![[paper.pdf#page=3]]
+```
+
+| File | Endings | What is shown |
+|---|---|---|
+| Sound | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`, `.3gp` | A player, in the note |
+| Video | `.mp4`, `.webm`, `.mov`, `.mkv`, `.ogv` | A player, in the note |
+| PDF | `.pdf` | A card with the file name, and the page if you gave one. Click it to open the PDF, at that page |
+
+A player does not read its file until you first use it, so a note with many recordings still opens quickly. Whether a file plays depends on the formats your system can play.
+
+These files are found the way embedded images are: by their path inside the vault, or by name from anywhere in it. If two files share a name, the one in the shallowest folder is used.
+
 A few things to know:
 
-- An embed written inside a sentence stays a link rather than expanding.
+- An embed of a note written inside a sentence stays a link rather than expanding. Images, players and PDF cards are shown wherever they are written.
 - Long notes are cut off after 150 lines, and the box scrolls.
 - Embedded content is shown with basic formatting. Callouts, math and diagrams inside the embedded note are not drawn the way they are in the note itself.
-- Files that open in their own view, such as drawings, canvases and PDFs, stay links.
+- [Comments](../editor/comments.md) in the embedded note are left out.
+- Files that open in their own view, such as drawings and canvases, stay links. Clicking the link opens the file.
+- Web pages are not embedded. An `<iframe>` in a note is removed when the note is drawn. This is on purpose: a note can arrive through sync or the web clipper, and a frame could load anything.
+
+## Links to Other Files
+
+A wiki-link can point at a file that is not a note. Write the file name with its ending:
+
+```markdown
+The figures are in [[paper.pdf]], and the table is on [[paper.pdf#page=3]].
+```
+
+Clicking the link opens the file in Noteriv. A PDF opens in the [PDF viewer](../views/pdf-viewer.md), at the page given after `#page=` if there is one. Images, canvases and drawings open in their own views too. Versions up to 2.4.13 do nothing when a link to a file other than a note is clicked.
+
+The file is found by its path inside the vault, or failing that by its name, with the shallowest file winning a shared name. Notes come first: if a note matches the link, the note is opened.
 
 ## Renaming and Moving Notes
 
@@ -133,38 +199,67 @@ Links are only updated when the rename is done in the desktop app. Renaming a fi
 
 To turn this off, go to Settings > General and switch off **Update links on rename**.
 
-## Backlinks Panel
+## Links Panel
 
-The backlinks panel shows every note in your vault that contains a wiki-link pointing to the file you currently have open. It is a read-only, automatically generated view -- you do not need to maintain it.
+The links panel shows how the open note is connected to the rest of the vault. It has four sections: Backlinks, Unlinked mentions, Outgoing links and Possible links. It is generated for you -- you do not need to maintain it. The panel described here is in the desktop app. Versions up to 2.4.13 have a backlinks list only.
 
 ### Opening the Panel
 
-Open the backlinks panel from the command palette (`Ctrl+Shift+P`, then search for "Toggle Backlinks") or by clicking the backlinks icon in the editor toolbar.
+Open the command palette (`Ctrl+Shift+P`) and run **Toggle Backlinks**. Run it again, or click the X in the panel's header, to close it. The command has no default shortcut; you can give it one in Settings > Shortcuts.
 
-### What It Shows
+Each section has a header with its name and a count. Click the header to fold or unfold the section. Possible links starts folded.
 
-For each source file that links to your current note, the panel displays:
+### Backlinks
 
-- **File name.** The basename of the linking note, without the extension.
-- **Line number.** The exact line where the link appears, shown as `L12`, `L45`, etc.
-- **Snippet.** Up to 120 characters of the line containing the link, giving you context without having to open the file.
-
-Results are grouped by source file and sorted alphabetically by filename, then by line number within each file.
-
-### Scanning
-
-When you open the backlinks panel or switch to a different file, Noteriv scans every `.md` and `.markdown` file in the vault for references to the current file's basename. The scan runs in parallel with a concurrency limit to avoid blocking the UI, and self-references (the current file linking to itself) are excluded.
-
-The regex used for matching handles all wiki-link forms:
+Backlinks are the notes that link to the open note. A link counts whether it is written with the note's name, its path or one of its [aliases](#note-aliases), and whether it is a link or an embed:
 
 - `[[filename]]`
-- `[[filename|alias]]`
+- `[[filename|display text]]`
+- `[[filename#heading]]`
 - `![[filename]]`
-- `![[filename|alias]]`
 
-### Navigating
+Results are grouped by note and sorted alphabetically by note name, then by line number within each note. Under each note is a row for each line that holds a link, showing:
 
-Click any backlink entry to open the source file in the editor. This makes backlinks a fast way to trace the connections between your notes without manually searching.
+- **Line number.** The line where the link appears, shown as `L12`, `L45`, etc.
+- **Snippet.** Up to 160 characters of the line containing the link, giving you context without having to open the file.
+
+Click a note's name to open it. Click a line to open the note at that line. Links from the note to itself are not listed.
+
+### Unlinked Mentions
+
+Unlinked mentions are lines in other notes where the open note's name, or one of its aliases, is written as plain text and not as a link. The matched text is highlighted.
+
+Click **Link** beside a mention to turn it into a link. Noteriv changes that line in the other note's file:
+
+| The text as written | Becomes |
+|---|---|
+| The same as the note's name | `[[Note]]` |
+| Anything else, such as an alias or different capitals | `[[Note\|text as written]]` |
+
+If the line has changed since the panel found it, nothing is written and the list is refreshed.
+
+What counts as a mention:
+
+- A whole word or phrase, not part of a longer word. Case is ignored.
+- Text that is not already inside a link, an embed, inline code, a web address or a `#tag`.
+- Names and aliases shorter than three characters are not looked for, because they would match everywhere.
+- Notes matched by [Excluded files](./file-settings.md#excluded-files) are not searched.
+
+### Outgoing Links
+
+Outgoing links are the notes and files the open note links to. Each one is listed once, in the order it first appears. A target the note links to more than once shows the number, such as `×3`.
+
+Click a row to open the note. A target that does not match a note in the vault is struck through and cannot be clicked. That covers links to notes that do not exist yet, and also links and embeds that point at files other than notes, such as `![[photo.png]]`.
+
+Links inside code blocks and inline code are not listed. The list is made from the text in the editor, so it changes as you type.
+
+### Possible Links
+
+Possible links are places in the open note where the name or an alias of another note is written as plain text. It is the reverse of unlinked mentions: it looks at the note you are in.
+
+Each row shows the line number and the line, with the match highlighted. Click **Link** to turn the text into a link to that note, written as `[[Note]]` or `[[Note|text as written]]` by the same rule as above. The change is made to the text of the open note, and it is saved the next time the note is saved.
+
+As with unlinked mentions, a match is a whole word or phrase that is not already inside a link, inline code, a web address or a tag, and names shorter than three characters are skipped. Text inside fenced code blocks is skipped too. At most 60 are listed.
 
 ## Live Rendering
 
@@ -175,6 +270,7 @@ In live mode, wiki-links on non-cursor lines are rendered as styled clickable te
 ## Tips
 
 - **Keep filenames short and descriptive.** Since resolution is by filename, shorter names mean faster typing and fewer collisions.
-- **Use aliases for readability.** Write `[[api-auth|authentication flow]]` instead of contorting your prose to fit a filename.
-- **Check backlinks regularly.** The backlinks panel reveals connections you might not remember making, which is valuable when revisiting old notes.
+- **Use display text for readability.** Write `[[api-auth|authentication flow]]` instead of contorting your prose to fit a filename.
+- **Give a note aliases for the names you actually use.** A note called `Artificial Intelligence` with the alias `AI` can be linked either way.
+- **Check the links panel regularly.** Backlinks reveal connections you might not remember making, and unlinked mentions show the ones you have not made yet.
 - **Use the lint panel** to catch broken wiki-links. Noteriv's linting engine flags any `[[target]]` that does not resolve to an existing file.
