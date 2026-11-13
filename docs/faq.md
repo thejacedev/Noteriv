@@ -30,7 +30,7 @@ Standard markdown (`.md` files) with optional YAML frontmatter. Noteriv adds ext
 Noteriv supports three sync methods:
 
 - **GitHub sync**: Uses native git on desktop and the GitHub REST API on mobile. Push and pull your vault to a GitHub repository with configurable auto-sync intervals.
-- **Folder sync**: Mirror your vault to a cloud storage folder (Dropbox, Google Drive, OneDrive, iCloud Drive). The desktop app watches for file changes and syncs bidirectionally.
+- **Folder sync**: Mirror your vault to a cloud storage folder (Dropbox, Google Drive, OneDrive, iCloud Drive). The desktop app syncs on a timer, in both directions by default.
 - **WebDAV sync**: Connect to a WebDAV server (Nextcloud, ownCloud, or any compatible provider) for self-hosted sync.
 
 All sync is optional. Noteriv works perfectly offline with local-only storage.

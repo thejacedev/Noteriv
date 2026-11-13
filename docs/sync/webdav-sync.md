@@ -223,6 +223,8 @@ Earlier versions could also leave stray files on the server, which the new versi
 
 Both are safe to delete on the server by hand. They are not downloaded.
 
+Update Noteriv on every device that syncs with the same server. A device still on 2.4.11 or earlier uploads any file missing from the server again, so a note deleted on an updated device comes back until every device is updated.
+
 ## Limitations
 
 - Conflicts are resolved by keeping both versions. Nothing is merged.

@@ -82,7 +82,7 @@ To minimize conflicts, Noteriv stashes any uncommitted local changes before pull
 
 ### Folder Sync
 
-Folder sync resolves conflicts by **modification time**: the file with the more recent modification timestamp wins. This is simple and works well for single-user workflows, but can cause data loss if two devices modify the same file within the same sync interval. For multi-device editing, git sync is the safer choice.
+Folder sync keeps both versions when a file changed on both sides since the last sync. In two-way mode the newer one keeps the note's name and the other is saved next to it as a conflict copy. See [Folder Sync](./folder-sync.md#conflicts).
 
 ### WebDAV Sync
 
@@ -93,7 +93,7 @@ WebDAV sync keeps both versions when a file changed on both sides since the last
 | Feature | Git | Folder | WebDAV |
 |---|---|---|---|
 | Version history | Full git log | None (overwrite) | None (overwrite) |
-| Conflict handling | Merge/rebase | Last-modified wins | Keeps both versions |
+| Conflict handling | Merge/rebase | Keeps both versions | Keeps both versions |
 | Requires internet | For push/pull | No (local folder) | Yes |
 | Setup complexity | Moderate (token) | Low (pick folder) | Moderate (URL/auth) |
 | Mobile support | Yes (via GitHub API) | No | No |
