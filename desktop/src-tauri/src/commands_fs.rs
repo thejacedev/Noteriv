@@ -40,6 +40,9 @@ pub struct DirEntry {
     path: String,
     #[serde(rename = "isDirectory")]
     is_directory: bool,
+    /// Modified and created, in milliseconds, for sorting the file list.
+    mtime: u64,
+    ctime: u64,
 }
 
 #[tauri::command]
@@ -649,10 +652,21 @@ pub async fn fs_read_dir(app: tauri::AppHandle, dir_path: String) -> Vec<DirEntr
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let name = e.file_name().to_string_lossy().into_owned();
             let full = e.path();
+            let millis = |time: std::io::Result<std::time::SystemTime>| {
+                time.ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_millis() as u64)
+            };
+            let meta = e.metadata().ok();
+            let mtime = meta.as_ref().map_or(0, |m| millis(m.modified()));
+            let created = meta.as_ref().map_or(0, |m| millis(m.created()));
             DirEntry {
                 name,
                 path: full.to_string_lossy().into_owned(),
                 is_directory: is_dir,
+                mtime,
+                // Not every filesystem records when a file was made.
+                ctime: if created == 0 { mtime } else { created },
             }
         })
         .collect();
@@ -990,6 +1004,17 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
     list_markdown_files(&dir, None)
 }
 
+/// Move a file or folder to the system's trash (the Recycle Bin on Windows,
+/// the Trash on macOS, the freedesktop trash on Linux).
+#[tauri::command]
+pub async fn fs_trash_system(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    if !allowed(&app, &path) {
+        return Err("Refusing to delete outside the permitted scope".into());
+    }
+    let _guard = lock_file_mutations();
+    trash::delete(&path).map_err(|e| format!("It could not be moved to the system trash: {e}"))
+}
+
 /// Every file in the vault, notes and attachments alike, as paths inside it
 /// with `/` between folders.
 #[tauri::command]
@@ -1009,6 +1034,9 @@ pub struct SearchVaultInput {
     /// nameAsc, nameDesc, modifiedNew, modifiedOld, createdNew or createdOld.
     #[serde(default)]
     pub sort: String,
+    /// The "Excluded files" patterns: notes they match are left out.
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 /// Search the vault with the query language described in `search.rs`.
@@ -1025,6 +1053,7 @@ pub async fn fs_search_vault(
         &args.query,
         args.case_sensitive,
         crate::search::Sort::from_name(&args.sort),
+        &args.exclude,
     )
 }
 

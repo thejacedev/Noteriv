@@ -19,6 +19,19 @@ export interface AppSettings {
   sidebarCollapseWidth: number;
   /** Rewrite links across the vault when a note, attachment or folder is renamed or moved. */
   updateLinksOnRename: boolean;
+  /** Where a new note is created: the top of the vault, beside the open note, or in `newNoteFolder`. */
+  newNoteLocation: "root" | "current" | "folder";
+  newNoteFolder: string;
+  /** The folder inside the vault that new attachments are saved to. */
+  attachmentFolder: string;
+  /** Paths left out of search, the graph, link suggestions and Quick Open: one per line. */
+  excludedFiles: string;
+  /** Where a deleted file goes: the app's own trash (restorable in the app) or the system's. */
+  deletedFiles: "noteriv" | "system";
+  /** How the file list is ordered. */
+  fileSort: import("./file-list").FileSort;
+  /** Open the file list at the note that is opened. */
+  autoRevealFile: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,6 +54,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoCollapseSidebar: true,
   sidebarCollapseWidth: 800,
   updateLinksOnRename: true,
+  newNoteLocation: "root",
+  newNoteFolder: "",
+  attachmentFolder: "attachments",
+  excludedFiles: "",
+  deletedFiles: "noteriv",
+  fileSort: "manual",
+  autoRevealFile: false,
 };
 
 export const ACCENT_COLORS = [

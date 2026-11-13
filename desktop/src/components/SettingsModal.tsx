@@ -196,6 +196,59 @@ export default function SettingsModal({
       <Row label="Update links on rename" desc="When a note, attachment or folder is renamed or moved, rewrite the links that point to it in every note.">
         <Toggle checked={settings.updateLinksOnRename} onChange={(v) => update({ updateLinksOnRename: v })} />
       </Row>
+      <Row label="New notes go" desc="Where a new note is created.">
+        <select
+          className="st-select"
+          value={settings.newNoteLocation}
+          onChange={(e) => update({ newNoteLocation: e.target.value as AppSettings["newNoteLocation"] })}
+        >
+          <option value="root">At the top of the vault</option>
+          <option value="current">Beside the open note</option>
+          <option value="folder">In a folder I choose</option>
+        </select>
+      </Row>
+      {settings.newNoteLocation === "folder" && (
+        <Row label="Folder for new notes" desc="A folder inside the vault, such as Inbox. It is created if it does not exist.">
+          <input
+            className="st-text-input"
+            type="text"
+            value={settings.newNoteFolder}
+            placeholder="Inbox"
+            onChange={(e) => update({ newNoteFolder: e.target.value })}
+          />
+        </Row>
+      )}
+      <Row label="Attachment folder" desc="The folder inside the vault that pasted and dropped files are saved to.">
+        <input
+          className="st-text-input"
+          type="text"
+          value={settings.attachmentFolder}
+          placeholder="attachments"
+          onChange={(e) => update({ attachmentFolder: e.target.value })}
+        />
+      </Row>
+      <Row label="Deleted files" desc="The app's trash lets you restore a note from the Trash view. The system trash is your computer's own.">
+        <select
+          className="st-select"
+          value={settings.deletedFiles}
+          onChange={(e) => update({ deletedFiles: e.target.value as AppSettings["deletedFiles"] })}
+        >
+          <option value="noteriv">Move to Noteriv's trash</option>
+          <option value="system">Move to the system trash</option>
+        </select>
+      </Row>
+      <Row label="Excluded files" desc="Left out of search, the graph, Quick Open and link suggestions. One per line: a folder or file path such as Archive, or *.tmp for an ending.">
+        <textarea
+          className="st-text-input st-textarea"
+          rows={3}
+          value={settings.excludedFiles}
+          placeholder={"Archive\nTemplates"}
+          onChange={(e) => update({ excludedFiles: e.target.value })}
+        />
+      </Row>
+      <Row label="Reveal the open note" desc="Open the file list at the note you open.">
+        <Toggle checked={settings.autoRevealFile} onChange={(v) => update({ autoRevealFile: v })} />
+      </Row>
       <Row label="Responsive sidebar" desc="Collapse the file navigator when the window becomes narrow.">
         <Toggle checked={settings.autoCollapseSidebar} onChange={(v) => update({ autoCollapseSidebar: v })} />
       </Row>

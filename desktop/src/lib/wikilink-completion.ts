@@ -2,6 +2,8 @@ import { EditorView } from "@codemirror/view";
 import { CompletionContext, autocompletion, type Completion } from "@codemirror/autocomplete";
 
 import { loadVaultIndex } from "./vault-index";
+import { isExcludedPath } from "./file-list";
+import { excludedPatterns } from "./vault-prefs";
 
 let cachedFiles: { label: string; filePath: string }[] = [];
 /** Aliases, each with the note it stands for. */
@@ -17,11 +19,14 @@ async function loadFiles(vaultPath: string): Promise<void> {
 
   try {
     const files = await window.electronAPI.listAllFiles(vaultPath);
-    cachedFiles = files.map((f) => ({
-      label: f.relativePath.replace(/\.(md|markdown)$/i, ""),
-      filePath: f.filePath,
-    }));
-    const index = await loadVaultIndex(vaultPath);
+    const patterns = excludedPatterns();
+    cachedFiles = files
+      .filter((f) => !isExcludedPath(f.relativePath, patterns))
+      .map((f) => ({
+        label: f.relativePath.replace(/\.(md|markdown)$/i, ""),
+        filePath: f.filePath,
+      }));
+    const index = (await loadVaultIndex(vaultPath)).filter((n) => !isExcludedPath(n.relativePath, patterns));
     cachedAliases = index.flatMap((n) =>
       n.aliases.map((alias) => ({ alias, note: n.relativePath.replace(/\.(md|markdown)$/i, "") }))
     );

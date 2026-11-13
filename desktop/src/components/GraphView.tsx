@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import "@/styles/graph-view.css";
 import { loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
+import { isExcludedPath } from "@/lib/file-list";
+import { excludedPatterns } from "@/lib/vault-prefs";
 import {
   DEFAULT_GRAPH_FILTERS,
   buildGraphModel,
@@ -208,7 +210,8 @@ export default function GraphView({
     let cancelled = false;
     loadVaultIndex(vaultPath)
       .then((notes) => {
-        if (!cancelled) setIndex(notes);
+        const patterns = excludedPatterns();
+        if (!cancelled) setIndex(notes.filter((n) => !isExcludedPath(n.relativePath, patterns)));
       })
       .catch((err) => console.error("GraphView: failed to load the vault", err))
       .finally(() => {

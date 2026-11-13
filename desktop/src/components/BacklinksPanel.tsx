@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { findLinkedNote } from "@/lib/wiki-link-utils";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
 import { findMentions, linkMention, outgoingLinks, possibleLinks, type TextRange } from "@/lib/mentions";
+import { excludedPatterns } from "@/lib/vault-prefs";
 
 interface BacklinksPanelProps {
   /** Full path of the current file being viewed. */
@@ -114,7 +115,9 @@ export default function BacklinksPanel({
         const seen = new Set<string>();
         for (const name of [self.name, ...self.aliases]) {
           if (name.trim().length < 3) continue;
-          const result = await window.electronAPI.searchVault(vaultPath, `"${name.replace(/"/g, '\\"')}"`);
+          const result = await window.electronAPI.searchVault(vaultPath, `"${name.replace(/"/g, '\\"')}"`, {
+            exclude: excludedPatterns(),
+          });
           for (const file of result.files) {
             if (file.filePath === filePath) continue;
             for (const hit of file.lines) {

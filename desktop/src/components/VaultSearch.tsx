@@ -10,6 +10,7 @@ import {
   type SearchSort,
   type VaultSearchResult,
 } from "@/lib/vault-search";
+import { excludedPatterns } from "@/lib/vault-prefs";
 
 interface VaultSearchProps {
   vaultPath: string;
@@ -63,7 +64,11 @@ export default function VaultSearch({
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await window.electronAPI.searchVault(vaultPath, query, { caseSensitive, sort });
+        const res = await window.electronAPI.searchVault(vaultPath, query, {
+          caseSensitive,
+          sort,
+          exclude: excludedPatterns(),
+        });
         if (cancelled) return;
         setResult(res);
         setSelectedIdx(0);

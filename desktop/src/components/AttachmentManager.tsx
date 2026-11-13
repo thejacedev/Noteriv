@@ -294,7 +294,7 @@ export default function AttachmentManager({
                       : "Drag & drop files to add attachments"}
                 </span>
                 <span className="am-dropzone-hint">
-                  Files are saved to the attachments/ folder
+                  Files are saved to the attachment folder chosen in Settings
                 </span>
               </div>
 

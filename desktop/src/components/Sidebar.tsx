@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
+import { FILE_SORTS, sortFileEntries, type FileSort } from "@/lib/file-list";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import { confirmDialog } from "./ConfirmDialog";
 
@@ -34,6 +35,11 @@ interface SidebarProps {
   onAnalyzeNote?: (filePath: string) => void;
   /** Adds or removes a bookmark for a note or a folder. */
   onToggleBookmark?: (path: string, isDirectory: boolean) => void;
+  /** How the list is ordered, and what to do when the user picks another order. */
+  fileSort?: FileSort;
+  onFileSortChange?: (sort: FileSort) => void;
+  /** A file to scroll to; `tick` changes each time it is asked for. */
+  reveal?: { path: string; tick: number } | null;
 }
 
 interface ContextMenuData {
@@ -54,17 +60,11 @@ type DropIndicator = {
   dirPath: string;
 };
 
-function sortEntries(entries: FileEntry[], order: string[] | undefined): FileEntry[] {
-  if (!order || order.length === 0) return entries;
-  const orderMap = new Map(order.map((name, i) => [name, i]));
-  return [...entries].sort((a, b) => {
-    const ai = orderMap.get(a.name);
-    const bi = orderMap.get(b.name);
-    if (ai !== undefined && bi !== undefined) return ai - bi;
-    if (ai !== undefined) return -1;
-    if (bi !== undefined) return 1;
-    return 0;
-  });
+/** The order the file list is in, for every folder at every depth. */
+const FileSortContext = createContext<FileSort>("manual");
+
+function sortEntries(entries: FileEntry[], order: string[] | undefined, sort: FileSort = "manual"): FileEntry[] {
+  return sortFileEntries(entries, sort, order);
 }
 
 function FolderItem({
@@ -165,7 +165,8 @@ function FolderItem({
     if (!isRenaming) didFocusRef.current = false;
   }, [isRenaming, renameValue]);
 
-  const sorted = sortEntries(children, fileOrder[entry.path]);
+  const fileSort = useContext(FileSortContext);
+  const sorted = sortEntries(children, fileOrder[entry.path], fileSort);
 
   const isFolderDropTarget = entry.isDirectory && dropIndicator?.type === "into" && dropIndicator.dirPath === entry.path;
   const showDropLineBefore = dropIndicator?.type === "between" && dropIndicator.dirPath === parentDir && dropIndicator.index === index;
@@ -336,6 +337,9 @@ export default function Sidebar({
   onTrashFile,
   onAnalyzeNote,
   onToggleBookmark,
+  fileSort = "manual",
+  onFileSortChange,
+  reveal,
 }: SidebarProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -359,6 +363,25 @@ export default function Sidebar({
     refreshEntries();
     setRefreshKey((k) => k + 1);
   }, [refreshEntries, refreshTrigger]);
+
+  const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // Scroll to a file the app wants shown. Its folders are opened by the app
+  // first, so the row may take a moment to exist.
+  const revealPath = reveal?.path;
+  const revealTick = reveal?.tick;
+  useEffect(() => {
+    if (!revealPath) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      const row = Array.from(document.querySelectorAll<HTMLElement>("[data-filepath]")).find(
+        (el) => el.getAttribute("data-filepath") === revealPath
+      );
+      if (row) row.scrollIntoView({ block: "nearest" });
+      if (row || ++tries > 10) clearInterval(timer);
+    }, 80);
+    return () => clearInterval(timer);
+  }, [revealPath, revealTick]);
 
   const toggleFolder = useCallback((folderPath: string) => {
     onExpandedFoldersChange(
@@ -456,7 +479,7 @@ export default function Sidebar({
       // Reorder within same directory (only single file reorder makes sense)
       let currentEntries: FileEntry[] = [];
       if (window.electronAPI) currentEntries = await window.electronAPI.readDir(dirPath);
-      const sorted = sortEntries(currentEntries, fileOrder[dirPath]);
+      const sorted = sortEntries(currentEntries, fileOrder[dirPath], fileSort);
       const names = sorted.map((e) => e.name);
       const fromIdx = names.indexOf(source.entry.name);
       if (fromIdx === -1) return;
@@ -780,7 +803,7 @@ export default function Sidebar({
 
   if (collapsed) return null;
 
-  const sorted = sortEntries(entries, vault ? fileOrder[vault.path] : undefined);
+  const sorted = sortEntries(entries, vault ? fileOrder[vault.path] : undefined, fileSort);
 
   const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -806,6 +829,7 @@ export default function Sidebar({
   };
 
   return (
+    <FileSortContext.Provider value={fileSort}>
     <div
       className="sidebar-root"
       style={{ width, minWidth: width }}
@@ -821,6 +845,26 @@ export default function Sidebar({
                   <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
               </button>
+              {onFileSortChange && (
+                <button
+                  onClick={() => setShowSortMenu((v) => !v)}
+                  className="sidebar-btn"
+                  title="Change sort order"
+                  aria-haspopup="menu"
+                  aria-expanded={showSortMenu}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 4h10M3 8h7M3 12h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+              {expandedFolders.length > 0 && (
+                <button onClick={() => onExpandedFoldersChange([])} className="sidebar-btn" title="Collapse all folders">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6l4-3 4 3M4 10l4 3 4-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
               <button onClick={onCollapse} className="sidebar-btn" title="Close sidebar (Ctrl+B)">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <path d="M10.5 3.5L6 8l4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -828,6 +872,25 @@ export default function Sidebar({
               </button>
             </div>
           </div>
+
+          {showSortMenu && onFileSortChange && (
+            <div className="sidebar-sort-menu" role="menu">
+              {FILE_SORTS.map((option) => (
+                <button
+                  key={option.value}
+                  role="menuitemradio"
+                  aria-checked={fileSort === option.value}
+                  className={`sidebar-sort-item${fileSort === option.value ? " sidebar-sort-item-on" : ""}`}
+                  onClick={() => {
+                    onFileSortChange(option.value);
+                    setShowSortMenu(false);
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* File tree */}
           <div
@@ -911,5 +974,6 @@ export default function Sidebar({
         }}
       />
     </div>
+    </FileSortContext.Provider>
   );
 }

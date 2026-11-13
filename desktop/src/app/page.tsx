@@ -45,6 +45,9 @@ import { splitWikiTarget, findAnchorLine, findLinkedFile, findLinkedNote, linkKe
 import { pdfPage } from "@/lib/embed-utils";
 import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
 import { countWords, plural } from "@/lib/text-stats";
+import { newNoteFolder, nextTimestampName } from "@/lib/file-list";
+import { setVaultPrefs } from "@/lib/vault-prefs";
+import FootnotesPanel from "@/components/FootnotesPanel";
 import { findNoteByAlias, invalidateVaultIndex, loadVaultIndex } from "@/lib/vault-index";
 import { unfoldAll } from "@codemirror/language";
 import { foldAllHeadingsAndLists } from "@/lib/editor-extensions";
@@ -207,6 +210,9 @@ export default function Home() {
   const [showVaultSearch, setShowVaultSearch] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
+  const [showFootnotes, setShowFootnotes] = useState(false);
+  // A file the file list should scroll to.
+  const [revealFile, setRevealFile] = useState<{ path: string; tick: number } | null>(null);
   const [showGraphView, setShowGraphView] = useState(false);
   // A page a link asked a PDF to open at.
   const [pdfPageRequest, setPdfPageRequest] = useState<{ filePath: string; page: number; tick: number } | null>(null);
@@ -1586,23 +1592,62 @@ export default function Home() {
     }
   }, [currentTab, activeVault]);
 
-  const handleNewFile = useCallback(async () => {
+  // Create an empty note where the settings say new notes go, and open it.
+  // `pickName` is given the names already in that folder.
+  const createNote = useCallback(async (pickName: (taken: (name: string) => boolean) => string) => {
     if (!window.electronAPI || !activeVault) return;
-    // Find a unique filename
-    let name = "Untitled.md";
-    let counter = 1;
-    const existing = await window.electronAPI.readDir(activeVault.path);
-    const existingNames = existing.map((e) => e.name);
-    while (existingNames.includes(name)) {
-      counter++;
-      name = `Untitled ${counter}.md`;
-    }
-    const filePath = `${activeVault.path}/${name}`;
+    const folder = newNoteFolder(activeVault.path, settings.newNoteLocation, settings.newNoteFolder, activeTab);
+    await window.electronAPI.createDir(folder);
+    const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
+    const name = pickName((candidate) => existing.has(`${candidate}.md`.toLowerCase()));
+    const filePath = `${folder}/${name}.md`;
     await window.electronAPI.createFile(filePath);
     setTabs((prev) => [...prev, { filePath, content: "", savedContent: "" }]);
     setActiveTab(filePath);
     setSidebarRefresh((k) => k + 1);
+  }, [activeVault, activeTab, settings.newNoteLocation, settings.newNoteFolder]);
+
+  const handleNewFile = useCallback(
+    () =>
+      createNote((taken) => {
+        let name = "Untitled";
+        for (let counter = 2; taken(name); counter++) name = `Untitled ${counter}`;
+        return name;
+      }),
+    [createNote]
+  );
+
+  // A note named by the time, to the minute: a Zettelkasten-style id.
+  const handleUniqueNote = useCallback(
+    () => createNote((taken) => nextTimestampName(new Date(), taken)),
+    [createNote]
+  );
+
+  // Open the file list at a note: its folders first, then scroll to it.
+  const revealInFileList = useCallback((filePath: string) => {
+    const root = activeVault?.path;
+    if (!root || !filePath.startsWith(root)) return;
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      let folder = filePath.slice(0, Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")));
+      while (folder.length > root.length) {
+        next.add(folder);
+        folder = folder.slice(0, Math.max(folder.lastIndexOf("/"), folder.lastIndexOf("\\")));
+      }
+      return next.size === prev.length ? prev : [...next];
+    });
+    setRevealFile({ path: filePath, tick: Date.now() });
   }, [activeVault]);
+
+  // With "reveal the open note" on, the file list follows the open note.
+  useEffect(() => {
+    if (settings.autoRevealFile && activeTab) revealInFileList(activeTab);
+  }, [settings.autoRevealFile, activeTab, revealInFileList]);
+
+  // Settings that code outside React reads: see vault-prefs.ts.
+  useEffect(() => {
+    setVaultPrefs({ excludedFiles: settings.excludedFiles, attachmentFolder: settings.attachmentFolder });
+  }, [settings.excludedFiles, settings.attachmentFolder]);
 
   const handleNewFolder = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
@@ -1668,12 +1713,23 @@ export default function Home() {
 
   const handleTrashFileFromSidebar = useCallback(async (filePath: string) => {
     if (!activeVault) return;
-    const success = await trashFile(activeVault.path, filePath);
+    let success = false;
+    if (settings.deletedFiles === "system") {
+      // The system's trash: the file can be put back from there, not from the app.
+      try {
+        await window.electronAPI.trashSystem(filePath);
+        success = true;
+      } catch (err) {
+        showStatusNote(typeof err === "string" ? err : "The file could not be moved to the system trash.");
+      }
+    } else {
+      success = await trashFile(activeVault.path, filePath);
+    }
     if (success) {
       handleFileDelete(filePath);
       setSidebarRefresh((k) => k + 1);
     }
-  }, [activeVault, handleFileDelete]);
+  }, [activeVault, handleFileDelete, settings.deletedFiles, showStatusNote]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -2067,6 +2123,10 @@ export default function Home() {
       splitEditor: () => { if (activeTab) handleSplitRight(activeTab); },
       closeSplit: handleCloseSplit,
       knowledgeIngest: () => openKnowledgeIngest(),
+      uniqueNote: () => { void handleUniqueNote(); },
+      toggleFootnotes: () => setShowFootnotes((f) => !f),
+      revealActiveFile: () => { if (activeTab) { if (sidebarCollapsed) handleToggleSidebar(); revealInFileList(activeTab); } },
+      collapseAllFolders: () => setExpandedFolders([]),
       foldAll: () => { const v = shownView(); if (v) foldAllHeadingsAndLists(v); },
       unfoldAll: () => { const v = shownView(); if (v) unfoldAll(v); },
     };
@@ -2424,6 +2484,9 @@ export default function Home() {
             onToggleBookmark={(path, isDirectory) =>
               setBookmarks((b) => toggleBookmarkItem(b, isDirectory ? "folder" : "file", path))
             }
+            fileSort={settings.fileSort}
+            onFileSortChange={(fileSort) => handleSettingsChange({ ...settings, fileSort })}
+            reveal={revealFile}
           />
         )}
 
@@ -2541,6 +2604,13 @@ export default function Home() {
             content={content}
             onHeadingClick={handleHeadingClick}
             onClose={() => setShowOutline(false)}
+          />
+        )}
+        {showFootnotes && currentTab && !currentTab.kind && (
+          <FootnotesPanel
+            content={content}
+            onLineClick={handleHeadingClick}
+            onClose={() => setShowFootnotes(false)}
           />
         )}
         {showBacklinks && activeVault && currentTab && (

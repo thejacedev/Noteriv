@@ -2,6 +2,9 @@ interface FileEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  /** Modified and created, in milliseconds. */
+  mtime?: number;
+  ctime?: number;
 }
 
 interface Vault {
@@ -110,13 +113,15 @@ interface ElectronAPI {
     newPath: string,
     open: { path: string; unsaved: string | null }[]
   ) => Promise<import("@/lib/link-updates").RenameLinksResult>;
+  /** Move a file or folder to the system's trash. Rejects with the reason if it cannot. */
+  trashSystem: (path: string) => Promise<void>;
   /** Every file in the vault, as paths inside it with "/" between folders. */
   listVaultFiles: (dir: string) => Promise<string[]>;
   /** Search the vault. The query language is described in `src-tauri/src/search.rs`. */
   searchVault: (
     dir: string,
     query: string,
-    options?: { caseSensitive?: boolean; sort?: import("@/lib/vault-search").SearchSort }
+    options?: { caseSensitive?: boolean; sort?: import("@/lib/vault-search").SearchSort; exclude?: string[] }
   ) => Promise<import("@/lib/vault-search").VaultSearchResult>;
   /** Every note's frontmatter, tags, links and file details, in listing order. */
   vaultIndex: (dir: string) => Promise<import("@/lib/vault-index").RawNoteMeta[]>;

@@ -158,9 +158,10 @@ pub const SHIM_JS: &str = r#"
       listAllFiles: function (dir) { return invoke("fs_list_all_files", { dir: dir }); },
       vaultIndex: function (dir) { return invoke("fs_vault_index", { dir: dir }); },
       listVaultFiles: function (dir) { return invoke("fs_list_vault_files", { dir: dir }); },
+      trashSystem: function (path) { return invoke("fs_trash_system", { path: path }); },
       searchVault: function (dir, query, options) {
         var o = options || {};
-        return invoke("fs_search_vault", { args: { dir: dir, query: query, caseSensitive: !!o.caseSensitive, sort: o.sort || "nameAsc" } });
+        return invoke("fs_search_vault", { args: { dir: dir, query: query, caseSensitive: !!o.caseSensitive, sort: o.sort || "nameAsc", exclude: o.exclude || [] } });
       },
       getFileStats: function (dir) { return invoke("fs_get_file_stats", { dir: dir }); },
 

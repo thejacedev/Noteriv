@@ -744,8 +744,30 @@ fn line_hits(node: &Node, doc: &Doc, case: bool) -> (Vec<LineHit>, usize) {
     (hits, more)
 }
 
+/// Whether a path inside the vault matches an "Excluded files" pattern: a
+/// folder or file path from the top of the vault, or `*.ext` for an ending.
+/// The frontend has the same rule in `file-list.ts`.
+pub(crate) fn is_excluded(rel: &str, patterns: &[String]) -> bool {
+    let path = rel.to_lowercase();
+    patterns.iter().any(|raw| {
+        let pattern = raw.trim().replace('\\', "/").to_lowercase();
+        let pattern = pattern.trim_start_matches('/');
+        if let Some(ending) = pattern.strip_prefix('*') {
+            return !ending.is_empty() && path.ends_with(ending);
+        }
+        let folder = pattern.trim_end_matches('/');
+        !folder.is_empty() && (path == folder || path.starts_with(&format!("{folder}/")))
+    })
+}
+
 /// Search every note in the vault.
-pub(crate) fn search_vault(vault: &Path, query: &str, case_sensitive: bool, sort: Sort) -> SearchResult {
+pub(crate) fn search_vault(
+    vault: &Path,
+    query: &str,
+    case_sensitive: bool,
+    sort: Sort,
+    exclude: &[String],
+) -> SearchResult {
     let node = match parse(query.trim()) {
         Ok(node) => node,
         Err(error) => {
@@ -760,6 +782,9 @@ pub(crate) fn search_vault(vault: &Path, query: &str, case_sensitive: bool, sort
     for meta_rel in crate::links::list_vault(vault) {
         let lower = meta_rel.to_ascii_lowercase();
         if !(lower.ends_with(".md") || lower.ends_with(".markdown")) {
+            continue;
+        }
+        if is_excluded(&meta_rel, exclude) {
             continue;
         }
         let mut path = vault.to_path_buf();
@@ -1040,26 +1065,35 @@ Water is far from here.
         fs::write(vault.join("Gamma.md"), "nothing\n").unwrap();
         fs::write(vault.join("notes.txt"), "flour\n").unwrap();
 
-        let result = search_vault(&vault, "flour", false, Sort::NameAsc);
+        let result = search_vault(&vault, "flour", false, Sort::NameAsc, &[]);
         assert_eq!(result.error, None);
         assert_eq!(result.total_files, 2);
         let names: Vec<&str> = result.files.iter().map(|f| f.relative_path.as_str()).collect();
         assert_eq!(names, ["Sub/alpha.md", "Beta.md"]);
         assert_eq!(result.files[0].lines[0].ranges, [(0, 5), (10, 15)]);
 
-        let result = search_vault(&vault, "flour", false, Sort::NameDesc);
+        let result = search_vault(&vault, "flour", false, Sort::NameDesc, &[]);
         assert_eq!(result.files[0].relative_path, "Beta.md");
 
-        let result = search_vault(&vault, "tag:#work", false, Sort::NameAsc);
+        let result = search_vault(&vault, "tag:#work", false, Sort::NameAsc, &[]);
         assert_eq!(result.total_files, 1);
         assert!(result.files[0].lines.is_empty());
 
-        let result = search_vault(&vault, "(broken", false, Sort::NameAsc);
+        let result = search_vault(&vault, "(broken", false, Sort::NameAsc, &[]);
         assert!(result.error.is_some());
         assert!(result.files.is_empty());
 
+        // Excluded files are left out, by folder or by ending.
+        let excluded = search_vault(&vault, "flour", false, Sort::NameAsc, &["Sub".to_string()]);
+        assert_eq!(excluded.total_files, 1);
+        assert_eq!(excluded.files[0].relative_path, "Beta.md");
+        assert!(is_excluded("Archive/2024/Note.md", &["archive/".to_string()]));
+        assert!(!is_excluded("Archived/Note.md", &["Archive".to_string()]));
+        assert!(is_excluded("Notes/x.TMP", &["*.tmp".to_string()]));
+        assert!(!is_excluded("Notes/x.md", &["*".to_string(), "".to_string()]));
+
         // The field names the frontend reads.
-        let json = serde_json::to_value(search_vault(&vault, "flour", false, Sort::ModifiedNew)).unwrap();
+        let json = serde_json::to_value(search_vault(&vault, "flour", false, Sort::ModifiedNew, &[])).unwrap();
         let keys = |v: &serde_json::Value| {
             let mut k: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
             k.sort();

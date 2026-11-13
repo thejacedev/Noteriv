@@ -63,6 +63,8 @@ wait-timeout = "0.2"
 
 # Vault search: /regular expressions/ in a query
 regex = "1"
+# Deleting to the system's own trash, when the user chooses that
+trash = "5"
 # WebDAV: minimal XML parsing
 quick-xml = { version = "0.36", features = ["serialize"] }
 

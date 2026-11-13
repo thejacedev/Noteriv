@@ -84,6 +84,10 @@ export type HotkeyAction =
   | "vaultInsights"
   | "localGraph"
   | "bookmarkHeading"
+  | "uniqueNote"
+  | "toggleFootnotes"
+  | "revealActiveFile"
+  | "collapseAllFolders"
   | "foldAll"
   | "unfoldAll"
   // Knowledge
@@ -196,6 +200,10 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
   { action: "localGraph", label: "Open Local Graph", keys: "", category: "View" },
   { action: "bookmarkHeading", label: "Bookmark the Heading Under the Cursor", keys: "", category: "Navigation" },
+  { action: "uniqueNote", label: "Create New Unique Note", keys: "", category: "File" },
+  { action: "toggleFootnotes", label: "Toggle Footnotes", keys: "", category: "View" },
+  { action: "revealActiveFile", label: "Reveal the Open Note in the File List", keys: "", category: "Navigation" },
+  { action: "collapseAllFolders", label: "Collapse All Folders", keys: "", category: "View" },
   { action: "foldAll", label: "Fold All Headings and Lists", keys: "", category: "View" },
   { action: "unfoldAll", label: "Unfold All Headings and Lists", keys: "", category: "View" },
   // Knowledge

@@ -5,6 +5,8 @@
  * `attachments/` folder.
  */
 
+import { attachmentFolderName } from "./vault-prefs";
+
 export interface Attachment {
   name: string;
   path: string;
@@ -35,7 +37,7 @@ export function isImageFile(filename: string): boolean {
  * Returns the absolute path to the attachments directory for a vault.
  */
 export function getAttachmentsDir(vaultPath: string): string {
-  return `${vaultPath}/attachments`;
+  return `${vaultPath}/${attachmentFolderName()}`;
 }
 
 /**
@@ -157,7 +159,7 @@ export async function importAttachment(
     throw new Error(`Failed to import attachment: ${safeName}`);
   }
 
-  return `attachments/${safeName}`;
+  return `${attachmentFolderName()}/${safeName}`;
 }
 
 /**
@@ -167,7 +169,7 @@ export function markdownLinkForAttachment(
   name: string,
   type: Attachment["type"],
 ): string {
-  const relativePath = `attachments/${name}`;
+  const relativePath = `${attachmentFolderName()}/${name}`;
   switch (type) {
     case "image":
       return `![${name}](${relativePath})`;

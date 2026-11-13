@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadVaultIndex } from "@/lib/vault-index";
+import { isExcludedPath } from "@/lib/file-list";
+import { excludedPatterns } from "@/lib/vault-prefs";
 
 interface QuickOpenFile {
   filePath: string;
@@ -29,7 +31,9 @@ export default function QuickOpen({ vaultPath, onSelect, onClose }: QuickOpenPro
   // Load all files on mount
   useEffect(() => {
     if (!window.electronAPI) return;
-    window.electronAPI.listAllFiles(vaultPath).then(setFiles);
+    window.electronAPI
+      .listAllFiles(vaultPath)
+      .then((all) => setFiles(all.filter((f) => !isExcludedPath(f.relativePath, excludedPatterns()))));
     loadVaultIndex(vaultPath).then((index) => {
       setAliases(new Map(index.filter((n) => n.aliases.length > 0).map((n) => [n.filePath, n.aliases])));
     });

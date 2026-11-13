@@ -100,6 +100,7 @@ pub fn run() {
             commands_fs::fs_vault_index,
             commands_fs::fs_search_vault,
             commands_fs::fs_list_vault_files,
+            commands_fs::fs_trash_system,
             commands_fs::fs_create_dir,
             commands_fs::fs_copy_file,
             commands_fs::fs_write_binary_file,
