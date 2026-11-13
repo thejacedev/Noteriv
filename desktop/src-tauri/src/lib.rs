@@ -1,4 +1,6 @@
 mod auth;
+#[allow(dead_code)]
+mod cli;
 mod clipper;
 mod commands_dialog;
 mod commands_fs;
