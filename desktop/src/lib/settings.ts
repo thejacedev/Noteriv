@@ -38,6 +38,8 @@ export interface AppSettings {
   fileSort: import("./file-list").FileSort;
   /** Open the file list at the note that is opened. */
   autoRevealFile: boolean;
+  /** Open web links from notes in the app's reader instead of the browser. */
+  openLinksInReader: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deletedFiles: "noteriv",
   fileSort: "manual",
   autoRevealFile: false,
+  openLinksInReader: false,
 };
 
 export const ACCENT_COLORS = [

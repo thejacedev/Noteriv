@@ -264,6 +264,12 @@ export default function SettingsModal({
       <Row label="Reveal the open note" desc="Open the file list at the note you open.">
         <Toggle checked={settings.autoRevealFile} onChange={(v) => update({ autoRevealFile: v })} />
       </Row>
+      <Row
+        label="Open web links in the reader"
+        desc="A web link in a note opens in Noteriv's reader, which shows the page's text without its scripts, instead of in your browser. The reader can save a page as a note."
+      >
+        <Toggle checked={settings.openLinksInReader} onChange={(v) => update({ openLinksInReader: v })} />
+      </Row>
       <Row label="Responsive sidebar" desc="Collapse the file navigator when the window becomes narrow.">
         <Toggle checked={settings.autoCollapseSidebar} onChange={(v) => update({ autoCollapseSidebar: v })} />
       </Row>

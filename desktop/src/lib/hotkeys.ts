@@ -93,6 +93,7 @@ export type HotkeyAction =
   | "importNotes"
   | "openInNewWindow"
   | "moveToNewWindow"
+  | "openWebReader"
   | "saveWorkspaceLayout"
   | "revealActiveFile"
   | "collapseAllFolders"
@@ -217,6 +218,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "importNotes", label: "Import Notes from Another App", keys: "", category: "File" },
   { action: "openInNewWindow", label: "Open the Note in a New Window", keys: "", category: "View" },
   { action: "moveToNewWindow", label: "Move the Note to a New Window", keys: "", category: "View" },
+  { action: "openWebReader", label: "Open the Web Page Reader", keys: "", category: "View" },
   { action: "saveWorkspaceLayout", label: "Save Workspace Layout", keys: "", category: "View" },
   { action: "revealActiveFile", label: "Reveal the Open Note in the File List", keys: "", category: "Navigation" },
   { action: "collapseAllFolders", label: "Collapse All Folders", keys: "", category: "View" },

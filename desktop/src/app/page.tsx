@@ -130,6 +130,7 @@ import type { EditorView } from "@codemirror/view";
 const Editor = dynamic(() => import("@/components/Editor"), { ssr: false });
 // The pop-out holds an editor, which cannot be loaded where there is no page to draw on.
 const PopoutNote = dynamic(() => import("@/components/PopoutNote"), { ssr: false });
+const WebViewer = dynamic(() => import("@/components/WebViewer"), { ssr: false });
 const SourceEditor = dynamic(() => import("@/components/SourceEditor"), { ssr: false });
 const ReadOnlyView = dynamic(() => import("@/components/ReadOnlyView"), { ssr: false });
 const GraphView = dynamic(() => import("@/components/GraphView"), { ssr: false });
@@ -453,6 +454,16 @@ function Home() {
     contentRef.current = content;
     activeTabRef.current = activeTab;
   });
+
+  // The web page reader: the address it shows ("" while it waits for one)
+  // and the tab it was opened over. It shows only while that tab is in
+  // front, so choosing another tab puts the notes back.
+  const [webReader, setWebReader] = useState<{ url: string; tab: string | null } | null>(null);
+  const webReaderUrl = webReader && webReader.tab === activeTab ? webReader.url : null;
+  const setWebReaderUrl = useCallback((url: string | null) => {
+    setWebReader(url === null ? null : { url, tab: activeTabRef.current });
+  }, []);
+  const openLinksInReaderRef = useRef(false);
 
   const tabInfos = tabs.map((t) => ({
     filePath: t.filePath,
@@ -1828,6 +1839,26 @@ function Home() {
     [createNote]
   );
 
+  useEffect(() => {
+    openLinksInReaderRef.current = settings.openLinksInReader;
+  }, [settings.openLinksInReader]);
+
+  /** Save a page from the reader as a note, where new notes go, under the page's title. */
+  const saveWebPage = useCallback(async (markdown: string, title: string): Promise<boolean> => {
+    if (!window.electronAPI || !activeVault) return false;
+    const folder = newNoteFolder(activeVault.path, settings.newNoteLocation, settings.newNoteFolder, null);
+    await window.electronAPI.createDir(folder);
+    const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
+    // A title is not always fit to be a file name.
+    const clean = title.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) || "Web page";
+    const name = freeNoteName(`${clean}.md`, (candidate) => existing.has(candidate.toLowerCase()));
+    if (!await window.electronAPI.writeFile(`${folder}/${name}`, markdown)) return false;
+    invalidateVaultIndex();
+    setSidebarRefresh((k) => k + 1);
+    showStatusNote(`Saved the page as "${name.replace(/\.md$/, "")}"`);
+    return true;
+  }, [activeVault, settings.newNoteLocation, settings.newNoteFolder, showStatusNote]);
+
   // The open note in a window of its own. Moving it there closes its tab here.
   const openPopout = useCallback(async (move: boolean) => {
     if (!currentTab || currentTab.kind || !window.electronAPI) return;
@@ -2140,12 +2171,14 @@ function Home() {
 
       e.preventDefault();
       e.stopImmediatePropagation();
-      window.electronAPI?.openExternal(href);
+      // A web page can be read in the app when the user has chosen that.
+      if (openLinksInReaderRef.current && /^https?:/i.test(href)) setWebReaderUrl(href);
+      else window.electronAPI?.openExternal(href);
     };
 
     document.addEventListener("click", handleLinkClick, true);
     return () => document.removeEventListener("click", handleLinkClick, true);
-  }, []);
+  }, [setWebReaderUrl]);
 
   const handleDailyNote = useCallback(async () => {
     if (!window.electronAPI || !activeVault) return;
@@ -2534,6 +2567,7 @@ function Home() {
       toggleAllProperties: () => setShowAllProperties((p) => !p),
       newBase: () => { void handleNewBase(); },
       importNotes: () => setShowImport(true),
+      openWebReader: () => { if (webReaderUrl === null) setWebReaderUrl(""); },
       openInNewWindow: () => { void openPopout(false); },
       moveToNewWindow: () => { void openPopout(true); },
       manageWorkspaces: () => setShowWorkspaces(true),
@@ -2910,7 +2944,15 @@ function Home() {
 
         {/* Editor */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex flex-col" data-vault-path={activeVault?.path || ""} data-open-file={currentTab?.filePath || ""} onContextMenu={handleEditorContextMenu}>
-          {currentTab && !currentTab.kind ? (
+          {webReaderUrl !== null ? (
+            <WebViewer
+              url={webReaderUrl}
+              onNavigate={setWebReaderUrl}
+              onOpenExternal={(url) => { void window.electronAPI?.openExternal(url); }}
+              onSaveNote={saveWebPage}
+              onClose={() => setWebReaderUrl(null)}
+            />
+          ) : currentTab && !currentTab.kind ? (
             <SplitPane
               left={
                 <div className="flex flex-col h-full overflow-hidden">
