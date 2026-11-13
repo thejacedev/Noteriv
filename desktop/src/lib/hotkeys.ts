@@ -82,6 +82,7 @@ export type HotkeyAction =
   | "splitEditor"
   | "closeSplit"
   | "vaultInsights"
+  | "localGraph"
   | "foldAll"
   | "unfoldAll"
   // Knowledge
@@ -192,6 +193,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { action: "splitEditor", label: "Split Editor", keys: "Ctrl+\\", category: "View" },
   { action: "closeSplit", label: "Close Split", keys: "Ctrl+Shift+\\", category: "View" },
   { action: "vaultInsights", label: "Vault Insights", keys: "", category: "View" },
+  { action: "localGraph", label: "Open Local Graph", keys: "", category: "View" },
   { action: "foldAll", label: "Fold All Headings and Lists", keys: "", category: "View" },
   { action: "unfoldAll", label: "Unfold All Headings and Lists", keys: "", category: "View" },
   // Knowledge

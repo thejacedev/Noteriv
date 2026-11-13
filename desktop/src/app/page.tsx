@@ -199,6 +199,8 @@ export default function Home() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showGraphView, setShowGraphView] = useState(false);
+  // Whether the graph opens on the current note's neighbourhood.
+  const [graphStartsLocal, setGraphStartsLocal] = useState(false);
   const [showBacklinks, setShowBacklinks] = useState(false);
   const [showTagPane, setShowTagPane] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -1930,7 +1932,8 @@ export default function Home() {
       gitSync: handleGitSync,
       dailyNote: handleDailyNote,
       toggleOutline: () => setShowOutline((o) => !o),
-      graphView: () => setShowGraphView(true),
+      graphView: () => { setGraphStartsLocal(false); setShowGraphView(true); },
+      localGraph: () => { setGraphStartsLocal(true); setShowGraphView(true); },
       toggleBacklinks: () => setShowBacklinks((b) => !b),
       toggleTags: () => setShowTagPane((t) => !t),
       insertTemplate: () => setShowTemplatePicker(true),
@@ -2605,6 +2608,7 @@ export default function Home() {
         <GraphView
           vaultPath={activeVault.path}
           currentFile={activeTab}
+          startLocal={graphStartsLocal}
           onFileSelect={(f) => { openFile(f); setShowGraphView(false); }}
           onClose={() => setShowGraphView(false)}
         />

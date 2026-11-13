@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import "@/styles/graph-view.css";
-import { splitWikiTarget } from "@/lib/wiki-link-utils";
+import { loadVaultIndex, type NoteMeta } from "@/lib/vault-index";
+import {
+  DEFAULT_GRAPH_FILTERS,
+  buildGraphModel,
+  type GraphFilters,
+  type GraphNodeKind,
+} from "@/lib/graph-model";
 
 // ── Types ──
 
@@ -11,16 +17,66 @@ interface GraphViewProps {
   currentFile: string | null;
   onFileSelect: (filePath: string) => void;
   onClose: () => void;
+  /** Open on the current note's neighbourhood instead of the whole vault. */
+  startLocal?: boolean;
 }
 
 interface GraphNode {
-  id: string;           // file path
+  id: string;           // file path, or tag:/file:/missing: for the other kinds
   label: string;        // file name without .md
+  kind: GraphNodeKind;
+  /** A group's colour, if a group claims the note. */
+  color: string | null;
+  /** When the note was created, for the time-lapse. */
+  ctime: number;
   x: number;
   y: number;
   vx: number;
   vy: number;
   connections: number;  // total edge count
+}
+
+/** How the graph is drawn and how its nodes push and pull. 1 is the default strength. */
+interface GraphLook {
+  arrows: boolean;
+  nodeSize: number;
+  linkThickness: number;
+  /** Labels show when zoomed in at least this far. */
+  textFade: number;
+  centerForce: number;
+  repelForce: number;
+  linkForce: number;
+  /** The length a link settles at, in pixels. 0 pulls linked notes together freely. */
+  linkDistance: number;
+}
+
+const DEFAULT_LOOK: GraphLook = {
+  arrows: true,
+  nodeSize: 1,
+  linkThickness: 1,
+  textFade: 0.4,
+  centerForce: 1,
+  repelForce: 1,
+  linkForce: 1,
+  linkDistance: 0,
+};
+
+const GROUP_COLORS = ["#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#cba6f7", "#fab387", "#94e2d5"];
+const SETTINGS_KEY = "noteriv-graph-settings";
+
+function loadSettings(): { filters: GraphFilters; look: GraphLook } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    if (saved && typeof saved === "object") {
+      return {
+        filters: { ...DEFAULT_GRAPH_FILTERS, ...saved.filters, local: false },
+        look: { ...DEFAULT_LOOK, ...saved.look },
+      };
+    }
+  } catch {
+    // Unreadable settings are the same as none.
+  }
+  return { filters: { ...DEFAULT_GRAPH_FILTERS }, look: { ...DEFAULT_LOOK } };
 }
 
 interface GraphEdge {
@@ -46,16 +102,9 @@ const DAMPING = 0.85;
 const MIN_NODE_RADIUS = 6;
 const MAX_NODE_RADIUS = 22;
 const LABEL_FONT_SIZE = 11;
-const LINK_REGEX = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 const HIT_PADDING = 4;
 
 // ── Helpers ──
-
-function labelFromPath(filePath: string): string {
-  const parts = filePath.replace(/\\/g, "/").split("/");
-  const fileName = parts[parts.length - 1];
-  return fileName.replace(/\.md$/i, "");
-}
 
 function nodeRadius(connections: number, maxConnections: number): number {
   if (maxConnections <= 0) return MIN_NODE_RADIUS;
@@ -91,6 +140,7 @@ export default function GraphView({
   currentFile,
   onFileSelect,
   onClose,
+  startLocal = false,
 }: GraphViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,6 +151,26 @@ export default function GraphView({
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // The vault's notes, and the choices that decide what is drawn from them
+  const [index, setIndex] = useState<NoteMeta[]>([]);
+  const [filters, setFilters] = useState<GraphFilters>(() => ({ ...loadSettings().filters, local: startLocal }));
+  const [look, setLook] = useState<GraphLook>(() => loadSettings().look);
+  const [showSettings, setShowSettings] = useState(false);
+  const lookRef = useRef(look);
+  useEffect(() => { lookRef.current = look; }, [look]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ filters, look }));
+    } catch {
+      // Not being able to remember the settings is not worth interrupting for.
+    }
+  }, [filters, look]);
+
+  // Time-lapse: notes appear in the order they were created. While it runs,
+  // only notes created up to this moment are drawn.
+  const revealRef = useRef<number | null>(null);
+  const [playing, setPlaying] = useState(false);
 
   // Interaction state
   const [searchQuery, setSearchQuery] = useState("");
@@ -133,100 +203,44 @@ export default function GraphView({
   useEffect(() => { currentFileRef.current = currentFile; }, [currentFile]);
 
   // ── Build graph data ──
+  // Load the vault's notes once.
   useEffect(() => {
     let cancelled = false;
-
-    async function buildGraph() {
-      if (!window.electronAPI) return;
-
-      try {
-        const files = await window.electronAPI.listAllFiles(vaultPath);
-        const mdFiles = files.filter((f) => f.filePath.endsWith(".md") || f.filePath.endsWith(".markdown"));
-
-        // Read all file contents in parallel
-        const contents = await Promise.all(
-          mdFiles.map(async (f) => {
-            const content = await window.electronAPI.readFile(f.filePath);
-            return { file: f, content: content ?? "" };
-          })
-        );
-
-        if (cancelled) return;
-
-        // Build a lookup: label (lowercase) -> file path
-        const labelToPath = new Map<string, string>();
-        for (const f of mdFiles) {
-          const label = labelFromPath(f.filePath).toLowerCase();
-          labelToPath.set(label, f.filePath);
-        }
-
-        // Preserve link direction first, then collapse reciprocal pairs into
-        // one relationship that can be rendered with arrows at both ends.
-        const directedLinks = new Map<string, { source: string; target: string }>();
-
-        for (const { file, content } of contents) {
-          let match: RegExpExecArray | null;
-          const regex = new RegExp(LINK_REGEX.source, LINK_REGEX.flags);
-          while ((match = regex.exec(content)) !== null) {
-            // [[Note#Heading]] and [[Note#^block]] link to Note.
-            const linkTarget = splitWikiTarget(match[1]).file.toLowerCase();
-            const targetPath = labelToPath.get(linkTarget);
-            if (targetPath && targetPath !== file.filePath) {
-              const key = `${file.filePath}\0${targetPath}`;
-              directedLinks.set(key, { source: file.filePath, target: targetPath });
-            }
-          }
-        }
-
-        const relationshipSet = new Set<string>();
-        const edgeList: GraphEdge[] = [];
-        for (const link of directedLinks.values()) {
-          const relationshipKey = [link.source, link.target].sort().join("\0");
-          if (relationshipSet.has(relationshipKey)) continue;
-          relationshipSet.add(relationshipKey);
-          edgeList.push({
-            ...link,
-            reciprocal: directedLinks.has(`${link.target}\0${link.source}`),
-          });
-        }
-
-        // Count connections per node
-        const connectionCount = new Map<string, number>();
-        for (const edge of edgeList) {
-          connectionCount.set(edge.source, (connectionCount.get(edge.source) ?? 0) + 1);
-          connectionCount.set(edge.target, (connectionCount.get(edge.target) ?? 0) + 1);
-        }
-
-        // Create nodes with random initial positions
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        const spread = Math.min(cx, cy) * 0.8;
-
-        const nodeList: GraphNode[] = mdFiles.map((f) => ({
-          id: f.filePath,
-          label: labelFromPath(f.filePath),
-          x: cx + (Math.random() - 0.5) * spread * 2,
-          y: cy + (Math.random() - 0.5) * spread * 2,
-          vx: 0,
-          vy: 0,
-          connections: connectionCount.get(f.filePath) ?? 0,
-        }));
-
-        if (cancelled) return;
-        setNodes(nodeList);
-        setEdges(edgeList);
-        nodesRef.current = nodeList;
-        edgesRef.current = edgeList;
-        setLoading(false);
-      } catch (err) {
-        console.error("GraphView: failed to build graph", err);
+    loadVaultIndex(vaultPath)
+      .then((notes) => {
+        if (!cancelled) setIndex(notes);
+      })
+      .catch((err) => console.error("GraphView: failed to load the vault", err))
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    }
-
-    buildGraph();
+      });
     return () => { cancelled = true; };
   }, [vaultPath]);
+
+  // Build what is drawn. Nodes that were already there keep their place, so
+  // changing a filter does not throw the whole picture in the air.
+  const localTarget = filters.local ? currentFile : null;
+  useEffect(() => {
+    const model = buildGraphModel(index, filters, localTarget);
+    const previous = new Map(nodesRef.current.map((n) => [n.id, n]));
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const spread = Math.min(cx, cy) * 0.8;
+    const nodeList: GraphNode[] = model.nodes.map((n) => {
+      const old = previous.get(n.id);
+      return {
+        ...n,
+        x: old ? old.x : cx + (Math.random() - 0.5) * spread * 2,
+        y: old ? old.y : cy + (Math.random() - 0.5) * spread * 2,
+        vx: old ? old.vx : 0,
+        vy: old ? old.vy : 0,
+      };
+    });
+    setNodes(nodeList);
+    setEdges(model.edges);
+    nodesRef.current = nodeList;
+    edgesRef.current = model.edges;
+  }, [index, filters, localTarget]);
 
   // ── Computed values ──
   const stats = useMemo(() => {
@@ -241,6 +255,7 @@ export default function GraphView({
     textPrimary: "#cdd6f4",
     textMuted: "#6c7086",
     bgPrimary: "#1e1e2e",
+    green: "#a6e3a1",
   });
 
   useEffect(() => {
@@ -253,6 +268,7 @@ export default function GraphView({
         textPrimary: style.getPropertyValue("--text-primary").trim() || "#cdd6f4",
         textMuted: style.getPropertyValue("--text-muted").trim() || "#6c7086",
         bgPrimary: style.getPropertyValue("--bg-primary").trim() || "#1e1e2e",
+        green: style.getPropertyValue("--green").trim() || "#a6e3a1",
       };
     };
     readColors();
@@ -300,6 +316,9 @@ export default function GraphView({
       const curFile = currentFileRef.current;
       const colors = colorsRef.current;
       const dragging = dragRef.current;
+      const style = lookRef.current;
+      const reveal = revealRef.current;
+      const hidden = (n: GraphNode) => reveal !== null && n.kind === "note" && n.ctime > reveal;
 
       const W = canvas.getBoundingClientRect().width;
       const H = canvas.getBoundingClientRect().height;
@@ -324,7 +343,7 @@ export default function GraphView({
           let dy = a.y - b.y;
           let dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 1; }
-          const force = REPULSION_STRENGTH / (dist * dist);
+          const force = (REPULSION_STRENGTH * style.repelForce) / (dist * dist);
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
 
@@ -338,7 +357,7 @@ export default function GraphView({
         }
 
         // Center gravity (stronger for orphan nodes)
-        const gravity = a.connections === 0 ? ORPHAN_GRAVITY : CENTER_GRAVITY;
+        const gravity = (a.connections === 0 ? ORPHAN_GRAVITY : CENTER_GRAVITY) * style.centerForce;
         a.vx += (centerX - a.x) * gravity;
         a.vy += (centerY - a.y) * gravity;
       }
@@ -354,8 +373,10 @@ export default function GraphView({
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 1) continue;
 
-        const fx = dx * ATTRACTION_STRENGTH;
-        const fy = dy * ATTRACTION_STRENGTH;
+        // A spring that rests at the chosen link length.
+        const stretch = (dist - style.linkDistance) / dist;
+        const fx = dx * stretch * ATTRACTION_STRENGTH * style.linkForce;
+        const fy = dy * stretch * ATTRACTION_STRENGTH * style.linkForce;
 
         if (!(dragging.active && dragging.draggedNode === a.id)) {
           a.vx += fx;
@@ -417,6 +438,7 @@ export default function GraphView({
         const a = nodeMap.get(e.source);
         const b = nodeMap.get(e.target);
         if (!a || !b) continue;
+        if (hidden(a) || hidden(b)) continue;
 
         const isHighlighted = hovered && highlightSet.has(a.id) && highlightSet.has(b.id);
         const isDimmedBySearch = search && (!searchMatched.has(a.id) && !searchMatched.has(b.id));
@@ -427,10 +449,10 @@ export default function GraphView({
         if (distance < 1) continue;
         const ux = dx / distance;
         const uy = dy / distance;
-        const startX = a.x + ux * (nodeRadius(a.connections, mc) + 2);
-        const startY = a.y + uy * (nodeRadius(a.connections, mc) + 2);
-        const endX = b.x - ux * (nodeRadius(b.connections, mc) + 3);
-        const endY = b.y - uy * (nodeRadius(b.connections, mc) + 3);
+        const startX = a.x + ux * (nodeRadius(a.connections, mc) * style.nodeSize + 2);
+        const startY = a.y + uy * (nodeRadius(a.connections, mc) * style.nodeSize + 2);
+        const endX = b.x - ux * (nodeRadius(b.connections, mc) * style.nodeSize + 3);
+        const endY = b.y - uy * (nodeRadius(b.connections, mc) * style.nodeSize + 3);
         const edgeColor = isHighlighted ? colors.accent : colors.border;
         const edgeAlpha = isDimmedBySearch ? 0.08 : isHighlighted ? 0.85 : e.reciprocal ? 0.42 : 0.3;
 
@@ -441,21 +463,24 @@ export default function GraphView({
           ? colors.accent
           : colors.border;
         ctx.globalAlpha = edgeAlpha;
-        ctx.lineWidth = isHighlighted ? 1.5 : e.reciprocal ? 1.25 : 1;
+        ctx.lineWidth = (isHighlighted ? 1.5 : e.reciprocal ? 1.25 : 1) * style.linkThickness;
         ctx.stroke();
 
-        const angle = Math.atan2(dy, dx);
-        ctx.fillStyle = edgeColor;
-        drawArrowHead(ctx, endX, endY, angle, isHighlighted ? 7 : 6);
-        if (e.reciprocal) {
-          drawArrowHead(ctx, startX, startY, angle + Math.PI, isHighlighted ? 7 : 6);
+        if (style.arrows) {
+          const angle = Math.atan2(dy, dx);
+          ctx.fillStyle = edgeColor;
+          drawArrowHead(ctx, endX, endY, angle, isHighlighted ? 7 : 6);
+          if (e.reciprocal) {
+            drawArrowHead(ctx, startX, startY, angle + Math.PI, isHighlighted ? 7 : 6);
+          }
         }
         ctx.globalAlpha = 1;
       }
 
       // Draw nodes
       for (const n of ns) {
-        const r = nodeRadius(n.connections, mc);
+        if (hidden(n)) continue;
+        const r = nodeRadius(n.connections, mc) * style.nodeSize;
         const isActive = curFile === n.id;
         const isHovered = hovered === n.id;
         const isConnected = highlightSet.has(n.id);
@@ -480,16 +505,29 @@ export default function GraphView({
           ctx.strokeStyle = colors.accent;
           ctx.lineWidth = 2;
           ctx.stroke();
-        } else {
-          ctx.fillStyle = colors.bgSurface;
+        } else if (n.kind === "tag") {
+          // Tags are filled, so they read as a different kind of thing.
+          ctx.fillStyle = colors.green;
           ctx.fill();
-          ctx.strokeStyle = isConnected && hovered ? colors.accent : colors.accent;
+        } else if (n.kind === "missing" || n.kind === "attachment") {
+          // Not a note: an outline only, dashed for one that does not exist.
+          ctx.fillStyle = colors.bgPrimary;
+          ctx.fill();
+          if (n.kind === "missing") ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = colors.textMuted;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          ctx.fillStyle = n.color ?? colors.bgSurface;
+          ctx.fill();
+          ctx.strokeStyle = n.color ?? colors.accent;
           ctx.lineWidth = isConnected && hovered ? 1.5 : 1;
           ctx.stroke();
         }
 
         // Label
-        const showLabel = cam.zoom > 0.4 || isHovered || isActive || (search && isSearchMatch);
+        const showLabel = cam.zoom > style.textFade || isHovered || isActive || (search && isSearchMatch);
         if (showLabel) {
           const fontSize = Math.max(LABEL_FONT_SIZE / Math.max(cam.zoom, 0.5), 10);
           ctx.font = `${isActive || isHovered ? "600" : "400"} ${fontSize}px Inter, -apple-system, sans-serif`;
@@ -649,7 +687,8 @@ export default function GraphView({
         // If it was a click (not a drag), open the note
         if (dx < 3 && dy < 3) {
           const node = hitTest(e.clientX, e.clientY);
-          if (node) {
+          // A tag or a note that does not exist has nothing to open.
+          if (node && node.kind === "note") {
             onFileSelect(node.id);
           }
         }
@@ -696,6 +735,41 @@ export default function GraphView({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
+
+  // ── Time-lapse ──
+  const timelapseFrame = useRef(0);
+  const playTimelapse = useCallback(() => {
+    const times = nodesRef.current
+      .filter((n) => n.kind === "note")
+      .map((n) => n.ctime)
+      .sort((a, b) => a - b);
+    if (times.length < 2) return;
+    cancelAnimationFrame(timelapseFrame.current);
+    const startedAt = performance.now();
+    const duration = Math.min(8000, 1500 + times.length * 40);
+    setPlaying(true);
+    const step = (now: number) => {
+      const t = Math.min((now - startedAt) / duration, 1);
+      // By rank, not by date: a hundred notes imported on one day should
+      // still appear one after another.
+      revealRef.current = times[Math.min(times.length - 1, Math.floor(t * times.length))];
+      if (t < 1) {
+        timelapseFrame.current = requestAnimationFrame(step);
+      } else {
+        revealRef.current = null;
+        setPlaying(false);
+      }
+    };
+    timelapseFrame.current = requestAnimationFrame(step);
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(timelapseFrame.current), []);
+
+  const setFilter = useCallback(<K extends keyof GraphFilters>(key: K, value: GraphFilters[K]) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }, []);
+  const setLookValue = useCallback(<K extends keyof GraphLook>(key: K, value: GraphLook[K]) => {
+    setLook((l) => ({ ...l, [key]: value }));
+  }, []);
 
   // ── Backdrop click ──
   const handleBackdropClick = useCallback(
@@ -746,6 +820,145 @@ export default function GraphView({
           </svg>
         </button>
 
+        {/* Settings */}
+        <button
+          className={`graph-settings-btn${showSettings ? " graph-settings-btn-on" : ""}`}
+          onClick={() => setShowSettings((v) => !v)}
+          title="Graph settings"
+          aria-expanded={showSettings}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h7M12 4h2M2 8h2M7 8h7M2 12h8M13 12h1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="10.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="5.5" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="11.5" cy="12" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {showSettings && (
+          <div className="graph-settings">
+            <div className="graph-settings-head">
+              <span>Graph settings</span>
+              <button
+                className="graph-settings-reset"
+                onClick={() => {
+                  setFilters({ ...DEFAULT_GRAPH_FILTERS, local: filters.local });
+                  setLook({ ...DEFAULT_LOOK });
+                }}
+              >
+                Restore defaults
+              </button>
+            </div>
+
+            <div className="graph-settings-title">Filters</div>
+            <label className="graph-check" title={currentFile ? undefined : "Open a note first"}>
+              <input
+                type="checkbox"
+                checked={filters.local}
+                disabled={!currentFile}
+                onChange={(e) => setFilter("local", e.target.checked)}
+              />
+              Local graph: this note and its neighbours
+            </label>
+            {filters.local && (
+              <label className="graph-slider">
+                <span>Depth</span>
+                <input type="range" min={1} max={5} step={1} value={filters.depth} onChange={(e) => setFilter("depth", Number(e.target.value))} />
+                <span className="graph-slider-value">{filters.depth}</span>
+              </label>
+            )}
+            <label className="graph-check">
+              <input type="checkbox" checked={filters.showTags} onChange={(e) => setFilter("showTags", e.target.checked)} />
+              Tags
+            </label>
+            <label className="graph-check">
+              <input type="checkbox" checked={filters.showAttachments} onChange={(e) => setFilter("showAttachments", e.target.checked)} />
+              Attachments
+            </label>
+            <label className="graph-check">
+              <input type="checkbox" checked={filters.existingOnly} onChange={(e) => setFilter("existingOnly", e.target.checked)} />
+              Existing notes only
+            </label>
+            <label className="graph-check">
+              <input type="checkbox" checked={filters.showOrphans} onChange={(e) => setFilter("showOrphans", e.target.checked)} />
+              Notes with no links
+            </label>
+
+            <div className="graph-settings-title">Groups</div>
+            {filters.groups.map((group, i) => (
+              <div key={i} className="graph-group">
+                <input
+                  type="color"
+                  value={group.color}
+                  aria-label="Group colour"
+                  onChange={(e) =>
+                    setFilter("groups", filters.groups.map((g, k) => (k === i ? { ...g, color: e.target.value } : g)))
+                  }
+                />
+                <input
+                  type="text"
+                  value={group.query}
+                  placeholder="tag:#work, path:Folder or a name"
+                  aria-label="Which notes are in the group"
+                  onChange={(e) =>
+                    setFilter("groups", filters.groups.map((g, k) => (k === i ? { ...g, query: e.target.value } : g)))
+                  }
+                />
+                <button
+                  className="graph-group-remove"
+                  title="Remove group"
+                  aria-label="Remove group"
+                  onClick={() => setFilter("groups", filters.groups.filter((_, k) => k !== i))}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              className="graph-settings-action"
+              onClick={() =>
+                setFilter("groups", [
+                  ...filters.groups,
+                  { query: "", color: GROUP_COLORS[filters.groups.length % GROUP_COLORS.length] },
+                ])
+              }
+            >
+              New group
+            </button>
+
+            <div className="graph-settings-title">Display</div>
+            <label className="graph-check">
+              <input type="checkbox" checked={look.arrows} onChange={(e) => setLookValue("arrows", e.target.checked)} />
+              Arrows
+            </label>
+            {([
+              ["nodeSize", "Node size", 0.5, 2.5, 0.1],
+              ["linkThickness", "Link thickness", 0.5, 3, 0.1],
+              ["textFade", "Hide names when zoomed out past", 0, 1.5, 0.05],
+            ] as const).map(([key, label, min, max, step]) => (
+              <label key={key} className="graph-slider">
+                <span>{label}</span>
+                <input type="range" min={min} max={max} step={step} value={look[key]} onChange={(e) => setLookValue(key, Number(e.target.value))} />
+              </label>
+            ))}
+            <button className="graph-settings-action" onClick={playTimelapse} disabled={playing}>
+              {playing ? "Playing..." : "Play time-lapse"}
+            </button>
+
+            <div className="graph-settings-title">Forces</div>
+            {([
+              ["centerForce", "Center force", 0, 3, 0.1],
+              ["repelForce", "Repel force", 0.2, 3, 0.1],
+              ["linkForce", "Link force", 0, 3, 0.1],
+              ["linkDistance", "Link distance", 0, 300, 10],
+            ] as const).map(([key, label, min, max, step]) => (
+              <label key={key} className="graph-slider">
+                <span>{label}</span>
+                <input type="range" min={min} max={max} step={step} value={look[key]} onChange={(e) => setLookValue(key, Number(e.target.value))} />
+              </label>
+            ))}
+          </div>
+        )}
+
         {/* Canvas */}
         <canvas
           ref={canvasRef}
@@ -788,7 +1001,7 @@ export default function GraphView({
         <div className="graph-stats">
           <div className="graph-stat-item">
             <span className="graph-stat-value">{stats.noteCount}</span>
-            <span>notes</span>
+            <span>{filters.local ? "nearby" : "nodes"}</span>
           </div>
           <div className="graph-stat-item">
             <span className="graph-stat-value">{stats.edgeCount}</span>
