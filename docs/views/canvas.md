@@ -40,7 +40,7 @@ The toolbar sits at the top of the canvas. Point at a button to see its name.
 | Zoom to fit | Brings every card into view |
 | Delete selected | Deletes the selected cards or the selected connection |
 
-The tooltips of the select and draw buttons end in a letter in brackets. Those letters are not shortcuts: the canvas does not act on the `V` or `D` key.
+The letters in brackets are shortcuts: press `V` for the select tool and `D` to switch the draw tool on and off, while you are not typing in a card or a box.
 
 A card added from the toolbar is placed in the middle of the view. **Add notes from a folder** places its cards beside what is already on the canvas.
 
@@ -306,7 +306,9 @@ The background is a grid of dots. Cards do not snap to it.
 |---|---|
 | `Delete` / `Backspace` | Delete the selected cards or the selected connection |
 | `Ctrl+A` | Select every card |
-| `Ctrl+D` | Duplicate the selected cards. See the note below |
+| `Ctrl+D` | Duplicate the selected cards |
+| `V` | The select tool |
+| `D` | Switch the draw tool on and off |
 | `Ctrl+V` | Paste a web address as a [web page card](#web-page-cards) |
 | `Esc` | Clear the selection, close an open menu, stop a connection that is being drawn and leave the draw tool. With none of those to do, close the canvas |
 | `Shift`+click | Add a card to the selection, or take it out |
@@ -322,7 +324,7 @@ The background is a grid of dots. Cards do not snap to it.
 
 On macOS, use `Cmd` in place of `Ctrl`.
 
-`Ctrl+D` is also the default shortcut for **Open Daily Note**, and pressing it with cards selected does both: the cards are duplicated and the daily note opens. To duplicate without that, use **Duplicate** in the right-click menu, or give the daily note a different shortcut in Settings > Shortcuts.
+`Ctrl+D` is also the default shortcut for **Open Daily Note**. With cards selected on the canvas it only duplicates them; with nothing selected it opens the daily note as anywhere else.
 
 While you are typing in a text card or a sticky note, the keys go to the text, and `Esc` does not end the typing. Click outside the card to finish. When a list or a box is open over the canvas, `Esc` closes that list or box and leaves the canvas open.
 
