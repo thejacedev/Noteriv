@@ -82,10 +82,13 @@ Changing the direction starts again from scratch, like a first sync: files that 
 
 Before the first sync, you can click the "Test Connection" button in settings. This verifies that:
 
-1. The target path can be created, if it does not exist yet.
-2. Noteriv can write to it.
+1. The target folder is not inside the vault, and the vault is not inside it.
+2. The target path can be created, if it does not exist yet.
+3. Noteriv can write to it.
 
-The test writes a small temporary file (`.noteriv-test`) and deletes it again. If the test fails, the message says why.
+The test writes a small temporary file (`.noteriv-test`) and deletes it again. If the test fails, the message says why, and a folder that is refused is not created.
+
+In 2.4.13 the test did not make the first check: it said "Connected" for a folder inside the vault and created that folder, and sync then refused it.
 
 ## When Sync Runs
 
