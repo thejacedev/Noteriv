@@ -922,12 +922,25 @@ pub(crate) fn plan(
 // Doing it
 // ============================================================
 
+/// A note that had changed on both sides, and where the version that did
+/// not keep its name went. Paths are relative to the vault, with `/`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConflictCopy {
+    pub note: String,
+    pub copy: String,
+    /// Whether the copy was written into the vault. Push-only folder sync
+    /// leaves the vault alone, so there the copy is only in the target folder.
+    pub in_vault: bool,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
     pub pushed: usize,
     pub pulled: usize,
     pub deleted: usize,
     pub conflicts: usize,
+    /// One entry per conflict counted in `conflicts`, for the notice in the app.
+    pub conflict_copies: Vec<ConflictCopy>,
     /// One line per file that could not be synced this run.
     pub errors: Vec<String>,
 }
@@ -1120,6 +1133,11 @@ impl Run<'_> {
             self.upload(rel).await?;
         }
         self.outcome.conflicts += 1;
+        self.outcome.conflict_copies.push(ConflictCopy {
+            note: rel.to_string(),
+            copy: copy_rel,
+            in_vault: true,
+        });
         Ok(())
     }
 
@@ -2255,6 +2273,12 @@ mod live {
         let files = b.tree();
         assert_eq!(files.len(), 2, "{files:?}");
         assert!(files.iter().any(|f| f.contains("(conflict ")), "{files:?}");
+        // The run names the note and its copy, for the notice in the app.
+        assert_eq!(outcome.conflict_copies.len(), 1);
+        let reported = &outcome.conflict_copies[0];
+        assert_eq!(reported.note, "Both.md");
+        assert!(reported.in_vault);
+        assert!(files.contains(&reported.copy), "{} not in {files:?}", reported.copy);
         let mut versions: Vec<String> = files.iter().map(|f| b.text(f)).collect();
         versions.sort();
         assert_eq!(versions, ["edit from a", "edit from b"]);

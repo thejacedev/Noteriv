@@ -61,6 +61,8 @@ import {
   formatCommitMessage,
 } from "@/lib/settings";
 import { autoSyncApplies } from "@/lib/sync-providers";
+import { addConflicts, conflictsFor, dismissConflicts, removeConflictCopy, splitPath, type SyncConflict } from "@/lib/sync-conflicts";
+import SyncConflictNotice from "@/components/SyncConflictNotice";
 import {
   wrapSelection,
   insertLink as editorInsertLink,
@@ -255,6 +257,8 @@ export default function Home() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
+  // Notes that sync kept two versions of, until the notice is dismissed.
+  const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
   const [gitChanges, setGitChanges] = useState(0);
   const syncInFlightRef = useRef(false);
 
@@ -728,11 +732,17 @@ export default function Home() {
           settings.extraSyncProvider === "folder" ? settings.folderSync :
           settings.extraSyncProvider === "webdav" ? settings.webdavSync : null;
         if (config) {
-          await window.electronAPI.syncProviderSync(
-            activeVault.path,
+          const vaultPath = activeVault.path;
+          const result = await window.electronAPI.syncProviderSync(
+            vaultPath,
             settings.extraSyncProvider,
             config
           );
+          // Before anything else can fail: these conflicts are resolved on
+          // disk now, so no later run will report them again.
+          setSyncConflicts((prev) => addConflicts(prev, vaultPath, result?.conflictCopies));
+          // Some files could not be synced. The status bar shows it as before.
+          if (result?.error) throw new Error(result.error);
         }
       }
 
@@ -976,6 +986,24 @@ export default function Home() {
       openingFilesRef.current.delete(filePath);
     }
   }, []);
+
+  // "Open copy" in the sync conflict notice. The notice tells the user to
+  // delete the copy they do not need, so the copy may be gone by the time
+  // they click: then its row is dropped, instead of nothing happening (a
+  // note) or a tab opening on a missing file (an image or PDF).
+  const openConflictCopy = useCallback(async (filePath: string) => {
+    if (!window.electronAPI) return;
+    const { folder, name } = splitPath(filePath);
+    let entries: FileEntry[] = [];
+    try {
+      entries = await window.electronAPI.readDir(folder);
+    } catch {}
+    if (entries.some((entry) => entry.name === name && !entry.isDirectory)) {
+      await openFile(filePath);
+    } else {
+      setSyncConflicts((prev) => removeConflictCopy(prev, filePath));
+    }
+  }, [openFile]);
 
   const removeTab = useCallback((filePath: string) => {
     // Pinned tabs cannot be closed
@@ -2485,6 +2513,12 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <SyncConflictNotice
+        conflicts={conflictsFor(syncConflicts, activeVault?.path)}
+        onOpen={(filePath) => { void openConflictCopy(filePath); }}
+        onDismiss={() => setSyncConflicts((prev) => dismissConflicts(prev, activeVault?.path))}
+      />
 
       {/* Settings */}
       {showSettings && (

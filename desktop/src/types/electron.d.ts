@@ -201,7 +201,16 @@ interface ElectronAPI {
   onUpdaterError: (callback: (data: { message: string }) => void) => () => void;
 
   // Sync providers (folder, webdav, s3)
-  syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{ pushed: number; pulled: number; deleted: number; conflicts: number }>;
+  syncProviderSync: (vaultPath: string, providerType: string, config: Record<string, any>) => Promise<{
+    pushed: number;
+    pulled: number;
+    deleted: number;
+    conflicts: number;
+    /** One entry per conflict. `copyPath` is null when the copy is not in the vault. */
+    conflictCopies: { note: string; copy: string; copyPath: string | null }[];
+    /** Set when some files could not be synced; the rest of the result still stands. */
+    error: string | null;
+  }>;
   syncProviderTest: (providerType: string, config: Record<string, any>, vaultPath?: string) => Promise<{ ok: boolean; error?: string }>;
 
   // Search / file listing

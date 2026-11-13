@@ -1,0 +1,138 @@
+/* ─── Sync conflict notice ───
+   A card above the status bar, on the side where the sync indicator is.
+   Theme variables only, so it follows light and dark themes. */
+
+.scn-card {
+  position: fixed;
+  right: 12px;
+  bottom: 34px; /* clears the 24px status bar */
+  z-index: 900; /* above the editor and panels, below menus and dialogs */
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  padding: 12px 14px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--yellow);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  line-height: 1.45;
+  animation: scn-in 0.18s ease-out;
+}
+
+@keyframes scn-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scn-card { animation: none; }
+}
+
+.scn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scn-icon {
+  flex: none;
+  color: var(--yellow);
+}
+
+.scn-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scn-text {
+  margin: 6px 0 8px;
+  color: var(--text-secondary);
+}
+
+.scn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 168px; /* about five rows; a first sync can report many */
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.scn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.scn-note {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scn-name,
+.scn-folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scn-name {
+  color: var(--text-primary);
+}
+
+.scn-folder {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Says where the copy is when there is nothing to open, so it has to be
+   readable: the muted colour is too faint for that on light themes. */
+.scn-where {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.scn-btn {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.scn-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.scn-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scn-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.scn-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}

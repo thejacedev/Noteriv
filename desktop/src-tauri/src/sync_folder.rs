@@ -23,7 +23,8 @@
 use crate::sync_webdav::{
     action_rel, conflict_rel, content_hash, is_synced_file, list_local, load_record, local_path,
     move_to_trash_if_unchanged, plan, safe_rel, save_record, settle_touched_files, stat_local,
-    write_local_if_unchanged, Action, FileRecord, LocalFile, Outcome, RemoteFile, SyncRecord,
+    write_local_if_unchanged, Action, ConflictCopy, FileRecord, LocalFile, Outcome, RemoteFile,
+    SyncRecord,
     RECORD_VERSION, SAVE_EVERY, SKIP_DIRS,
 };
 use serde::Deserialize;
@@ -351,6 +352,11 @@ impl Run<'_> {
 
         self.copy(rel, vault_wins)?;
         self.outcome.conflicts += 1;
+        self.outcome.conflict_copies.push(ConflictCopy {
+            note: rel.to_string(),
+            copy: copy_rel,
+            in_vault: in_vault.is_some(),
+        });
         Ok(())
     }
 
@@ -618,6 +624,24 @@ mod tests {
         (o.pushed, o.pulled, o.deleted, o.conflicts)
     }
 
+    /// The one conflict a run reported: the note, and whether its copy is in
+    /// the vault. The copy has to exist where the report says it is.
+    fn reported_conflict(o: &Outcome, vault: &Path, target: &Path) -> (String, bool) {
+        assert_eq!(o.conflict_copies.len(), 1, "{:?}", o.conflict_copies);
+        let c = &o.conflict_copies[0];
+        assert!(c.copy.contains(" (conflict "), "{}", c.copy);
+        assert_eq!(
+            local_path(vault, &c.copy).exists(),
+            c.in_vault,
+            "the report says the wrong place for {}",
+            c.copy
+        );
+        if !c.in_vault {
+            assert!(local_path(target, &c.copy).exists());
+        }
+        (c.note.clone(), c.in_vault)
+    }
+
     /// One device: a vault and this machine's records.
     struct Device {
         vault: PathBuf,
@@ -790,6 +814,10 @@ mod tests {
 
         let outcome = b.sync(&target, "both");
         assert_eq!(outcome.conflicts, 1);
+        assert_eq!(
+            reported_conflict(&outcome, &b.vault, &target),
+            ("Both.md".to_string(), true)
+        );
         let files = tree(&b.vault);
         assert_eq!(files.len(), 2, "{files:?}");
         // The newer edit keeps the name; the older one becomes the copy.
@@ -1048,6 +1076,11 @@ mod tests {
         );
         let outcome = a.sync(&target, "push");
         assert_eq!((outcome.pushed, outcome.conflicts), (1, 1));
+        // Push-only leaves the vault alone, so the copy is only in the folder.
+        assert_eq!(
+            reported_conflict(&outcome, &a.vault, &target),
+            ("Shared.md".to_string(), false)
+        );
         assert_eq!(
             text(&target, "Shared.md"),
             "shared, now edited in the vault as well"
@@ -1102,6 +1135,10 @@ mod tests {
         );
         let outcome = a.sync(&target, "pull");
         assert_eq!((outcome.pulled, outcome.conflicts), (1, 1));
+        assert_eq!(
+            reported_conflict(&outcome, &a.vault, &target),
+            ("Shared.md".to_string(), true)
+        );
         assert_eq!(
             text(&a.vault, "Shared.md"),
             "shared, now edited in the folder as well"

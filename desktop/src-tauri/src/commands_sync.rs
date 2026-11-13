@@ -12,6 +12,26 @@ pub struct SyncResult {
     deleted: usize,
     /// Files that had changed on both sides and were kept as two copies.
     conflicts: usize,
+    /// One entry per conflict, so the app can tell the user which notes now
+    /// have a second copy.
+    #[serde(rename = "conflictCopies")]
+    conflict_copies: Vec<ConflictCopyInfo>,
+    /// Set when some files could not be synced. The rest of the result still
+    /// stands: those files' conflicts are already resolved on disk and will
+    /// not be reported by a later run.
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ConflictCopyInfo {
+    /// The note, relative to the vault, with `/` between folders.
+    note: String,
+    /// The conflict copy, relative the same way.
+    copy: String,
+    /// The copy's full path, for opening it. `None` when the copy is not in
+    /// the vault: push-only folder sync keeps it in the target folder.
+    #[serde(rename = "copyPath")]
+    copy_path: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,24 +61,44 @@ fn record_dir() -> std::path::PathBuf {
     crate::paths::user_data_dir().join("sync")
 }
 
-/// A run that finished but could not sync some files is reported as an error,
-/// so the status bar shows it. The files that did sync are already recorded.
-fn finish(outcome: crate::sync_webdav::Outcome) -> Result<SyncResult, String> {
-    if let Some(first) = outcome.errors.first() {
+/// What a finished run tells the frontend. A run that could not sync some
+/// files carries an `error`, which the status bar shows; the files that did
+/// sync are already recorded, and their conflicts are still reported.
+///
+/// The copy's path is built on the vault path as the frontend gave it, so it
+/// matches the paths the frontend already uses for that vault's files.
+fn finish(outcome: crate::sync_webdav::Outcome, vault_path: &str) -> SyncResult {
+    let error = outcome.errors.first().map(|first| {
         let n = outcome.errors.len();
         let files = if n == 1 {
             "1 file".to_string()
         } else {
             format!("{n} files")
         };
-        return Err(format!("{files} could not be synced. {first}"));
-    }
-    Ok(SyncResult {
+        format!("{files} could not be synced. {first}")
+    });
+    let vault = std::path::Path::new(vault_path);
+    let conflict_copies = outcome
+        .conflict_copies
+        .into_iter()
+        .map(|c| ConflictCopyInfo {
+            copy_path: c.in_vault.then(|| {
+                crate::sync_webdav::local_path(vault, &c.copy)
+                    .to_string_lossy()
+                    .into_owned()
+            }),
+            note: c.note,
+            copy: c.copy,
+        })
+        .collect();
+    SyncResult {
         pushed: outcome.pushed,
         pulled: outcome.pulled,
         deleted: outcome.deleted,
         conflicts: outcome.conflicts,
-    })
+        conflict_copies,
+        error,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,16 +116,14 @@ pub async fn sync_run(args: SyncRunInput) -> Result<SyncResult, String> {
         "folder" => {
             let cfg: crate::sync_folder::FolderConfig =
                 serde_json::from_value(args.config).map_err(|e| e.to_string())?;
-            finish(crate::sync_folder::sync(
-                &args.vault_path,
-                cfg,
-                &record_dir(),
-            )?)
+            let outcome = crate::sync_folder::sync(&args.vault_path, cfg, &record_dir())?;
+            Ok(finish(outcome, &args.vault_path))
         }
         "webdav" => {
             let cfg: crate::sync_webdav::WebDavConfig =
                 serde_json::from_value(args.config).map_err(|e| e.to_string())?;
-            finish(crate::sync_webdav::sync(&args.vault_path, cfg, &record_dir()).await?)
+            let outcome = crate::sync_webdav::sync(&args.vault_path, cfg, &record_dir()).await?;
+            Ok(finish(outcome, &args.vault_path))
         }
         other => Err(format!("Unknown sync provider: {other}")),
     }
@@ -134,6 +172,99 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dunce::canonicalize(dir).unwrap()
+    }
+
+    #[test]
+    fn a_run_with_a_failed_file_still_reports_its_conflicts() {
+        use crate::sync_webdav::{ConflictCopy, Outcome};
+        let vault = scratch("finish");
+        let outcome = Outcome {
+            pushed: 2,
+            conflicts: 2,
+            conflict_copies: vec![
+                ConflictCopy {
+                    note: "Daily Notes/Today.md".into(),
+                    copy: "Daily Notes/Today (conflict 2026-11-13 09-00-00).md".into(),
+                    in_vault: true,
+                },
+                ConflictCopy {
+                    note: "Inbox.md".into(),
+                    copy: "Inbox (conflict 2026-11-13 09-00-00).md".into(),
+                    in_vault: false,
+                },
+            ],
+            errors: vec!["\"Locked.md\": permission denied".into(), "another".into()],
+            ..Outcome::default()
+        };
+        let result = finish(outcome, vault.to_str().unwrap());
+        assert_eq!(
+            result.error.as_deref(),
+            Some("2 files could not be synced. \"Locked.md\": permission denied")
+        );
+        assert_eq!(result.conflict_copies.len(), 2);
+        // A copy in the vault comes with a path built from native separators.
+        let expected = vault
+            .join("Daily Notes")
+            .join("Today (conflict 2026-11-13 09-00-00).md");
+        assert_eq!(
+            result.conflict_copies[0].copy_path.as_deref(),
+            Some(expected.to_str().unwrap())
+        );
+        // A copy that is only in the target folder has none.
+        assert_eq!(result.conflict_copies[1].copy_path, None);
+
+        // The exact field names the frontend reads.
+        let json = serde_json::to_value(&result).unwrap();
+        let mut keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            ["conflictCopies", "conflicts", "deleted", "error", "pulled", "pushed"]
+        );
+        let mut keys: Vec<&str> = json["conflictCopies"][0]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort();
+        assert_eq!(keys, ["copy", "copyPath", "note"]);
+        assert_eq!(json["conflictCopies"][1]["copyPath"], serde_json::Value::Null);
+
+        let clean = finish(Outcome::default(), vault.to_str().unwrap());
+        assert_eq!(serde_json::to_value(&clean).unwrap()["error"], serde_json::Value::Null);
+        assert!(clean.conflict_copies.is_empty());
+    }
+
+    #[test]
+    fn a_folder_sync_through_the_command_names_the_conflict_copy() {
+        let base = scratch("run-conflict");
+        let (vault, target) = (base.join("vault"), base.join("cloud"));
+        fs::create_dir_all(&vault).unwrap();
+        fs::create_dir_all(&target).unwrap();
+        // No record yet and the two sides differ: both versions are kept.
+        fs::write(vault.join("Note.md"), "the vault's version").unwrap();
+        fs::write(target.join("Note.md"), "the folder's").unwrap();
+
+        // `sync_run` keeps its records in the user's data folder, so the
+        // provider is called here with a scratch one, then `finish` as the
+        // command does.
+        let cfg: crate::sync_folder::FolderConfig = serde_json::from_value(json!({
+            "targetPath": target.to_string_lossy(), "direction": "both",
+        }))
+        .unwrap();
+        let vault_arg = vault.to_str().unwrap();
+        let outcome = crate::sync_folder::sync(vault_arg, cfg, &base.join("records")).unwrap();
+        let result = finish(outcome, vault_arg);
+
+        assert_eq!(result.conflicts, 1);
+        assert_eq!(result.error, None);
+        let copy = &result.conflict_copies[0];
+        assert_eq!(copy.note, "Note.md");
+        assert!(copy.copy.starts_with("Note (conflict "), "{}", copy.copy);
+        let path = std::path::Path::new(copy.copy_path.as_deref().expect("the copy is in the vault"));
+        assert!(path.is_file(), "{} does not exist", path.display());
+        assert_eq!(path.parent().unwrap(), vault);
     }
 
     /// The arguments exactly as the frontend sends them.
