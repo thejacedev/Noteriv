@@ -2489,6 +2489,7 @@ dependencies = [
  "notify-debouncer-mini",
  "quick-xml 0.36.2",
  "rand 0.8.6",
+ "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

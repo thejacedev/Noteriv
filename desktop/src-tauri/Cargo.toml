@@ -61,6 +61,8 @@ rand = "0.8"
 # Git timeout (std::process::Command has no native timeout)
 wait-timeout = "0.2"
 
+# Vault search: /regular expressions/ in a query
+regex = "1"
 # WebDAV: minimal XML parsing
 quick-xml = { version = "0.36", features = ["serialize"] }
 

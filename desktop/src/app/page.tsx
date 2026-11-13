@@ -250,7 +250,9 @@ export default function Home() {
   // A wiki link to a heading or block, waiting for its note to be on screen.
   const pendingJumpRef = useRef<{
     filePath: string;
-    anchor: WikiAnchor;
+    /** A heading or block to find, or a line number already known. */
+    anchor?: WikiAnchor;
+    line?: number;
     expires: number;
     appliedTo?: EditorView;
   } | null>(null);
@@ -1033,6 +1035,16 @@ export default function Home() {
     }
   }, [openFile]);
 
+  // Open a note and, when a line is given, scroll to it. Used by search
+  // results and by anything else that knows where in a note it points.
+  const openFileAtLine = useCallback((filePath: string, line?: number) => {
+    pendingJumpRef.current =
+      line !== undefined ? { filePath, line, expires: Date.now() + 3000 } : null;
+    void openFile(filePath);
+    // The note may already be on screen, in which case nothing else re-renders.
+    if (line !== undefined) setJumpTick((t) => t + 1);
+  }, [openFile]);
+
   const removeTab = useCallback((filePath: string) => {
     // Pinned tabs cannot be closed
     if (pinnedTabs.has(filePath)) return;
@@ -1687,7 +1699,11 @@ export default function Home() {
     if (pending.appliedTo === view) return;
     pending.appliedTo = view;
 
-    const line = findAnchorLine(content, pending.anchor);
+    const line = pending.anchor
+      ? findAnchorLine(content, pending.anchor)
+      : pending.line !== undefined && pending.line >= 1 && pending.line <= view.state.doc.lines
+        ? pending.line
+        : null;
     if (line === null) return;
 
     const pos = view.state.doc.line(line).from;
@@ -2563,7 +2579,7 @@ export default function Home() {
       {showVaultSearch && activeVault && (
         <VaultSearch
           vaultPath={activeVault.path}
-          onSelect={openFile}
+          onSelect={openFileAtLine}
           onClose={() => setShowVaultSearch(false)}
         />
       )}

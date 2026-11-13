@@ -110,6 +110,12 @@ interface ElectronAPI {
     newPath: string,
     open: { path: string; unsaved: string | null }[]
   ) => Promise<import("@/lib/link-updates").RenameLinksResult>;
+  /** Search the vault. The query language is described in `src-tauri/src/search.rs`. */
+  searchVault: (
+    dir: string,
+    query: string,
+    options?: { caseSensitive?: boolean; sort?: import("@/lib/vault-search").SearchSort }
+  ) => Promise<import("@/lib/vault-search").VaultSearchResult>;
   /** Every note's frontmatter, tags, links and file details, in listing order. */
   vaultIndex: (dir: string) => Promise<import("@/lib/vault-index").RawNoteMeta[]>;
   createFile: (filePath: string) => Promise<boolean>;

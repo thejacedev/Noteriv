@@ -990,6 +990,34 @@ pub async fn fs_list_all_files(app: tauri::AppHandle, dir: String) -> Vec<Listed
     list_markdown_files(&dir, None)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SearchVaultInput {
+    pub dir: String,
+    pub query: String,
+    #[serde(rename = "caseSensitive", default)]
+    pub case_sensitive: bool,
+    /// nameAsc, nameDesc, modifiedNew, modifiedOld, createdNew or createdOld.
+    #[serde(default)]
+    pub sort: String,
+}
+
+/// Search the vault with the query language described in `search.rs`.
+#[tauri::command]
+pub async fn fs_search_vault(
+    app: tauri::AppHandle,
+    args: SearchVaultInput,
+) -> crate::search::SearchResult {
+    if args.dir.is_empty() || !allowed(&app, &args.dir) {
+        return crate::search::SearchResult::default();
+    }
+    crate::search::search_vault(
+        Path::new(&args.dir),
+        &args.query,
+        args.case_sensitive,
+        crate::search::Sort::from_name(&args.sort),
+    )
+}
+
 /// Every note's properties, tags, links and file details, in one call.
 #[tauri::command]
 pub async fn fs_vault_index(
