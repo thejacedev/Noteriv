@@ -704,6 +704,14 @@
   overflow: visible;
 }
 
+/* ─── The canvas with the keyboard ─── */
+/* The canvas takes the focus so that its shortcuts work. A ring around the
+   whole view would say nothing: the selected card already shows where a key
+   will act. */
+.canvas-viewport:focus {
+  outline: none;
+}
+
 /* ─── Layers drawn over the cards ─── */
 /* The layer the cards sit in has no size of its own, so "100%" of it is
    nothing, and a browser does not draw an SVG that is zero wide. One pixel is

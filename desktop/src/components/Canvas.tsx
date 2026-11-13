@@ -43,6 +43,7 @@ import {
   recalcEdgesFor,
   resolveCanvasFile,
   stickyBackground,
+  subpathPage,
   STICKY_COLORS,
 } from "@/lib/canvas-utils";
 import { generateAttachmentName, getAttachmentsDir } from "@/lib/attachment-utils";
@@ -59,7 +60,8 @@ interface CanvasProps {
   filePath: string;
   vaultPath: string;
   onSave: (content: string) => void;
-  onFileSelect: (filePath: string) => void;
+  /** Open a file in the app. `page` is the page a PDF card is narrowed to, when it is. */
+  onFileSelect: (filePath: string, page?: number) => void;
   onClose?: () => void;
 }
 
@@ -1045,6 +1047,12 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
     setEditingNodeId(null);
   }, [filePath, vaultPath]);
 
+  // Take the keyboard when a canvas opens, as the drawing editor does, so the
+  // canvas's shortcuts work without a click on it first.
+  useEffect(() => {
+    viewportRef.current?.focus({ preventScroll: true });
+  }, [filePath]);
+
   // ─── Observe viewport size ───
   useEffect(() => {
     const el = viewportRef.current;
@@ -1109,6 +1117,9 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
       e.preventDefault();
       setContextMenu(null);
+      // The press is cancelled above, so the browser does not move the focus
+      // here by itself; without it the canvas's keys would go nowhere.
+      viewportRef.current?.focus({ preventScroll: true });
 
       // Draw mode: start freehand stroke
       if (activeTool === "draw") {
@@ -1385,7 +1396,9 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
         return;
       }
       const path = resolveCanvasFile(node.file, vaultPath);
-      if (path) onFileSelect(path);
+      if (!path) return;
+      const isPdf = fileCardKind(node.file || "") === "pdf";
+      onFileSelect(path, isPdf ? subpathPage(node.subpath) : undefined);
     },
     [canvasData.nodes, vaultPath, onFileSelect]
   );
@@ -1545,6 +1558,8 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
       e.preventDefault();
       e.stopPropagation();
       setSelectedNodeIds(new Set([nodeId]));
+      // The card is now what is selected, not an edge picked earlier.
+      setSelectedEdgeId(null);
       setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
     },
     []
@@ -1561,27 +1576,37 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
   );
 
   // ─── Delete ───
-  const deleteSelected = useCallback(() => {
-    if (selectedEdgeId) {
+  const deleteEdge = useCallback(
+    (edgeId: string) => {
       updateCanvas((prev) => ({
         ...prev,
-        edges: prev.edges.filter((e) => e.id !== selectedEdgeId),
+        edges: prev.edges.filter((e) => e.id !== edgeId),
       }));
-      setSelectedEdgeId(null);
-      return;
-    }
+      setSelectedEdgeId((selected) => (selected === edgeId ? null : selected));
+    },
+    [updateCanvas]
+  );
 
-    if (selectedNodeIds.size > 0) {
+  /** Remove cards, and the edges that end on them. */
+  const deleteNodes = useCallback(
+    (ids: Set<string>) => {
       updateCanvas((prev) => ({
         ...prev,
-        nodes: prev.nodes.filter((n) => !selectedNodeIds.has(n.id)),
-        edges: prev.edges.filter(
-          (e) => !selectedNodeIds.has(e.fromNode) && !selectedNodeIds.has(e.toNode)
-        ),
+        nodes: prev.nodes.filter((n) => !ids.has(n.id)),
+        edges: prev.edges.filter((e) => !ids.has(e.fromNode) && !ids.has(e.toNode)),
       }));
       setSelectedNodeIds(new Set());
+    },
+    [updateCanvas]
+  );
+
+  const deleteSelected = useCallback(() => {
+    if (selectedEdgeId) {
+      deleteEdge(selectedEdgeId);
+      return;
     }
-  }, [selectedNodeIds, selectedEdgeId, updateCanvas]);
+    if (selectedNodeIds.size > 0) deleteNodes(selectedNodeIds);
+  }, [selectedNodeIds, selectedEdgeId, deleteEdge, deleteNodes]);
 
   // ─── Duplicate ───
   const duplicateSelected = useCallback(() => {
@@ -1643,61 +1668,103 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
 
   // ─── Keyboard shortcuts ───
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    /**
+     * Whether a key press is the canvas's to act on: no card, label or dialog
+     * is being typed in, and the focus is on the canvas (or nowhere), not in
+     * a text field or another part of the app.
+     */
+    const canvasHasKeyboard = () => {
+      if (editingNodeId || editingEdgeId || overlayOpen) return false;
+      const focused = document.activeElement as HTMLElement | null;
+      if (!focused || focused === document.body) return true;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(focused.tagName) || focused.isContentEditable) return false;
+      return containerRef.current?.contains(focused) ?? false;
+    };
+
+    /**
+     * The canvas's own shortcuts. The app's shortcuts are read by a listener
+     * on the window as the key press comes back up; these are read on the way
+     * down and stopped there, so a key the canvas acts on is not also taken as
+     * one of the app's (Ctrl+D is "Open Daily Note" there). A key the canvas
+     * does not act on is left untouched and reaches the app as before.
+     */
+    const handleShortcut = (e: KeyboardEvent) => {
+      if (!canvasHasKeyboard()) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const modOnly = mod && !e.shiftKey && !e.altKey;
+      const bare = !mod && !e.shiftKey && !e.altKey;
+      const key = e.key.toLowerCase();
+      let acted = false;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        if (selectedNodeIds.size > 0 || selectedEdgeId) {
+          deleteSelected();
+          acted = true;
+        }
+      } else if (modOnly && key === "a") {
+        // Ctrl+A: select all
+        setSelectedNodeIds(new Set(canvasData.nodes.map((n) => n.id)));
+        acted = true;
+      } else if (modOnly && key === "d" && selectedNodeIds.size > 0) {
+        // Ctrl+D: duplicate
+        duplicateSelected();
+        acted = true;
+      } else if (bare && key === "v" && !isDrawing) {
+        // V: the select tool
+        setActiveTool("select");
+        acted = true;
+      } else if (bare && key === "d" && !isDrawing) {
+        // D: the draw tool, and back. A key held down repeats, and would
+        // switch the tool on and straight off again.
+        if (!e.repeat) setActiveTool((tool) => (tool === "draw" ? "select" : "draw"));
+        acted = true;
+      }
+
+      if (acted) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
       // Don't capture when editing text
       if (editingNodeId || editingEdgeId) return;
       // A dialog over the canvas has the keyboard: Escape closes it, not the canvas.
       if (overlayOpen) return;
 
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (document.activeElement === document.body || document.activeElement === viewportRef.current) {
-          e.preventDefault();
-          deleteSelected();
+      // If something is active, deselect it first
+      if (selectedNodeIds.size > 0 || selectedEdgeId || editingNodeId || drawingEdge || isDrawing || contextMenu || activeTool !== "select") {
+        setSelectedNodeIds(new Set());
+        setSelectedEdgeId(null);
+        setEditingNodeId(null);
+        setContextMenu(null);
+        setDrawingEdge(null);
+        setActiveTool("select");
+        setIsDrawing(false);
+        setCurrentDrawPoints([]);
+        drawPointsRef.current = [];
+      } else if (onClose) {
+        // Nothing selected — save what has not been written yet, and close
+        if (dirtyRef.current) {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          dirtyRef.current = false;
+          onSave(serializeCanvas(canvasData));
         }
-      }
-
-      if (e.key === "Escape") {
-        // If something is active, deselect it first
-        if (selectedNodeIds.size > 0 || selectedEdgeId || editingNodeId || drawingEdge || isDrawing || contextMenu || activeTool !== "select") {
-          setSelectedNodeIds(new Set());
-          setSelectedEdgeId(null);
-          setEditingNodeId(null);
-          setContextMenu(null);
-          setDrawingEdge(null);
-          setActiveTool("select");
-          setIsDrawing(false);
-          setCurrentDrawPoints([]);
-          drawPointsRef.current = [];
-        } else if (onClose) {
-          // Nothing selected — save what has not been written yet, and close
-          if (dirtyRef.current) {
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            dirtyRef.current = false;
-            onSave(serializeCanvas(canvasData));
-          }
-          onClose();
-        }
-      }
-
-      // Ctrl+A: select all
-      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-        if (document.activeElement === document.body || document.activeElement === viewportRef.current) {
-          e.preventDefault();
-          setSelectedNodeIds(new Set(canvasData.nodes.map((n) => n.id)));
-        }
-      }
-
-      // Ctrl+D: duplicate
-      if ((e.metaKey || e.ctrlKey) && e.key === "d") {
-        if (selectedNodeIds.size > 0) {
-          e.preventDefault();
-          duplicateSelected();
-        }
+        onClose();
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    // On the document, not the window: a dialog that takes every key while it
+    // is open (the shortcut recorder in Settings, a confirmation) listens on
+    // the window on the way down, and so still comes first.
+    document.addEventListener("keydown", handleShortcut, true);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleShortcut, true);
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [
     editingNodeId, editingEdgeId, overlayOpen, deleteSelected, duplicateSelected, canvasData,
     selectedNodeIds, selectedEdgeId, drawingEdge, isDrawing, contextMenu, activeTool, onClose, onSave,
@@ -2423,7 +2490,9 @@ export default function Canvas({ filePath, vaultPath, onSave, onFileSelect, onCl
           target={menuTarget}
           actions={{
             onDelete: () => {
-              deleteSelected();
+              // What the menu was opened on, whatever else is selected.
+              if (contextMenu.edgeId) deleteEdge(contextMenu.edgeId);
+              else if (contextMenu.nodeId) deleteNodes(new Set([contextMenu.nodeId]));
               setContextMenu(null);
             },
             onColorChange: changeSelectedColor,
