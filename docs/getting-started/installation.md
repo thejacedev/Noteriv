@@ -39,11 +39,11 @@ The AppImage is a self-contained executable that works on any Linux distribution
 1. Download the `.AppImage` file from the releases page.
 2. Make it executable:
    ```bash
-   chmod +x Noteriv-*.AppImage
+   chmod +x Noteriv_*_amd64.AppImage
    ```
 3. Run it:
    ```bash
-   ./Noteriv-*.AppImage
+   ./Noteriv_*_amd64.AppImage
    ```
 
 You can move the AppImage to any directory you like, such as `~/Applications/` or `/opt/`. To integrate it with your desktop environment (application menu, file associations), consider using a tool like [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher).
@@ -53,15 +53,11 @@ You can move the AppImage to any directory you like, such as `~/Applications/` o
 For Debian-based distributions (Debian, Ubuntu, Linux Mint, Pop!_OS, elementary OS, etc.):
 
 1. Download the `.deb` file from the releases page.
-2. Install it with `dpkg`:
+2. Install it with `apt`, which also installs any missing dependencies:
    ```bash
-   sudo dpkg -i noteriv_*.deb
+   sudo apt install ./Noteriv_*_amd64.deb
    ```
-3. If there are missing dependencies, fix them with:
-   ```bash
-   sudo apt-get install -f
-   ```
-4. Launch Noteriv from your application menu or run `noteriv` from the terminal.
+3. Launch Noteriv from your application menu or run `noteriv` from the terminal.
 
 To uninstall:
 ```bash
@@ -76,10 +72,10 @@ For RPM-based distributions (Fedora, openSUSE, CentOS, RHEL, etc.):
 2. Install it:
    ```bash
    # Fedora
-   sudo dnf install noteriv-*.rpm
+   sudo dnf install ./Noteriv-*.x86_64.rpm
 
    # openSUSE
-   sudo zypper install noteriv-*.rpm
+   sudo zypper install ./Noteriv-*.x86_64.rpm
    ```
 3. Launch Noteriv from your application menu or run `noteriv` from the terminal.
 
