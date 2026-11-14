@@ -75,8 +75,9 @@ For RPM-based distributions (Fedora, openSUSE, CentOS, RHEL, etc.):
    sudo dnf install ./Noteriv-*.x86_64.rpm
 
    # openSUSE
-   sudo zypper install ./Noteriv-*.x86_64.rpm
+   sudo zypper install --allow-unsigned-rpm ./Noteriv-*.x86_64.rpm
    ```
+   The package is not GPG-signed, so both tools print a warning. Without `--allow-unsigned-rpm`, zypper also asks whether to abort, retry, or ignore, and aborts if you press Enter.
 3. Launch Noteriv from your application menu or run `noteriv` from the terminal.
 
 To uninstall:
