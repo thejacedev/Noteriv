@@ -144,6 +144,8 @@ Noteriv can look for a new version on GitHub Releases: press **Check for Updates
 
 Releases up to 3.0.1 were published without those signatures, so **Download Update** ended in "Download failed" for every kind of install. 3.0.2 is the first release that carries them.
 
+Versions 2.0.0 to 2.1.2 were built with an older signing key and refuse every later release, so **Download Update** still fails there. Download the new version by hand once; after that, updates install from inside the app.
+
 A `.deb` or `.rpm` copy of 3.0.1 or earlier still shows **Download Update**. It cannot work there: update the package instead.
 
 ## Mobile app
