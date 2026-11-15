@@ -29,6 +29,9 @@ import type { SettingsTab } from "@/lib/plugin-api";
 
 type Section = "general" | "appearance" | "editor" | "shortcuts" | "sync" | "ecosystem";
 
+/** Where a copy that cannot replace itself sends you for the new version. */
+const DOWNLOAD_PAGE = "https://github.com/thejacedev/Noteriv/releases/latest";
+
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "general", label: "General" },
   { id: "appearance", label: "Appearance" },
@@ -322,13 +325,30 @@ export default function SettingsModal({
             <button className="st-test-btn" onClick={handleCheckForUpdates}>Check Again</button>
           </div>
         )}
-        {updateStatus === "available" && (
+        {updateStatus === "available" && updateInfo.canInstall && (
           <div className="st-update-status">
             <span className="st-update-version">v{updateInfo.version} available</span>
             <button className="st-test-btn st-update-download-btn" onClick={handleDownloadUpdate}>
               Download Update
             </button>
           </div>
+        )}
+        {updateStatus === "available" && !updateInfo.canInstall && (
+          <>
+            <div className="st-update-status">
+              <span className="st-update-version">v{updateInfo.version} available</span>
+              <button
+                className="st-test-btn st-update-download-btn"
+                onClick={() => window.electronAPI?.openExternal(DOWNLOAD_PAGE)}
+              >
+                Open Download Page
+              </button>
+            </div>
+            <div className="st-update-note">
+              This copy of Noteriv was installed as a package or built from source, so it cannot replace itself.
+              Install the new version the way you installed this one.
+            </div>
+          </>
         )}
         {updateStatus === "downloading" && (
           <div className="st-update-status">
@@ -516,7 +536,13 @@ export default function SettingsModal({
   const [updateStatus, setUpdateStatus] = useState<
     "idle" | "checking" | "available" | "downloading" | "downloaded" | "error" | "up-to-date"
   >("idle");
-  const [updateInfo, setUpdateInfo] = useState<{ version?: string; percent?: number; error?: string }>({});
+  const [updateInfo, setUpdateInfo] = useState<{
+    version?: string;
+    percent?: number;
+    error?: string;
+    /** False for a copy that cannot replace itself (a .deb, an .rpm, a build from source). */
+    canInstall?: boolean;
+  }>({});
   // True when the platform manages updates itself (Flatpak/Flathub) or self-update
   // is unavailable (portable). The whole update UI is hidden in that case.
   const [updateManaged, setUpdateManaged] = useState(false);
@@ -541,7 +567,7 @@ export default function SettingsModal({
       setUpdateInfo({ error: result.error });
     } else if (result.available) {
       setUpdateStatus("available");
-      setUpdateInfo({ version: result.version });
+      setUpdateInfo({ version: result.version, canInstall: result.canInstall });
     } else {
       setUpdateStatus("up-to-date");
     }
@@ -564,10 +590,10 @@ export default function SettingsModal({
       setUpdateInfo({ error: data.message });
     });
 
-    const ok = await window.electronAPI.updaterDownload();
-    if (!ok) {
+    const result = await window.electronAPI.updaterDownload();
+    if (!result.ok) {
       setUpdateStatus("error");
-      setUpdateInfo({ error: "Download failed" });
+      setUpdateInfo({ error: result.error || "Download failed" });
     }
 
     // Cleanup listeners after a delay to catch events

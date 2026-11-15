@@ -226,8 +226,10 @@ interface ElectronAPI {
   webFetchPage: (url: string) => Promise<import("@/lib/web-reader").WebPage>;
 
   // Updater
-  updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string }>;
-  updaterDownload: () => Promise<boolean>;
+  /** `canInstall` is false for a copy that cannot replace itself (a .deb, an .rpm, a build from source). */
+  updaterCheck: () => Promise<{ available: boolean; version?: string; releaseDate?: string; releaseNotes?: string; error?: string; canInstall?: boolean }>;
+  /** Downloads the update and installs it. `error` says why when it could not. */
+  updaterDownload: () => Promise<{ ok: boolean; error?: string }>;
   updaterInstall: () => Promise<void>;
   updaterGetVersion: () => Promise<string>;
   updaterIsManaged: () => Promise<boolean>;
