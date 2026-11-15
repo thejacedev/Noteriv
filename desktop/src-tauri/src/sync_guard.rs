@@ -154,7 +154,7 @@ pub(crate) fn check(
     match sharing {
         None => Ok(()),
         Some(other) => Err(format!(
-            "Nothing was synced: the vault \"{}\" on this computer already syncs with this folder, or with one that holds it or is inside it. Two vaults in one sync folder would have their notes mixed together. Give this vault a folder of its own in Settings > Sync.",
+            "The vault \"{}\" on this computer already syncs with this folder, or with one that holds it or is inside it. Two vaults in one sync folder would have their notes mixed together. Give this vault a folder of its own in Settings > Sync.",
             other.name
         )),
     }
@@ -243,8 +243,7 @@ mod tests {
 
         record(&records, "folder-1.json", &work, &format!("folder\n{}\nboth", cloud.display()));
         let refused = check(&records, &home, &target, &listed).unwrap_err();
-        assert!(refused.contains("the vault \"Work\""), "{refused}");
-        assert!(refused.contains("Nothing was synced"), "{refused}");
+        assert!(refused.starts_with("The vault \"Work\" on this computer already syncs"), "{refused}");
 
         // A folder inside the other vault's, and one that holds it.
         let inside = Destination::Folder(cloud.join("Home"));

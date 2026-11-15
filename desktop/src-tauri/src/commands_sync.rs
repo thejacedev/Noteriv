@@ -267,6 +267,11 @@ pub async fn sync_run(args: SyncRunInput) -> Result<SyncResult, String> {
     run(args, &record_dir(), &listed_vaults()).await
 }
 
+/// What the status bar says when a run was refused before it began.
+fn not_synced(reason: String) -> String {
+    format!("Nothing was synced. {reason}")
+}
+
 /// `sync_run`, told where the records are kept and which vaults are listed.
 async fn run(
     args: SyncRunInput,
@@ -277,7 +282,8 @@ async fn run(
         "folder" => {
             let cfg: crate::sync_folder::FolderConfig =
                 serde_json::from_value(args.config).map_err(|e| e.to_string())?;
-            guard(&args.vault_path, crate::sync_folder::destination(&cfg), records, listed)?;
+            guard(&args.vault_path, crate::sync_folder::destination(&cfg), records, listed)
+                .map_err(not_synced)?;
             let outcome = crate::sync_folder::sync(&args.vault_path, cfg, records)?;
             Ok(finish(outcome, &args.vault_path))
         }
@@ -285,7 +291,8 @@ async fn run(
             let cfg: crate::sync_webdav::WebDavConfig =
                 serde_json::from_value(args.config).map_err(|e| e.to_string())?;
             // Before the server is asked for anything, and before the remote folder is made.
-            guard(&args.vault_path, crate::sync_webdav::destination(&cfg), records, listed)?;
+            guard(&args.vault_path, crate::sync_webdav::destination(&cfg), records, listed)
+                .map_err(not_synced)?;
             let outcome = crate::sync_webdav::sync(&args.vault_path, cfg, records).await?;
             Ok(finish(outcome, &args.vault_path))
         }
@@ -535,7 +542,7 @@ mod tests {
         // run, by the timer's run after it, and by the test in the settings.
         for _ in 0..2 {
             let refused = folder_run(&home, &cloud, &records, &vaults).unwrap_err();
-            assert!(refused.contains("the vault \"Work\""), "{refused}");
+            assert!(refused.starts_with("Nothing was synced. The vault \"Work\" on this computer"), "{refused}");
         }
         let test_args = |target: &std::path::Path| -> SyncTestInput {
             serde_json::from_value(json!({
@@ -546,7 +553,8 @@ mod tests {
             .unwrap()
         };
         let tested = tauri::async_runtime::block_on(test(test_args(&cloud), &records, &vaults));
-        assert!(tested.unwrap_err().contains("the vault \"Work\""));
+        // The test synced nothing either way, so it only gives the reason.
+        assert!(tested.unwrap_err().starts_with("The vault \"Work\" on this computer"));
         // So is a folder inside the first vault's, and the test does not make it.
         let inside = cloud.join("Home");
         assert!(folder_run(&home, &inside, &records, &vaults).is_err());
@@ -716,5 +724,107 @@ mod tests {
         assert_eq!(guard("/no/such/vault", place(), &records, &other), Ok(()));
         // With another vault listed that has no record there, it still syncs.
         assert_eq!(guard(new_place.to_str().unwrap(), place(), &records, &other), Ok(()));
+    }
+
+    /// Against a real WebDAV server: see the top of the live tests in
+    /// `sync_webdav.rs` for the server and the variables. Run with
+    /// `cargo test --lib commands_sync::tests::live -- --ignored --test-threads=1`.
+    mod live {
+        use super::*;
+
+        fn var(name: &str) -> String {
+            std::env::var(name).unwrap_or_else(|_| panic!("{name} is not set"))
+        }
+
+        fn config(remote_path: &str) -> Value {
+            json!({
+                "url": var("NOTERIV_WEBDAV_URL"),
+                "username": var("NOTERIV_WEBDAV_USER"),
+                "password": var("NOTERIV_WEBDAV_PASS"),
+                "remotePath": remote_path,
+            })
+        }
+
+        fn webdav_run(
+            vault: &std::path::Path,
+            remote_path: &str,
+            records: &std::path::Path,
+            vaults: &[crate::store::Vault],
+        ) -> Result<SyncResult, String> {
+            let input: SyncRunInput = serde_json::from_value(json!({
+                "vaultPath": vault.to_string_lossy(),
+                "providerType": "webdav",
+                "config": config(remote_path),
+            }))
+            .unwrap();
+            tauri::async_runtime::block_on(run(input, records, vaults))
+        }
+
+        fn webdav_test(
+            vault: &std::path::Path,
+            remote_path: &str,
+            records: &std::path::Path,
+            vaults: &[crate::store::Vault],
+        ) -> Result<(), String> {
+            let input: SyncTestInput = serde_json::from_value(json!({
+                "providerType": "webdav",
+                "config": config(remote_path),
+                "vaultPath": vault.to_string_lossy(),
+            }))
+            .unwrap();
+            tauri::async_runtime::block_on(test(input, records, vaults))
+        }
+
+        #[test]
+        #[ignore]
+        fn a_second_vault_is_kept_out_of_the_first_vaults_webdav_folder() {
+            let base = scratch("live-two-vaults");
+            let (work, home, records) = (base.join("work"), base.join("home"), base.join("records"));
+            fs::create_dir_all(&work).unwrap();
+            fs::create_dir_all(&home).unwrap();
+            fs::write(work.join("Work note.md"), "for work").unwrap();
+            fs::write(home.join("Diary.md"), "dear diary").unwrap();
+            let vaults = [listed("Work", &work), listed("Home", &home)];
+            let millis = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+            let top = format!("/noteriv-live-guard-{millis}");
+            let shared = format!("{top}/Work");
+
+            // The first vault syncs with the folder on the server.
+            let first = webdav_run(&work, &shared, &records, &vaults).unwrap();
+            assert_eq!((first.pushed, first.pulled, first.error), (1, 0, None));
+
+            // The second vault is refused that folder, a folder inside it and
+            // the folder that holds it, by a run and by the test.
+            for place in [shared.clone(), format!("{shared}/"), format!("{shared}/Inner"), top.clone()] {
+                let refused = webdav_run(&home, &place, &records, &vaults).unwrap_err();
+                assert!(refused.starts_with("Nothing was synced. The vault \"Work\" on this computer"), "{place}: {refused}");
+                let tested = webdav_test(&home, &place, &records, &vaults).unwrap_err();
+                assert!(tested.starts_with("The vault \"Work\" on this computer"), "{place}: {tested}");
+            }
+            assert!(!home.join("Work note.md").exists());
+
+            // The first vault syncs again and finds nothing new on the server:
+            // none of the refused runs put anything there.
+            let again = webdav_run(&work, &shared, &records, &vaults).unwrap();
+            assert_eq!((again.pushed, again.pulled, again.deleted, again.error), (0, 0, 0, None));
+            assert!(!work.join("Diary.md").exists());
+
+            // A folder of its own, beside the first one, is fine.
+            let own = format!("{top}/Home");
+            assert_eq!(webdav_test(&home, &own, &records, &vaults), Ok(()));
+            let second = webdav_run(&home, &own, &records, &vaults).unwrap();
+            assert_eq!((second.pushed, second.pulled, second.error), (1, 0, None));
+            // And now it is the first vault that is refused the second one's.
+            assert!(webdav_run(&work, &own, &records, &vaults).is_err());
+
+            // Each vault still has only its own note.
+            let again = webdav_run(&work, &shared, &records, &vaults).unwrap();
+            assert_eq!((again.pushed, again.pulled), (0, 0));
+            assert!(!work.join("Diary.md").exists());
+            assert!(!home.join("Work note.md").exists());
+        }
     }
 }
