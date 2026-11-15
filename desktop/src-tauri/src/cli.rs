@@ -1637,16 +1637,10 @@ fn list(root: &Path, folder: Option<&str>, json: bool) -> Result<Printed, String
 }
 
 fn search(root: &Path, query: &str, json: bool, limit: Option<usize>) -> Result<Printed, String> {
-    use crate::search::{search_vault, Sort};
-    let mut result = search_vault(root, query, false, Sort::NameAsc, &[]);
+    // In the order of the notes' paths, and cut after they are in that order.
+    let mut result = crate::search::search_vault_by_path(root, query, limit);
     if let Some(error) = result.error.take() {
         return Err(error);
-    }
-    result
-        .files
-        .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-    if let Some(limit) = limit {
-        result.files.truncate(limit);
     }
     if json {
         return Printed::json(&result);
@@ -2985,6 +2979,36 @@ mod tests {
         assert_eq!(found["totalFiles"], 2);
         let found: Value = serde_json::from_str(&vaults.ok(&["search", "unicorn", "--json"])).unwrap();
         assert_eq!(found, json!({"files": [], "totalFiles": 0, "error": null}));
+    }
+
+    #[test]
+    fn search_limit_counts_from_the_first_path_and_can_pass_the_usual_number() {
+        let vaults = Vaults::new("search-many");
+        // First by its path, last by its name.
+        vaults.dir.write("work/Aaa/zz.md", "A zebra.\n");
+        for i in 0..505 {
+            vaults.dir.write(&format!("work/Zoo/a{i:04}.md"), "A zebra.\n");
+        }
+
+        let ran = vaults.run(&["search", "zebra", "--limit", "1"]);
+        assert_eq!(ran.out, "Aaa/zz.md:1: A zebra.\n");
+        assert_eq!(ran.err, "noteriv: 506 notes match; the first 1 are shown.\n");
+
+        // With no limit the usual 500 are printed, starting from the same note.
+        let ran = vaults.run(&["search", "zebra"]);
+        assert_eq!(ran.out.lines().count(), 500);
+        assert_eq!(ran.out.lines().next(), Some("Aaa/zz.md:1: A zebra."));
+        assert_eq!(ran.err, "noteriv: 506 notes match; the first 500 are shown.\n");
+
+        // A limit past the usual number prints them all, and says nothing more.
+        let ran = vaults.run(&["search", "zebra", "--limit", "600"]);
+        assert_eq!(ran.out.lines().count(), 506);
+        assert_eq!(ran.out.lines().last(), Some("Zoo/a0504.md:1: A zebra."));
+        assert_eq!(ran.err, "");
+        let found: Value =
+            serde_json::from_str(&vaults.ok(&["search", "zebra", "--json", "--limit", "600"])).unwrap();
+        assert_eq!(found["files"].as_array().unwrap().len(), 506);
+        assert_eq!(found["totalFiles"], 506);
     }
 
     #[test]

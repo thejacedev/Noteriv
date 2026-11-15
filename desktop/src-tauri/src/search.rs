@@ -760,24 +760,9 @@ pub(crate) fn is_excluded(rel: &str, patterns: &[String]) -> bool {
     })
 }
 
-/// Search every note in the vault.
-pub(crate) fn search_vault(
-    vault: &Path,
-    query: &str,
-    case_sensitive: bool,
-    sort: Sort,
-    exclude: &[String],
-) -> SearchResult {
-    let node = match parse(query.trim()) {
-        Ok(node) => node,
-        Err(error) => {
-            return SearchResult {
-                error: Some(error),
-                ..SearchResult::default()
-            }
-        }
-    };
-
+/// Every note in the vault that the query matches, in the order the vault is
+/// listed in and with none left off.
+fn matching_notes(vault: &Path, node: &Node, case_sensitive: bool, exclude: &[String]) -> Vec<FileHit> {
     let mut files: Vec<FileHit> = Vec::new();
     for meta_rel in crate::links::list_vault(vault) {
         let lower = meta_rel.to_ascii_lowercase();
@@ -795,10 +780,10 @@ pub(crate) fn search_vault(
             continue;
         };
         let doc = Doc::new(&meta_rel, &content);
-        if !matches(&node, &doc, case_sensitive) {
+        if !matches(node, &doc, case_sensitive) {
             continue;
         }
-        let (lines, more_lines) = line_hits(&node, &doc, case_sensitive);
+        let (lines, more_lines) = line_hits(node, &doc, case_sensitive);
         let stat = fs::metadata(&path).ok();
         let millis = |time: std::io::Result<std::time::SystemTime>| {
             time.ok()
@@ -820,7 +805,28 @@ pub(crate) fn search_vault(
             more_lines,
         });
     }
+    files
+}
 
+/// Search every note in the vault.
+pub(crate) fn search_vault(
+    vault: &Path,
+    query: &str,
+    case_sensitive: bool,
+    sort: Sort,
+    exclude: &[String],
+) -> SearchResult {
+    let node = match parse(query.trim()) {
+        Ok(node) => node,
+        Err(error) => {
+            return SearchResult {
+                error: Some(error),
+                ..SearchResult::default()
+            }
+        }
+    };
+
+    let mut files = matching_notes(vault, &node, case_sensitive, exclude);
     match sort {
         Sort::NameAsc => files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
         Sort::NameDesc => files.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
@@ -831,6 +837,32 @@ pub(crate) fn search_vault(
     }
     let total_files = files.len();
     files.truncate(MAX_FILES);
+    SearchResult {
+        files,
+        total_files,
+        error: None,
+    }
+}
+
+/// Search for the command line: the notes in the order of their paths, cut
+/// to `limit` when one is given and to the usual number when none is. The
+/// order is settled before the cut, so the notes that are kept are the first
+/// ones in the order they are printed in, and a limit can ask for more than
+/// the usual number.
+pub(crate) fn search_vault_by_path(vault: &Path, query: &str, limit: Option<usize>) -> SearchResult {
+    let node = match parse(query.trim()) {
+        Ok(node) => node,
+        Err(error) => {
+            return SearchResult {
+                error: Some(error),
+                ..SearchResult::default()
+            }
+        }
+    };
+    let mut files = matching_notes(vault, &node, false, &[]);
+    files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    let total_files = files.len();
+    files.truncate(limit.unwrap_or(MAX_FILES));
     SearchResult {
         files,
         total_files,
@@ -1105,6 +1137,52 @@ Water is far from here.
             ["ctime", "filePath", "lines", "moreLines", "mtime", "name", "relativePath"]
         );
         assert_eq!(keys(&json["files"][0]["lines"][0]), ["line", "ranges", "text"]);
+        let _ = fs::remove_dir_all(&vault);
+    }
+
+    #[test]
+    fn the_command_line_search_is_cut_in_the_order_of_the_paths() {
+        let vault = std::env::temp_dir().join(format!("noteriv-search-by-path-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&vault);
+        fs::create_dir_all(vault.join("A")).unwrap();
+        fs::create_dir_all(vault.join("B")).unwrap();
+        // First by its path, last by its name.
+        fs::write(vault.join("A/zz.md"), "flour\n").unwrap();
+        let more = MAX_FILES + 10;
+        for i in 0..more {
+            fs::write(vault.join(format!("B/a{i:04}.md")), "flour\n").unwrap();
+        }
+        let paths = |result: &SearchResult| -> Vec<String> {
+            result.files.iter().map(|f| f.relative_path.clone()).collect()
+        };
+
+        // With no limit, the usual number of notes: the first ones by path.
+        let usual = search_vault_by_path(&vault, "flour", None);
+        assert_eq!(usual.error, None);
+        assert_eq!(usual.total_files, more + 1);
+        assert_eq!(usual.files.len(), MAX_FILES);
+        assert_eq!(usual.files[0].relative_path, "A/zz.md");
+        assert_eq!(usual.files[1].relative_path, "B/a0000.md");
+        let mut sorted = paths(&usual);
+        sorted.sort();
+        assert_eq!(paths(&usual), sorted);
+
+        // A limit is counted from the same first note, and may ask for more
+        // than the usual number.
+        assert_eq!(paths(&search_vault_by_path(&vault, "flour", Some(2))), ["A/zz.md", "B/a0000.md"]);
+        let all = search_vault_by_path(&vault, "flour", Some(more + 100));
+        assert_eq!(all.files.len(), more + 1);
+        assert_eq!(all.total_files, more + 1);
+        assert_eq!(all.files.last().unwrap().relative_path, format!("B/a{:04}.md", more - 1));
+
+        // The search panel's answer is cut by name, as it was: this note is
+        // last by name, so it is one of those left off.
+        let panel = search_vault(&vault, "flour", false, Sort::NameAsc, &[]);
+        assert_eq!(panel.files.len(), MAX_FILES);
+        assert_eq!(panel.total_files, more + 1);
+        assert!(!paths(&panel).contains(&"A/zz.md".to_string()));
+
+        assert!(search_vault_by_path(&vault, "(broken", None).error.is_some());
         let _ = fs::remove_dir_all(&vault);
     }
 }
