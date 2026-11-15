@@ -8,6 +8,7 @@ import {
 import { EditorState, RangeSetBuilder, Facet, StateEffect } from "@codemirror/state";
 import { RenderedMarkdownWidget } from "./widget";
 import { getBlockRenderers, getInlineRenderers } from "./registry";
+import { calloutFolds, foldedCalloutRanges, toggleCalloutFold } from "./callout-folds";
 import { CodeBlockTracker } from "./renderers/code-blocks";
 import { MathBlockTracker } from "./renderers/math";
 import { HtmlBlockTracker } from "./renderers/html";
@@ -167,6 +168,10 @@ function buildDecorations(
   const visible = getVisibleRange(view);
   // Links and embeds can be paths from the folder of the note being shown.
   const inlineContext: InlineContext = { notePath: view.state.facet(notePathFacet) };
+  const reading = view.state.facet(renderAllLines);
+  // The lines of a folded callout are hidden as one stretch, and not drawn.
+  const folded = foldedCalloutRanges(view.state);
+  let nextFold = 0;
 
   // Math tracker needs to know state up to the visible range
   // Pre-run math tracker from line 1 to visible.from to get correct state
@@ -181,6 +186,11 @@ function buildDecorations(
   for (let i = visible.from; i <= visible.to; i++) {
     const line = doc.line(i);
     const text = line.text;
+
+    // Every hidden line is a quoted line (it starts with ">"), so none of
+    // the trackers below misses a fence by not seeing it.
+    while (nextFold < folded.length && folded[nextFold].to < line.from) nextFold++;
+    if (nextFold < folded.length && line.from > folded[nextFold].from && line.to <= folded[nextFold].to) continue;
 
     // A block comment is shown as written, dimmed, and never rendered. The
     // reading view hides `.md-comment-line`.
@@ -231,7 +241,7 @@ function buildDecorations(
     if (text.trim() === "") continue;
 
     // Try block renderers
-    const ctx: BlockContext = { builder, line, text, lineNumber: i };
+    const ctx: BlockContext = { builder, line, text, lineNumber: i, state: view.state, reading };
     let handled = false;
     let handlerName = "";
 
@@ -338,7 +348,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         // Another note in the same editor: its relative links lead elsewhere.
         update.startState.facet(notePathFacet) !== update.state.facet(notePathFacet) ||
         update.transactions.some((tr) =>
-          tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged))
+          tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged) || e.is(toggleCalloutFold))
         )
       ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
@@ -346,5 +356,9 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
       }
     }
   },
-  { decorations: (v) => v.decorations }
+  {
+    decorations: (v) => v.decorations,
+    // Which callouts are folded, and the decoration that hides their lines.
+    provide: () => calloutFolds,
+  }
 );

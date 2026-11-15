@@ -273,6 +273,38 @@ export const markdownRenderTheme = EditorView.baseTheme({
     color: "var(--text-primary)",
     fontWeight: "500",
   },
+  // The arrow that folds and opens a callout marked `+` or `-`.
+  "& .md-callout-fold": {
+    marginLeft: "auto",
+    flexShrink: "0",
+    width: "1.5em",
+    height: "1.5em",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "4px",
+    cursor: "pointer",
+    color: "var(--text-muted)",
+  },
+  "& .md-callout-fold:hover": {
+    background: "color-mix(in srgb, var(--text-muted) 18%, transparent)",
+    color: "var(--text-primary)",
+  },
+  "& .md-callout-fold::before": {
+    content: '""',
+    width: "0.42em",
+    height: "0.42em",
+    borderRight: "2px solid currentColor",
+    borderBottom: "2px solid currentColor",
+    transform: "translateY(-20%) rotate(45deg)",
+    transition: "transform 0.12s ease",
+  },
+  "& .md-callout-folded .md-callout-fold::before": {
+    transform: "translateX(-20%) rotate(-45deg)",
+  },
+  "& .md-callout-reading .md-callout-header": {
+    cursor: "pointer",
+  },
 
   // Math
   ".md-math-fence": {

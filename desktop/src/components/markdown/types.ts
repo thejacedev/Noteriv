@@ -1,6 +1,6 @@
 import { Decoration } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
-import type { Line } from "@codemirror/state";
+import type { EditorState, Line } from "@codemirror/state";
 
 /** Context passed to block-level renderers */
 export interface BlockContext {
@@ -8,6 +8,10 @@ export interface BlockContext {
   line: Line;
   text: string;
   lineNumber: number;
+  /** The editor's state, for a renderer that draws by more than the line's own text. */
+  state?: EditorState;
+  /** True in the reading view, where every line is drawn and none is shown as written. */
+  reading?: boolean;
 }
 
 /**
