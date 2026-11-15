@@ -176,7 +176,9 @@ describe("formatLink", () => {
   });
 
   // Whatever is written has to lead back to the file it was written for.
-  it("always resolves back to its target", () => {
+  // Every combination is tried: more than twenty thousand links. That takes a second or two
+  // here and more than the usual five on a slow machine, so it is given longer.
+  it("always resolves back to its target", { timeout: 60_000 }, () => {
     const notes = VAULT.filter(isNotePath);
     const formats: LinkFormat[] = ["shortest", "relative", "absolute"];
     const fragments = ["", "#Scope", "#^b1", "#A heading (2) & more"];
