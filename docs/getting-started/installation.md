@@ -73,7 +73,7 @@ For Fedora and openSUSE:
    ```bash
    sudo rpm --import https://raw.githubusercontent.com/thejacedev/Noteriv/main/packaging/RPM-GPG-KEY-noteriv
    ```
-   The package is signed with this key, whose fingerprint is `C62C 1F44 8323 F48C 2EDA A27C 1EB3 C30D 4B37 42AF`. Without it, the install below stops with "Signature verification failed".
+   The package is signed with this key, whose fingerprint is `C62C 1F44 8323 F48C 2EDA A27C 1EB3 C30D 4B37 42AF`. Without it, the install below stops with "Signature verification failed". Packages are signed from 3.0.1 on. The 3.0.0 package and earlier ones are not, and do not install with these commands.
 3. Install the package:
    ```bash
    # Fedora
