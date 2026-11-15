@@ -122,7 +122,7 @@ A sync folder holds one vault. Give each vault a target folder or a remote path 
 
 Noteriv refuses a vault's first sync with a target folder or remote path that another vault on the same device already syncs with (after 3.0.0). It also refuses one that holds that folder, or is inside it. The status bar names the other vault, and nothing is copied. **Test Connection** refuses it the same way.
 
-A vault that has synced with a folder before is never refused. A vault you have moved, or removed from Noteriv, does not stand in the way of another one.
+A vault that has synced with a folder before is never refused. A vault you have moved, or removed from Noteriv, does not stand in the way of another one. Neither does a vault that no longer syncs with the folder: once its **Provider** is set to **None**, or it has a different folder, the folder is free for another vault.
 
 ### Updating from 3.0.0 or Earlier
 

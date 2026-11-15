@@ -226,7 +226,8 @@ Without `-` or `+`, the callout is always expanded, has no arrow and cannot be c
 How folding behaves:
 
 - Folding never changes the note. The `-` or `+` in the note says how the callout starts, and what you fold or open is remembered only while the note stays open in that mode. Opening the note again, switching to another note and back, or switching between Live and View mode shows every callout the way it starts.
-- A folded callout opens by itself while the cursor is inside it, and while a match found with **Find** is inside it. It folds again when the cursor leaves.
+- A folded callout opens by itself while the cursor is inside it: when a search result, a link to a block or a match found with **Find** leads there. It folds again when the cursor leaves.
+- Folding a callout while the cursor is inside it moves the cursor to the line after the callout.
 - With the arrow keys, the cursor steps over a folded callout.
 - A collapsible callout with nothing under its header has no arrow, because there is nothing to fold.
 - Source mode shows the note as written and does not fold.
