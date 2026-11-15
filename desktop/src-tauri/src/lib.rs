@@ -22,6 +22,7 @@ mod shim;
 mod store;
 mod sync_crypto;
 mod sync_folder;
+mod sync_guard;
 mod sync_webdav;
 mod updater_cmds;
 mod vault_index;

@@ -223,6 +223,11 @@ pub(crate) fn root_url(cfg: &WebDavConfig) -> Result<String, String> {
     })
 }
 
+/// Where this configuration syncs to, as the record of a sync names it.
+pub(crate) fn destination(cfg: &WebDavConfig) -> Result<crate::sync_guard::Destination, String> {
+    root_url(cfg).map(|root| crate::sync_guard::Destination::webdav(&root))
+}
+
 fn file_url(root: &str, rel: &str) -> String {
     format!("{root}/{}", encode_rel(rel))
 }

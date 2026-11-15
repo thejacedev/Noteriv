@@ -107,6 +107,11 @@ fn resolve_target(configured: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// Where this configuration syncs to, as the record of a sync names it.
+pub(crate) fn destination(cfg: &FolderConfig) -> Result<crate::sync_guard::Destination, String> {
+    resolve_target(&cfg.target_path).map(crate::sync_guard::Destination::Folder)
+}
+
 /// A target inside the vault, or a vault inside the target, would copy into
 /// itself on every run.
 fn check_separate(vault: &Path, target: &Path) -> Result<(), String> {
