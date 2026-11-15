@@ -25,6 +25,8 @@ Line 15, Col 3: Broken wiki-link: [[nonexistent-note]]
 
 This catches typos in link targets, references to deleted files, and links to files you intended to create but have not yet.
 
+A link or embed of a file that is not a note, such as `![[photo.png]]`, `[[paper.pdf#page=3]]` or `![[Projects.base]]`, is looked up among the other files in the vault, the same way a click on it is (after 3.0.0). It is reported only when no such file exists. In 3.0.0 and earlier every link of this kind was reported as broken.
+
 The check considers the display text alias syntax (`[[target|alias]]`) -- only the target portion before the pipe is validated.
 
 ### Empty Headings (Warning)

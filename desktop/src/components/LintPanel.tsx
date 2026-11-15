@@ -3,10 +3,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { lintMarkdown, type LintWarning } from "@/lib/markdown-lint";
 import { loadVaultIndex } from "@/lib/vault-index";
+import { loadLinkIndex, onLinkIndexChange, vaultRelative } from "@/lib/vault-links";
+import type { LinkIndex } from "@/lib/link-resolve";
 
 interface LintPanelProps {
   content: string;
   vaultPath: string;
+  /** The note being checked, as a full path: a link can be a path from it. */
+  filePath: string;
   onLineClick: (line: number) => void;
   onClose: () => void;
 }
@@ -14,13 +18,38 @@ interface LintPanelProps {
 export default function LintPanel({
   content,
   vaultPath,
+  filePath,
   onLineClick,
   onClose,
 }: LintPanelProps) {
   const [warnings, setWarnings] = useState<LintWarning[]>([]);
   const [fileList, setFileList] = useState<string[]>([]);
   const [aliases, setAliases] = useState<string[]>([]);
+  // Every file in the vault, for finding what a link points at the way a
+  // click on it does: pictures, PDFs and bases as well as notes.
+  const [links, setLinks] = useState<LinkIndex | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The broken links last checked against a list of files read afresh.
+  const brokenCheckedRef = useRef("");
+
+  useEffect(() => {
+    if (!window.electronAPI || !vaultPath) return;
+    let cancelled = false;
+    const load = () => {
+      loadLinkIndex(vaultPath)
+        .then((index) => {
+          if (!cancelled) setLinks(index);
+        })
+        .catch(() => {});
+    };
+    load();
+    // A file added or removed since: the same list the editor draws from.
+    const stop = onLinkIndexChange(load);
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [vaultPath]);
 
   // Load file list for broken wiki-link detection
   useEffect(() => {
@@ -45,13 +74,28 @@ export default function LintPanel({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const results = lintMarkdown(content, vaultPath, fileList, aliases);
+      const from = vaultRelative(vaultPath, filePath) ?? "";
+      const lookup = links ? (target: string) => links.wiki(from, target) : undefined;
+      const results = lintMarkdown(content, vaultPath, fileList, aliases, lookup);
       setWarnings(results);
+      if (!window.electronAPI || !vaultPath) return;
+      // The list of files is kept for a few seconds, so a picture pasted a
+      // moment ago may not be in it yet. Links that look broken are checked
+      // once against a list read afresh before they are left standing.
+      const broken = results
+        .filter((w) => w.rule === "broken-wikilink")
+        .map((w) => w.message)
+        .join("\n");
+      const readAfresh = broken !== "" && broken !== brokenCheckedRef.current;
+      brokenCheckedRef.current = broken;
+      loadLinkIndex(vaultPath, readAfresh ? 0 : undefined)
+        .then((index) => setLinks((held) => (held === index ? held : index)))
+        .catch(() => {});
     }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, vaultPath, fileList, aliases]);
+  }, [content, vaultPath, filePath, fileList, aliases, links]);
 
   // Group by severity
   const grouped = useMemo(() => {

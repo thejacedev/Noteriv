@@ -11,17 +11,29 @@ export interface LintWarning {
 }
 
 /**
+ * What the file part of a `[[...]]` link points at in the vault, as a path
+ * inside it, or null when it points at nothing. The app's own lookup
+ * (`LinkIndex.wiki`) is what should be passed, so the linter and a click on
+ * the link agree.
+ */
+export type WikiLookup = (target: string) => string | null;
+
+/**
  * Lint markdown content and return warnings.
  * @param content - The markdown text to lint
  * @param vaultPath - The vault path (used for checking wiki-link targets)
  * @param fileList - Optional list of file names in the vault (without extension)
  * @param aliases - Other names notes go by (their `aliases` property); a link to one is not broken
+ * @param lookup - Finds a link's file the way the app does. Without it only
+ *   notes are known, and a link or embed of any other file (`![[photo.png]]`,
+ *   `[[paper.pdf#page=3]]`, `[[Projects.base]]`) is reported as broken.
  */
 export function lintMarkdown(
   content: string,
   vaultPath: string,
   fileList?: string[],
-  aliases: string[] = []
+  aliases: string[] = [],
+  lookup?: WikiLookup
 ): LintWarning[] {
   const warnings: LintWarning[] = [];
   const lines = content.split("\n");
@@ -93,7 +105,9 @@ export function lintMarkdown(
         const name = target.replace(/\\/g, "/").split("/").pop()!.replace(/\.(md|markdown)$/, "");
         const exists =
           fileList.some((f) => f.toLowerCase() === target || f.toLowerCase() === name) ||
-          aliases.some((a) => a.toLowerCase() === target);
+          aliases.some((a) => a.toLowerCase() === target) ||
+          // A picture, a PDF, a base, or a note named by a path from this one.
+          (lookup ? lookup(splitWikiTarget(wlMatch[1]).file) !== null : false);
         if (!exists) {
           warnings.push({
             line: lineNum,

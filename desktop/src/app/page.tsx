@@ -3182,6 +3182,7 @@ function Home() {
           <LintPanel
             content={content}
             vaultPath={activeVault.path}
+            filePath={currentTab.filePath}
             onLineClick={handleHeadingClick}
             onClose={() => setShowLintPanel(false)}
           />
