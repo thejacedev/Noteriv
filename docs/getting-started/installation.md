@@ -69,16 +69,21 @@ sudo apt-get remove noteriv
 For Fedora and openSUSE:
 
 1. Download the `.rpm` file from the releases page.
-2. Install it:
+2. Import the Noteriv signing key. You only need to do this once per machine:
+   ```bash
+   sudo rpm --import https://raw.githubusercontent.com/thejacedev/Noteriv/main/packaging/RPM-GPG-KEY-noteriv
+   ```
+   The package is signed with this key, whose fingerprint is `C62C 1F44 8323 F48C 2EDA A27C 1EB3 C30D 4B37 42AF`. Without it, the install below stops with "Signature verification failed".
+3. Install the package:
    ```bash
    # Fedora
-   sudo dnf install ./Noteriv-*.x86_64.rpm
+   sudo dnf install --setopt=localpkg_gpgcheck=1 ./Noteriv-*.x86_64.rpm
 
    # openSUSE
-   sudo zypper install --allow-unsigned-rpm ./Noteriv-*.x86_64.rpm
+   sudo zypper install ./Noteriv-*.x86_64.rpm
    ```
-   The package is not GPG-signed, so both tools print a warning. Without `--allow-unsigned-rpm`, zypper also asks whether to abort, retry, or ignore, and aborts if you press Enter.
-3. Launch Noteriv from your application menu or run `noteriv` from the terminal.
+   `--setopt=localpkg_gpgcheck=1` makes dnf check the signature of a downloaded package. Without it, dnf installs the file unchecked and warns "skipped OpenPGP checks".
+4. Launch Noteriv from your application menu or run `noteriv` from the terminal.
 
 To uninstall:
 ```bash
