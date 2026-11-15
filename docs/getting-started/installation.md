@@ -66,7 +66,7 @@ sudo apt-get remove noteriv
 
 ### Fedora / openSUSE (.rpm)
 
-For RPM-based distributions (Fedora, openSUSE, CentOS, RHEL, etc.):
+For Fedora and openSUSE:
 
 1. Download the `.rpm` file from the releases page.
 2. Install it:
