@@ -19,6 +19,8 @@ In two-way mode, every note in the target folder, and every attachment of a kind
 
 Noteriv refuses to sync when the target folder is inside the vault, or the vault is inside the target folder.
 
+The folder is for one vault only. Noteriv refuses a vault's first sync with a folder that another vault on this device already syncs with, or with one that holds that folder or is inside it (after 3.0.0). The target folder and the other folder sync settings are kept for each vault. See [More Than One Vault on a Device](./index.md#more-than-one-vault-on-a-device).
+
 ## How It Works
 
 Each device keeps a small record of what every file looked like, in the vault and in the target folder, the last time the two matched. On every sync Noteriv lists both folders, compares them with that record, and then:
@@ -86,13 +88,14 @@ Below the folder settings are the switches for images, PDFs, audio and video, th
 
 Before the first sync, you can click the "Test Connection" button in settings. This verifies that:
 
-1. The target folder is not inside the vault, and the vault is not inside it.
-2. The target path can be created, if it does not exist yet.
-3. Noteriv can write to it.
+1. No other vault on this device syncs with the target folder, with a folder that holds it, or with a folder inside it (after 3.0.0).
+2. The target folder is not inside the vault, and the vault is not inside it.
+3. The target path can be created, if it does not exist yet.
+4. Noteriv can write to it.
 
 The test writes a small temporary file (`.noteriv-test`) and deletes it again. If the test fails, the message says why, and a folder that is refused is not created.
 
-In 2.4.13 the test did not make the first check: it said "Connected" for a folder inside the vault and created that folder, and sync then refused it.
+In 2.4.13 the test did not check that the folder is outside the vault: it said "Connected" for a folder inside the vault and created that folder, and sync then refused it.
 
 ## When Sync Runs
 

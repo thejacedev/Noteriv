@@ -58,6 +58,8 @@ The folder on the WebDAV server where your vault files are stored. Default: `/No
 
 For example, if your server URL is `https://cloud.example.com/remote.php/dav/files/alice/` and the remote path is `/Noteriv`, files are stored at `https://cloud.example.com/remote.php/dav/files/alice/Noteriv/`.
 
+The remote path is for one vault only. If you sync more than one vault from this device, give each a remote path of its own, such as `/Noteriv/Work` and `/Noteriv/Home`. Noteriv refuses a vault's first sync with a remote path that another vault on this device already syncs with, or with one that holds that folder or is inside it (after 3.0.0). The WebDAV settings are kept for each vault. See [More Than One Vault on a Device](./index.md#more-than-one-vault-on-a-device).
+
 ### Encryption Password
 
 Leave this empty for no encryption. With a password, the contents of every file are encrypted on this device before they are uploaded. File and folder names are not encrypted. Read [Encryption](#encryption) before you set one. This setting was added after 2.4.13.
@@ -105,10 +107,11 @@ The switches for images, PDFs, audio and video, the list of folders to leave out
 
 Before the first sync, click "Test Connection" in the WebDAV settings. This checks that:
 
-1. The URL is reachable.
-2. The username and password are accepted.
-3. The remote path exists. If it does not, Noteriv creates it.
-4. The encryption password fits the remote folder, if the folder was already there (after 2.4.13). See [When a Sync Stops](#when-a-sync-stops).
+1. No other vault on this device syncs with the remote path, with a folder that holds it, or with a folder inside it (after 3.0.0). This is checked first, before the server is contacted.
+2. The URL is reachable.
+3. The username and password are accepted.
+4. The remote path exists. If it does not, Noteriv creates it.
+5. The encryption password fits the remote folder, if the folder was already there (after 2.4.13). See [When a Sync Stops](#when-a-sync-stops).
 
 If the test fails, the message says whether the server could not be reached, rejected the username or password, or refused the folder, or why the encryption password does not fit.
 

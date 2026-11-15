@@ -107,7 +107,7 @@ WebDAV sync keeps both versions when a file changed on both sides since the last
 
 ## Settings Location
 
-The Git remote is stored per vault, so each vault can sync to its own repository. The additional sync provider is not. The folder target or WebDAV server, the choice of what syncs and the WebDAV encryption password are stored once, in Noteriv's settings on the device, and are used for whichever vault is open. If you open more than one vault on a device, they all sync with the same target folder or remote path.
+The Git remote is stored per vault, so each vault can sync to its own repository. The additional sync provider is stored per vault too (after 3.0.0): each vault has its own folder target or WebDAV server, its own choice of what syncs and its own WebDAV encryption password. They are kept in Noteriv's settings on the device, not in the vault. A vault you have not picked a provider for does not sync with one. See [More Than One Vault on a Device](#more-than-one-vault-on-a-device).
 
 On desktop, sync settings are accessed from:
 
@@ -115,6 +115,29 @@ On desktop, sync settings are accessed from:
 2. **Settings modal**: Settings > Sync section, where you configure the auto-sync interval, pull-on-open behavior, and additional sync providers (folder, WebDAV). Once a provider is picked, the same section holds the choice of what it syncs and, for WebDAV, the encryption password.
 
 On mobile, sync settings are in the vault settings screen.
+
+## More Than One Vault on a Device
+
+A sync folder holds one vault. Give each vault a target folder or a remote path of its own, such as `/Noteriv/Work` and `/Noteriv/Home`.
+
+Noteriv refuses a vault's first sync with a target folder or remote path that another vault on the same device already syncs with (after 3.0.0). It also refuses one that holds that folder, or is inside it. The status bar names the other vault, and nothing is copied. **Test Connection** refuses it the same way.
+
+A vault that has synced with a folder before is never refused. A vault you have moved, or removed from Noteriv, does not stand in the way of another one.
+
+### Updating from 3.0.0 or Earlier
+
+In 3.0.0 and earlier the folder and WebDAV settings were shared by every vault on the device. A second vault synced with the first vault's folder as soon as it was open when a sync ran, and each vault received the other's notes.
+
+When you update, the shared settings are handed out once:
+
+| Your vaults | What happens |
+|---|---|
+| One vault | It keeps the settings. Nothing changes |
+| Several vaults, and one of them has synced with the folder | That vault keeps the settings. The others start with **Provider** set to **None** |
+| Several vaults, and none has synced with the folder yet | The vault that is open keeps the settings. The others start with **Provider** set to **None** |
+| Several vaults that have already synced with the same folder | Each keeps the settings and goes on syncing with it. Their notes are already mixed |
+
+If two of your vaults were mixed this way, separate them by hand. Decide which vault the folder belongs to. In the other vault, set **Provider** to **None** or give it a folder of its own. Then delete the notes that do not belong from each vault.
 
 ## What Gets Synced
 
