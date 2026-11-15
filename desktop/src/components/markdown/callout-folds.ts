@@ -68,9 +68,13 @@ export function findFoldableCallouts(doc: Text): FoldableCallout[] {
   return found;
 }
 
-/** Fold or open the callout whose header line starts at this position. */
-export const toggleCalloutFold = StateEffect.define<number>({
-  map: (pos, change) => change.mapPos(pos, 1),
+/**
+ * Fold or open the callout whose header line starts at `header`. It says
+ * which of the two, not "the other one": a callout can be standing open only
+ * because the cursor is in it, and a click on its arrow then means "fold".
+ */
+export const setCalloutFold = StateEffect.define<{ header: number; folded: boolean }>({
+  map: (value, change) => ({ header: change.mapPos(value.header, 1), folded: value.folded }),
 });
 
 interface FoldState {
@@ -113,10 +117,14 @@ export const calloutFolds = StateField.define<FoldState>({
       toggled = replaced ? [] : toggled.map((pos) => tr.changes.mapPos(pos, 1)).filter((pos) => headers.has(pos));
     }
     for (const effect of tr.effects) {
-      if (!effect.is(toggleCalloutFold)) continue;
-      const header = effect.value;
-      if (!callouts.some((callout) => callout.header === header)) continue;
-      toggled = toggled.includes(header) ? toggled.filter((pos) => pos !== header) : [...toggled, header];
+      if (!effect.is(setCalloutFold)) continue;
+      const { header, folded } = effect.value;
+      const callout = callouts.find((c) => c.header === header);
+      if (!callout) continue;
+      // Remembered only when it differs from how the callout starts.
+      const differs = callout.startsFolded !== folded;
+      if (differs === toggled.includes(header)) continue;
+      toggled = differs ? [...toggled, header] : toggled.filter((pos) => pos !== header);
     }
     if (!tr.docChanged && !tr.selection && toggled === value.toggled) return value;
     return settle(tr.state, callouts, toggled);
@@ -136,6 +144,31 @@ export function calloutFoldAt(state: EditorState, header: number): "folded" | "o
   const value = state.field(calloutFolds, false);
   if (!value || !value.callouts.some((callout) => callout.header === header)) return null;
   return value.folded.has(header) ? "folded" : "open";
+}
+
+/**
+ * What a click on a callout's arrow does: fold it when it is open and open
+ * it when it is folded. A cursor inside a callout that is being folded is
+ * put on the line after it, or it would hold the callout open. Null when
+ * there is no foldable callout at `header`.
+ */
+export function calloutFoldClick(
+  state: EditorState,
+  header: number
+): { effects: StateEffect<unknown>; selection?: { anchor: number } } | null {
+  const value = state.field(calloutFolds, false);
+  const callout = value?.callouts.find((c) => c.header === header);
+  if (!value || !callout) return null;
+  const fold = !value.folded.has(header);
+  const effects = setCalloutFold.of({ header, folded: fold });
+  const inside = (pos: number) => pos > callout.from && pos <= callout.to;
+  if (!fold || !state.selection.ranges.some((range) => inside(range.anchor) || inside(range.head))) {
+    return { effects };
+  }
+  // The start of the next line. A callout that ends the note has none: the
+  // end of its header is the nearest place that is not inside it.
+  const after = callout.to < state.doc.length ? callout.to + 1 : callout.from;
+  return { effects, selection: { anchor: after } };
 }
 
 /** The hidden stretches of the text, in order. */

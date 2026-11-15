@@ -1,7 +1,7 @@
 import { Decoration, WidgetType, type EditorView } from "@codemirror/view";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 import { RenderedMarkdownWidget } from "../widget";
-import { CALLOUT_HEADER, calloutFoldAt, toggleCalloutFold } from "../callout-folds";
+import { CALLOUT_HEADER, calloutFoldAt, calloutFoldClick } from "../callout-folds";
 import type { BlockRenderer, BlockContext } from "../types";
 
 /**
@@ -44,7 +44,8 @@ class CalloutHeaderWidget extends WidgetType {
       event.preventDefault();
       // Where the header is now: the note may have changed since this was drawn.
       const header = view.state.doc.lineAt(view.posAtDOM(span)).from;
-      view.dispatch({ effects: toggleCalloutFold.of(header) });
+      const click = calloutFoldClick(view.state, header);
+      if (click) view.dispatch(click);
     });
     return span;
   }

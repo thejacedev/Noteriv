@@ -4,9 +4,10 @@ import {
   CALLOUT_HEADER,
   calloutFoldAt,
   calloutFolds,
+  calloutFoldClick,
   findFoldableCallouts,
   foldedCalloutRanges,
-  toggleCalloutFold,
+  setCalloutFold,
 } from "../../components/markdown/callout-folds";
 
 const NOTE = [
@@ -29,6 +30,11 @@ function start(text = NOTE, cursor = 0): EditorState {
   return EditorState.create({ doc: text, selection: { anchor: cursor }, extensions: [calloutFolds] });
 }
 const lineStart = (state: EditorState, n: number) => state.doc.line(n).from;
+/** A click on the arrow of the callout whose header is on line `n`. */
+function click(state: EditorState, n: number): EditorState {
+  const spec = calloutFoldClick(state, lineStart(state, n));
+  return spec ? state.update(spec).state : state;
+}
 /** The line numbers a fold hides. */
 function hiddenLines(state: EditorState): number[] {
   const lines: number[] = [];
@@ -89,26 +95,66 @@ describe("the fold state", () => {
 
   it("opens and folds on a toggle, and never changes the text", () => {
     let state = start();
-    state = state.update({ effects: toggleCalloutFold.of(lineStart(state, 3)) }).state;
+    state = click(state, 3);
     expect(calloutFoldAt(state, lineStart(state, 3))).toBe("open");
     expect(hiddenLines(state)).toEqual([]);
 
-    state = state.update({ effects: toggleCalloutFold.of(lineStart(state, 7)) }).state;
+    state = click(state, 7);
     expect(calloutFoldAt(state, lineStart(state, 7))).toBe("folded");
     expect(hiddenLines(state)).toEqual([8]);
 
-    state = state.update({ effects: toggleCalloutFold.of(lineStart(state, 3)) }).state;
+    state = click(state, 3);
     expect(hiddenLines(state)).toEqual([4, 5, 8]);
     expect(state.doc.toString()).toBe(NOTE);
 
-    // A toggle that names no foldable callout does nothing.
-    const same = state.update({ effects: toggleCalloutFold.of(lineStart(state, 10)) }).state;
+    // A click that names no foldable callout does nothing.
+    expect(calloutFoldClick(state, lineStart(state, 10))).toBe(null);
+    const same = state.update({ effects: setCalloutFold.of({ header: lineStart(state, 10), folded: true }) }).state;
     expect(hiddenLines(same)).toEqual([4, 5, 8]);
+    // Asking for what a callout already is changes nothing.
+    const again = state.update({ effects: setCalloutFold.of({ header: lineStart(state, 3), folded: true }) }).state;
+    expect(hiddenLines(again)).toEqual([4, 5, 8]);
+  });
+
+  it("folds from the arrow with the cursor inside, and puts the cursor after the callout", () => {
+    // The open callout, with the cursor in its line.
+    let state = start(NOTE, 0);
+    state = state.update({ selection: { anchor: lineStart(state, 8) + 4 } }).state;
+    expect(calloutFoldAt(state, lineStart(state, 7))).toBe("open");
+    state = click(state, 7);
+    expect(calloutFoldAt(state, lineStart(state, 7))).toBe("folded");
+    expect(hiddenLines(state)).toEqual([4, 5, 8]);
+    expect(state.selection.main.head).toBe(lineStart(state, 9));
+
+    // The folded callout, standing open only because the cursor went into it.
+    state = state.update({ selection: { anchor: lineStart(state, 4) + 2 } }).state;
+    expect(calloutFoldAt(state, lineStart(state, 3))).toBe("open");
+    state = click(state, 3);
+    expect(calloutFoldAt(state, lineStart(state, 3))).toBe("folded");
+    expect(state.selection.main.head).toBe(lineStart(state, 6));
+    // It was not turned into "open for good": moving in and out again leaves it folded.
+    state = state.update({ selection: { anchor: lineStart(state, 5) } }).state;
+    state = state.update({ selection: { anchor: 0 } }).state;
+    expect(calloutFoldAt(state, lineStart(state, 3))).toBe("folded");
+
+    // A cursor that is somewhere else is left where it is.
+    state = click(state, 3);
+    expect(calloutFoldAt(state, lineStart(state, 3))).toBe("open");
+    expect(state.selection.main.head).toBe(0);
+  });
+
+  it("puts the cursor at the end of the header when the folded callout ends the note", () => {
+    const text = "intro\n\n> [!tip]+ Last\n> the last line";
+    let state = start(text, text.length);
+    expect(calloutFoldAt(state, 7)).toBe("open");
+    state = click(state, 3);
+    expect(calloutFoldAt(state, 7)).toBe("folded");
+    expect(state.selection.main.head).toBe(state.doc.line(3).to);
   });
 
   it("keeps a fold on its callout when text is typed above it", () => {
     let state = start();
-    state = state.update({ effects: toggleCalloutFold.of(lineStart(state, 7)) }).state;
+    state = click(state, 7);
     state = state.update({ changes: { from: 0, insert: "A new first line\n\n" } }).state;
     // Everything moved down two lines.
     expect(calloutFoldAt(state, lineStart(state, 9))).toBe("folded");
@@ -142,7 +188,7 @@ describe("the fold state", () => {
 
   it("forgets the folds when the whole text is replaced by another note", () => {
     let state = start();
-    state = state.update({ effects: toggleCalloutFold.of(lineStart(state, 3)) }).state;
+    state = click(state, 3);
     expect(hiddenLines(state)).toEqual([]);
     const other = "> [!tip]- Another note\n> its own lines\n";
     state = state.update({ changes: { from: 0, to: state.doc.length, insert: other }, selection: { anchor: 0 } }).state;

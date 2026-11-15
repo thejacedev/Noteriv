@@ -8,7 +8,7 @@ import {
 import { EditorState, RangeSetBuilder, Facet, StateEffect } from "@codemirror/state";
 import { RenderedMarkdownWidget } from "./widget";
 import { getBlockRenderers, getInlineRenderers } from "./registry";
-import { calloutFolds, foldedCalloutRanges, toggleCalloutFold } from "./callout-folds";
+import { calloutFolds, foldedCalloutRanges, setCalloutFold } from "./callout-folds";
 import { CodeBlockTracker } from "./renderers/code-blocks";
 import { MathBlockTracker } from "./renderers/math";
 import { HtmlBlockTracker } from "./renderers/html";
@@ -348,7 +348,7 @@ export const liveMarkdownPlugin = ViewPlugin.fromClass(
         // Another note in the same editor: its relative links lead elsewhere.
         update.startState.facet(notePathFacet) !== update.state.facet(notePathFacet) ||
         update.transactions.some((tr) =>
-          tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged) || e.is(toggleCalloutFold))
+          tr.effects.some((e) => e.is(codeBlockProcessorsChanged) || e.is(embedDataChanged) || e.is(setCalloutFold))
         )
       ) {
         // Cursor moved or scrolled — rebuild viewport decorations only (cheap, no pre-scan)
