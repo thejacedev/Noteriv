@@ -16,6 +16,9 @@
 //! - A record whose vault is no longer in the app's list of vaults, or whose
 //!   folder is gone, counts for nothing: a vault that was moved or removed
 //!   does not stand in the way of the one that took its place.
+//! - Neither does the record of a vault that is no longer set to sync there.
+//!   A vault that synced with a folder once and was then given another, or
+//!   had sync turned off, has left it for the next vault.
 
 use serde::Deserialize;
 use std::fs;
@@ -63,23 +66,34 @@ impl Destination {
     }
 }
 
+/// A vault in the app's list, and where it is set to sync to now: `None`
+/// when it has no folder or server set.
+#[derive(Debug, Clone)]
+pub(crate) struct ListedVault {
+    pub vault: crate::store::Vault,
+    pub destination: Option<Destination>,
+}
+
 /// A vault in the app's list, other than the one that is syncing.
 #[derive(Debug, Clone)]
 pub(crate) struct OtherVault {
     pub name: String,
     /// Its folder, resolved through links.
     pub path: PathBuf,
+    /// Where it is set to sync to now.
+    pub destination: Option<Destination>,
 }
 
 /// The vaults in the app's list whose folders exist, without `vault`.
-pub(crate) fn other_vaults(vault: &Path, listed: &[crate::store::Vault]) -> Vec<OtherVault> {
+pub(crate) fn other_vaults(vault: &Path, listed: &[ListedVault]) -> Vec<OtherVault> {
     listed
         .iter()
         .filter_map(|entry| {
-            let path = dunce::canonicalize(&entry.path).ok()?;
+            let path = dunce::canonicalize(&entry.vault.path).ok()?;
             (path.is_dir() && path != vault).then(|| OtherVault {
-                name: entry.name.clone(),
+                name: entry.vault.name.clone(),
                 path,
+                destination: entry.destination.clone(),
             })
         })
         .collect()
@@ -148,7 +162,11 @@ pub(crate) fn check(
             continue;
         }
         if sharing.is_none() && theirs.overlaps(destination) {
-            sharing = others.iter().find(|other| other.path == owner);
+            // It synced there, and it is still set to: a record alone may be
+            // of a folder the vault has since left.
+            sharing = others.iter().find(|other| {
+                other.path == owner && other.destination.as_ref().is_some_and(|set| set.overlaps(destination))
+            });
         }
     }
     match sharing {
@@ -182,10 +200,12 @@ mod tests {
         fs::write(dir.join(name), text.to_string()).unwrap();
     }
 
-    fn other(name: &str, path: &Path) -> OtherVault {
+    /// Another vault in the list, set to sync with `set`.
+    fn other(name: &str, path: &Path, set: Option<&Destination>) -> OtherVault {
         OtherVault {
             name: name.into(),
             path: path.to_path_buf(),
+            destination: set.cloned(),
         }
     }
 
@@ -236,7 +256,7 @@ mod tests {
             fs::create_dir_all(dir).unwrap();
         }
         let target = Destination::Folder(cloud.clone());
-        let listed = [other("Work", &work)];
+        let listed = [other("Work", &work, Some(&target))];
 
         // Nobody has synced with it yet.
         assert_eq!(check(&records, &home, &target, &listed), Ok(()));
@@ -255,7 +275,7 @@ mod tests {
         assert_eq!(check(&records, &home, &beside, &listed), Ok(()));
 
         // The vault the folder belongs to goes on syncing with it.
-        assert_eq!(check(&records, &work, &target, &[other("Home", &home)]), Ok(()));
+        assert_eq!(check(&records, &work, &target, &[other("Home", &home, Some(&target))]), Ok(()));
         assert!(has_synced(&records, &work, &target));
         assert!(!has_synced(&records, &home, &target));
         assert!(!has_synced(&records, &work, &inside));
@@ -270,8 +290,8 @@ mod tests {
         record(&records, "folder-1.json", &work, &format!("folder\n{}\nboth", cloud.display()));
         // Its own record, kept when the direction was another one.
         record(&records, "folder-2.json", &home, &format!("folder\n{}\npush", cloud.display()));
-        assert_eq!(check(&records, &home, &target, &[other("Work", &work)]), Ok(()));
-        assert_eq!(check(&records, &work, &target, &[other("Home", &home)]), Ok(()));
+        assert_eq!(check(&records, &home, &target, &[other("Work", &work, Some(&target))]), Ok(()));
+        assert_eq!(check(&records, &work, &target, &[other("Home", &home, Some(&target))]), Ok(()));
     }
 
     #[test]
@@ -283,22 +303,23 @@ mod tests {
         record(&records, "folder-1.json", &old, &format!("folder\n{}\nboth", cloud.display()));
         // The vault was moved or removed: nothing in the list is at that path.
         assert_eq!(check(&records, &home, &target, &[]), Ok(()));
-        assert_eq!(check(&records, &home, &target, &[other("Elsewhere", &base.join("elsewhere"))]), Ok(()));
+        assert_eq!(check(&records, &home, &target, &[other("Elsewhere", &base.join("elsewhere"), Some(&target))]), Ok(()));
 
         // Files that are not records are passed over.
         fs::write(records.join("notes.txt"), "folder").unwrap();
         fs::write(records.join("broken.json"), "{ not json").unwrap();
         fs::write(records.join("other.json"), "[1, 2, 3]").unwrap();
         fs::write(records.join("empty.json"), "{}").unwrap();
-        assert_eq!(check(&records, &home, &target, &[other("Old", &old)]).is_err(), true);
-        assert_eq!(check(&base.join("no such folder"), &home, &target, &[other("Old", &old)]), Ok(()));
+        assert_eq!(check(&records, &home, &target, &[other("Old", &old, Some(&target))]).is_err(), true);
+        assert_eq!(check(&base.join("no such folder"), &home, &target, &[other("Old", &old, Some(&target))]), Ok(()));
     }
 
     #[test]
     fn a_webdav_folder_is_one_place_whoever_signs_in_and_encrypted_or_not() {
         let base = scratch("webdav");
         let (work, home, records) = (base.join("work"), base.join("home"), base.join("records"));
-        let listed = [other("Work", &work)];
+        let set = Destination::webdav("https://dav.example.com/files/me/Noteriv");
+        let listed = [other("Work", &work, Some(&set))];
         record(&records, "webdav-1.json", &work, "https://dav.example.com/files/me/Noteriv\nme\nencrypted");
 
         let same = Destination::webdav("https://dav.example.com/files/me/Noteriv/");
@@ -315,7 +336,7 @@ mod tests {
         assert_eq!(check(&records, &home, &folder, &listed), Ok(()));
 
         // The vault's own record is for the folder as it was before it was encrypted.
-        assert_eq!(check(&records, &work, &same, &[other("Home", &home)]), Ok(()));
+        assert_eq!(check(&records, &work, &same, &[other("Home", &home, Some(&same))]), Ok(()));
     }
 
     #[test]
@@ -333,10 +354,43 @@ mod tests {
             auto_sync: false,
             last_opened: 0,
         };
-        let listed = [vault("Work", &work), vault("Home", &home), vault("Gone", &base.join("gone"))];
+        let set = Destination::Folder(base.join("cloud"));
+        let at = |vault, destination: Option<&Destination>| ListedVault {
+            vault,
+            destination: destination.cloned(),
+        };
+        let listed = [
+            at(vault("Work", &work), Some(&set)),
+            at(vault("Home", &home), None),
+            at(vault("Gone", &base.join("gone")), Some(&set)),
+        ];
         let others = other_vaults(&home, &listed);
         assert_eq!(others.len(), 1);
         assert_eq!(others[0].name, "Work");
         assert_eq!(others[0].path, work);
+        assert_eq!(others[0].destination, Some(set));
+    }
+
+    #[test]
+    fn a_vault_that_no_longer_syncs_there_does_not_hold_the_folder() {
+        let base = scratch("left");
+        let (work, home, cloud, records) =
+            (base.join("work"), base.join("home"), base.join("cloud"), base.join("records"));
+        let target = Destination::Folder(cloud.clone());
+        // Work synced with the folder once.
+        record(&records, "folder-1.json", &work, &format!("folder\n{}\nboth", cloud.display()));
+
+        // While Work is set to sync with it, or with a folder in or around it, Home is refused.
+        assert!(check(&records, &home, &target, &[other("Work", &work, Some(&target))]).is_err());
+        let inside = Destination::Folder(cloud.join("Sub"));
+        assert!(check(&records, &home, &target, &[other("Work", &work, Some(&inside))]).is_err());
+        assert!(check(&records, &home, &target, &[other("Work", &work, Some(&Destination::Folder(base.clone())))]).is_err());
+
+        // Work has sync turned off, or was given another folder or a server: the folder is free.
+        assert_eq!(check(&records, &home, &target, &[other("Work", &work, None)]), Ok(()));
+        let elsewhere = Destination::Folder(base.join("cloud-work"));
+        assert_eq!(check(&records, &home, &target, &[other("Work", &work, Some(&elsewhere))]), Ok(()));
+        let server = Destination::webdav("https://dav.example.com/files/me/Noteriv");
+        assert_eq!(check(&records, &home, &target, &[other("Work", &work, Some(&server))]), Ok(()));
     }
 }

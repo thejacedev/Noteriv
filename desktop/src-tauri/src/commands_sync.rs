@@ -61,14 +61,30 @@ fn record_dir() -> std::path::PathBuf {
     crate::paths::user_data_dir().join("sync")
 }
 
-/// The vaults in the app's list. The tests have no list of their own, and are
-/// not to read the user's.
-fn listed_vaults() -> Vec<crate::store::Vault> {
+/// The vaults in the app's list, each with where it is set to sync to now.
+/// The tests have no list of their own, and are not to read the user's.
+fn listed_vaults() -> Vec<crate::sync_guard::ListedVault> {
     if cfg!(test) {
-        Vec::new()
-    } else {
-        crate::store::get_vaults()
+        return Vec::new();
     }
+    let settings = crate::store::load_settings();
+    crate::store::get_vaults()
+        .into_iter()
+        .map(|vault| crate::sync_guard::ListedVault {
+            destination: vault_destination(&settings, &vault.id),
+            vault,
+        })
+        .collect()
+}
+
+/// Where a vault's own sync settings say it syncs to. `None` when it has no
+/// settings, no provider chosen, or a folder or address that cannot be read.
+fn vault_destination(
+    settings: &serde_json::Map<String, Value>,
+    id: &str,
+) -> Option<crate::sync_guard::Destination> {
+    let entry = settings.get("vaultSync")?.as_object()?.get(id)?.as_object()?;
+    shared_destination(entry.get("extraSyncProvider")?.as_str()?, entry)
 }
 
 /// Refuse a run that would put this vault into a folder another vault on this
@@ -78,7 +94,7 @@ fn guard(
     vault_path: &str,
     destination: Result<crate::sync_guard::Destination, String>,
     record_dir: &std::path::Path,
-    listed: &[crate::store::Vault],
+    listed: &[crate::sync_guard::ListedVault],
 ) -> Result<(), String> {
     let (Ok(vault), Ok(destination)) = (dunce::canonicalize(vault_path), destination) else {
         return Ok(());
@@ -276,7 +292,7 @@ fn not_synced(reason: String) -> String {
 async fn run(
     args: SyncRunInput,
     records: &std::path::Path,
-    listed: &[crate::store::Vault],
+    listed: &[crate::sync_guard::ListedVault],
 ) -> Result<SyncResult, String> {
     match args.provider_type.as_str() {
         "folder" => {
@@ -321,7 +337,7 @@ pub async fn sync_test(args: SyncTestInput) -> ConnectionResult {
 async fn test(
     args: SyncTestInput,
     record_dir: &std::path::Path,
-    listed: &[crate::store::Vault],
+    listed: &[crate::sync_guard::ListedVault],
 ) -> Result<(), String> {
     let vault = args.vault_path.as_deref();
     match args.provider_type.as_str() {
@@ -506,11 +522,23 @@ mod tests {
         }
     }
 
+    /// A vault in the list that is set to sync with the folder `place`.
+    fn set_to(
+        name: &str,
+        path: &std::path::Path,
+        place: Option<&std::path::Path>,
+    ) -> crate::sync_guard::ListedVault {
+        crate::sync_guard::ListedVault {
+            vault: listed(name, path),
+            destination: place.map(|p| crate::sync_guard::Destination::Folder(p.to_path_buf())),
+        }
+    }
+
     fn folder_run(
         vault: &std::path::Path,
         target: &std::path::Path,
         records: &std::path::Path,
-        vaults: &[crate::store::Vault],
+        vaults: &[crate::sync_guard::ListedVault],
     ) -> Result<SyncResult, String> {
         let input: SyncRunInput = serde_json::from_value(json!({
             "vaultPath": vault.to_string_lossy(),
@@ -530,7 +558,9 @@ mod tests {
         fs::create_dir_all(&home).unwrap();
         fs::write(work.join("Work note.md"), "for work").unwrap();
         fs::write(home.join("Diary.md"), "dear diary").unwrap();
-        let vaults = [listed("Work", &work), listed("Home", &home)];
+        // Where each vault ends up set to sync: Work with the folder, Home with one of its own.
+        let own = base.join("cloud-home");
+        let vaults = [set_to("Work", &work, Some(&cloud)), set_to("Home", &home, Some(&own))];
 
         // The first vault syncs with the folder, and goes on doing so.
         let first = folder_run(&work, &cloud, &records, &vaults).unwrap();
@@ -566,7 +596,6 @@ mod tests {
         assert!(!home.join("Work note.md").exists());
 
         // A folder of its own is fine, and then each vault keeps to its own.
-        let own = base.join("cloud-home");
         assert!(tauri::async_runtime::block_on(test(test_args(&own), &records, &vaults)).is_ok());
         let second = folder_run(&home, &own, &records, &vaults).unwrap();
         assert_eq!((second.pushed, second.pulled), (1, 0));
@@ -585,6 +614,61 @@ mod tests {
         assert!(cloud.join("Diary.md").is_file());
         // Now that it has happened, the vault is not locked out of the folder.
         assert!(folder_run(&home, &cloud, &records, &vaults).is_ok());
+    }
+
+    #[test]
+    fn a_folder_a_vault_has_left_is_free_for_another() {
+        let base = scratch("left-folder");
+        let (work, home, cloud, records) =
+            (base.join("work"), base.join("home"), base.join("cloud"), base.join("records"));
+        fs::create_dir_all(&work).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        fs::write(work.join("Work note.md"), "for work").unwrap();
+        fs::write(home.join("Diary.md"), "dear diary").unwrap();
+
+        // The settings went to the wrong vault and it synced once before anyone noticed.
+        let at_first = [set_to("Work", &work, Some(&cloud)), set_to("Home", &home, None)];
+        folder_run(&work, &cloud, &records, &at_first).unwrap();
+        assert!(folder_run(&home, &cloud, &records, &at_first).is_err());
+
+        // Work's sync is turned off and the folder is given to Home: Home is
+        // not turned away by a record of a sync Work no longer does.
+        let put_right = [set_to("Work", &work, None), set_to("Home", &home, Some(&cloud))];
+        let synced = folder_run(&home, &cloud, &records, &put_right).unwrap();
+        assert_eq!(synced.error, None);
+        assert!(cloud.join("Diary.md").is_file());
+        // Work has synced with the folder before, so it is never locked out
+        // of it: set to it again, it is let through, as it always was.
+        let both_set = [set_to("Work", &work, Some(&cloud)), set_to("Home", &home, Some(&cloud))];
+        assert!(folder_run(&work, &cloud, &records, &both_set).is_ok());
+    }
+
+    #[test]
+    fn a_vaults_own_settings_say_where_it_syncs_to() {
+        let base = scratch("vault-destination");
+        let cloud = base.join("cloud");
+        let settings = json!({
+            "extraSyncProvider": "webdav",
+            "webdavSync": { "url": "https://old.example.com", "username": "", "password": "", "remotePath": "/Shared" },
+            "vaultSync": {
+                "work": { "extraSyncProvider": "folder", "folderSync": { "targetPath": cloud.to_string_lossy(), "direction": "both" } },
+                "home": { "extraSyncProvider": "webdav", "webdavSync": { "url": "https://dav.example.com/files/me/", "username": "me", "password": "x", "remotePath": "/Home" } },
+                "off": { "extraSyncProvider": "none", "folderSync": { "targetPath": cloud.to_string_lossy(), "direction": "both" } },
+                "empty": { "extraSyncProvider": "folder", "folderSync": { "targetPath": "", "direction": "both" } },
+            },
+        });
+        let settings = settings.as_object().unwrap();
+        use crate::sync_guard::Destination;
+        assert_eq!(vault_destination(settings, "work"), Some(Destination::Folder(cloud.clone())));
+        assert_eq!(
+            vault_destination(settings, "home"),
+            Some(Destination::webdav("https://dav.example.com/files/me/Home"))
+        );
+        // Sync off, nothing set, or no settings of its own: not the shared ones at the top.
+        assert_eq!(vault_destination(settings, "off"), None);
+        assert_eq!(vault_destination(settings, "empty"), None);
+        assert_eq!(vault_destination(settings, "new"), None);
+        assert_eq!(vault_destination(json!({ "extraSyncProvider": "folder" }).as_object().unwrap(), "work"), None);
     }
 
     #[test]
@@ -629,7 +713,7 @@ mod tests {
         assert_eq!(entries(&[], Some("work")), json!({}));
 
         // Work has synced with the folder. It is Work's, whichever vault is open.
-        folder_run(&work, &cloud, &records, &both).unwrap();
+        folder_run(&work, &cloud, &records, &[]).unwrap();
         assert_eq!(entries(&both, Some("home")), json!({ "work": shared, "home": off }));
         assert_eq!(entries(&both, Some("work")), json!({ "work": shared, "home": off }));
         assert_eq!(entries(&[w.clone()], Some("work")), json!({ "work": shared }));
@@ -703,11 +787,11 @@ mod tests {
             (base.join("notes"), base.join("notes-moved"), base.join("cloud"), base.join("records"));
         fs::create_dir_all(&old_place).unwrap();
         fs::write(old_place.join("Note.md"), "a note").unwrap();
-        folder_run(&old_place, &cloud, &records, &[listed("Notes", &old_place)]).unwrap();
+        folder_run(&old_place, &cloud, &records, &[set_to("Notes", &old_place, Some(&cloud))]).unwrap();
 
         // The folder is moved and the app's list now has it at the new place.
         fs::rename(&old_place, &new_place).unwrap();
-        let vaults = [listed("Notes", &new_place)];
+        let vaults = [set_to("Notes", &new_place, Some(&cloud))];
         let again = folder_run(&new_place, &cloud, &records, &vaults).unwrap();
         assert_eq!(again.error, None);
         assert_eq!(again.conflicts, 0);
@@ -719,7 +803,7 @@ mod tests {
         }))
         .unwrap();
         let place = || crate::sync_folder::destination(&cfg);
-        let other = [listed("Notes", &new_place), listed("Other", &base)];
+        let other = [set_to("Notes", &new_place, Some(&cloud)), set_to("Other", &base, None)];
         assert_eq!(guard(new_place.to_str().unwrap(), Err("no folder".into()), &records, &other), Ok(()));
         assert_eq!(guard("/no/such/vault", place(), &records, &other), Ok(()));
         // With another vault listed that has no record there, it still syncs.
@@ -749,7 +833,7 @@ mod tests {
             vault: &std::path::Path,
             remote_path: &str,
             records: &std::path::Path,
-            vaults: &[crate::store::Vault],
+            vaults: &[crate::sync_guard::ListedVault],
         ) -> Result<SyncResult, String> {
             let input: SyncRunInput = serde_json::from_value(json!({
                 "vaultPath": vault.to_string_lossy(),
@@ -764,7 +848,7 @@ mod tests {
             vault: &std::path::Path,
             remote_path: &str,
             records: &std::path::Path,
-            vaults: &[crate::store::Vault],
+            vaults: &[crate::sync_guard::ListedVault],
         ) -> Result<(), String> {
             let input: SyncTestInput = serde_json::from_value(json!({
                 "providerType": "webdav",
@@ -784,13 +868,22 @@ mod tests {
             fs::create_dir_all(&home).unwrap();
             fs::write(work.join("Work note.md"), "for work").unwrap();
             fs::write(home.join("Diary.md"), "dear diary").unwrap();
-            let vaults = [listed("Work", &work), listed("Home", &home)];
             let millis = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis();
             let top = format!("/noteriv-live-guard-{millis}");
             let shared = format!("{top}/Work");
+            let own = format!("{top}/Home");
+            // Where each vault ends up set to sync: its own folder on the server.
+            let set_to = |name: &str, path: &std::path::Path, remote_path: &str| {
+                let cfg: crate::sync_webdav::WebDavConfig = serde_json::from_value(config(remote_path)).unwrap();
+                crate::sync_guard::ListedVault {
+                    vault: listed(name, path),
+                    destination: crate::sync_webdav::destination(&cfg).ok(),
+                }
+            };
+            let vaults = [set_to("Work", &work, &shared), set_to("Home", &home, &own)];
 
             // The first vault syncs with the folder on the server.
             let first = webdav_run(&work, &shared, &records, &vaults).unwrap();
@@ -813,7 +906,6 @@ mod tests {
             assert!(!work.join("Diary.md").exists());
 
             // A folder of its own, beside the first one, is fine.
-            let own = format!("{top}/Home");
             assert_eq!(webdav_test(&home, &own, &records, &vaults), Ok(()));
             let second = webdav_run(&home, &own, &records, &vaults).unwrap();
             assert_eq!((second.pushed, second.pulled, second.error), (1, 0, None));
