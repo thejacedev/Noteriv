@@ -183,27 +183,29 @@ Icon: Flame. Color: Mauve.
 
 ## Collapsible Callouts
 
-You can make callouts collapsible by adding `-` or `+` after the type identifier:
+You can make a callout collapsible by adding `-` or `+` straight after the type, with no space before it (after 3.0.0). The mark is not shown. A collapsible callout has an arrow at the right end of its header.
+
+In 3.0.0 and earlier the callout was drawn but did not fold, and the `-` or `+` was shown as part of the title.
 
 ### Initially Collapsed
 
 ```markdown
 > [!tip]- Click to Expand
 > This content is hidden by default.
-> Click the callout title to reveal it.
+> Click the arrow in the header to reveal it.
 ```
 
-The `-` after `[!tip]` means the callout starts collapsed. The user must click the title to expand it and see the content.
+The `-` after `[!tip]` means the callout starts collapsed: only its header is shown.
 
 ### Initially Expanded
 
 ```markdown
 > [!tip]+ Click to Collapse
 > This content is visible by default.
-> Click the callout title to collapse it.
+> Click the arrow in the header to collapse it.
 ```
 
-The `+` after `[!tip]` means the callout starts expanded but can be collapsed by clicking the title.
+The `+` after `[!tip]` means the callout starts expanded and can be collapsed.
 
 ### Non-Collapsible (Default)
 
@@ -212,7 +214,24 @@ The `+` after `[!tip]` means the callout starts expanded but can be collapsed by
 > This callout has no collapse behavior.
 ```
 
-Without `-` or `+`, the callout is always expanded and cannot be collapsed.
+Without `-` or `+`, the callout is always expanded, has no arrow and cannot be collapsed. A `-` that comes after a space, as in `> [!tip] - a dash`, is the start of the title and not a mark.
+
+### Folding and Opening
+
+| Where | What folds and opens the callout |
+|---|---|
+| Live mode | A click on the arrow at the right end of the header. A click anywhere else on the header puts the cursor on that line, which shows it as written so you can edit it |
+| View mode | A click anywhere on the header |
+
+How folding behaves:
+
+- Folding never changes the note. The `-` or `+` in the note says how the callout starts, and what you fold or open is remembered only while the note stays open in that mode. Opening the note again, switching to another note and back, or switching between Live and View mode shows every callout the way it starts.
+- A folded callout opens by itself while the cursor is inside it, and while a match found with **Find** is inside it. It folds again when the cursor leaves.
+- With the arrow keys, the cursor steps over a folded callout.
+- A collapsible callout with nothing under its header has no arrow, because there is nothing to fold.
+- Source mode shows the note as written and does not fold.
+
+Published pages, PDF export, embedded notes and file cards on a canvas do not draw callouts at all: a callout appears there as a quote that begins with `[!tip]`. That is the same as in 3.0.0.
 
 ## Nesting Content
 

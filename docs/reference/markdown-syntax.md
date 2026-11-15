@@ -275,7 +275,7 @@ See [Callouts](./callouts.md) for all 14 types with their icons and colors.
 > This content is visible but can be collapsed.
 ```
 
-Use `-` after the type for initially collapsed, `+` for initially expanded.
+Use `-` after the type for initially collapsed, `+` for initially expanded. The arrow in the callout's header folds and opens it (after 3.0.0). See [Collapsible Callouts](./callouts.md#collapsible-callouts).
 
 ---
 

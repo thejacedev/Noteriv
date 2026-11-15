@@ -30,6 +30,7 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | Notes and folders | Shown as they are |
 | `[[Note]]` and `[[Note\|alias]]` links | Work, including links by name to notes in other folders |
 | `[[Note#Heading]]` and `[[Note#^block]]` links | Open the note at that heading or block (from 2.4.9) |
+| Foldable callouts (`> [!tip]-` and `> [!tip]+`) | Fold and open with the arrow in the callout's header, in Live and View mode (after 3.0.0). Folding does not change the note. See [Collapsible Callouts](/reference/callouts#collapsible-callouts) |
 | `aliases` in frontmatter | A link or an embed written with an alias finds the note, and link suggestions and Quick Open find the note by its aliases (after 2.4.13). See [Note Aliases](/features/wiki-links#note-aliases) |
 | Markdown links to notes, such as `[text](Folder/Note.md)`, `[text](../Note.md)` and `[text](Note.md#Heading)` | Open the note or file on a click, at the heading, block or PDF page (after 2.4.13). They count as links in the links panel, the graph and bases, and are updated when a file is renamed or moved. A path is looked for from the top of the vault, then from the note's folder; `./` and `../` start at the note's folder and `/` at the top of the vault. See [Markdown Links](/features/wiki-links#markdown-links) |
 | Link format settings: "New link format" and "Use \[\[Wikilinks\]\]" | Both are in Settings > General, with the same three path choices and a switch for wiki-links (after 2.4.13). They apply to links Noteriv adds from now on: link suggestions, the Link buttons in the links panel, the Attachment Manager and the Audio Recorder. Links already in your notes are not converted. See [Link Format](/features/wiki-links#link-format) |
@@ -69,7 +70,6 @@ Tested by opening an Obsidian-style vault in Noteriv 2.4.8 on desktop; heading a
 | Obsidian feature | In Noteriv |
 |---|---|
 | Callouts, math and diagrams inside an embedded note | The embedded text is shown, but these are not drawn the way they are in the note itself |
-| Foldable callouts (`> [!tip]-`) | The callout renders, but does not fold, and the `-` or `+` is shown |
 | Web pages embedded with an `<iframe>` | Not shown. Frames are removed from note content on purpose |
 | Bookmarks made in Obsidian | Not read. Noteriv keeps its own [bookmarks](/features/bookmarks) for notes, folders, searches and headings, with groups, in `.noteriv/bookmarks.json` (after 2.4.13) |
 | Markdown in a canvas text card | Shown as written. A text card shows plain text, so formatting such as `**bold**` is not drawn |
