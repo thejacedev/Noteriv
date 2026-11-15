@@ -38,7 +38,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libssl-dev
+            libssl-dev \
+            rpm
 
       - uses: actions/setup-node@v4
         with:
@@ -94,6 +95,47 @@ jobs:
             esac
           done
           rm -rf "$WORK"
+
+      # Sign the .rpm so dnf and zypper can check it against
+      # packaging/RPM-GPG-KEY-noteriv; zypper refuses an unsigned one unless
+      # given --allow-unsigned-rpm. Signed with gpg through rpmsign, not with
+      # Tauri's TAURI_SIGNING_RPM_KEY: rpm 4.14 to 4.17 (RHEL 8 and 9) report
+      # the signatures Tauri makes as BAD. Requires the secrets RPM_SIGNING_KEY
+      # (ASCII-armored private key) and RPM_SIGNING_KEY_PASSPHRASE.
+      - name: Sign the RPM (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          RPM_SIGNING_KEY: ${{ secrets.RPM_SIGNING_KEY }}
+          RPM_SIGNING_KEY_PASSPHRASE: ${{ secrets.RPM_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          if [ -z "$RPM_SIGNING_KEY" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/v*) echo "::error::The RPM_SIGNING_KEY secret is not set, so the release .rpm cannot be signed."; exit 1 ;;
+              *) echo "::warning::The RPM_SIGNING_KEY secret is not set; leaving the .rpm unsigned."; exit 0 ;;
+            esac
+          fi
+          export GNUPGHOME="$(mktemp -d)"
+          trap 'gpgconf --kill gpg-agent; rm -rf "$GNUPGHOME"' EXIT
+          printf '%s\n' "$RPM_SIGNING_KEY" | gpg --batch --quiet --import
+          KEYID=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^sec/ {print $5; exit}')
+          printf '%s' "$RPM_SIGNING_KEY_PASSPHRASE" > "$GNUPGHOME/passphrase"
+          DB="$GNUPGHOME/rpmdb"
+          rpmkeys --dbpath "$DB" --import ../packaging/RPM-GPG-KEY-noteriv
+          for rpm in src-tauri/target/release/bundle/rpm/*.rpm; do
+            rpmsign --addsign \
+              --define "__gpg /usr/bin/gpg" \
+              --define "_gpg_name $KEYID" \
+              --define "_gpg_sign_cmd_extra_args --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" \
+              "$rpm"
+            # Check against the published public key, so a wrong key in the
+            # secret fails the build instead of every install.
+            result=$(rpmkeys --dbpath "$DB" --checksig "$rpm" 2>&1) || true
+            echo "$result"
+            case "$result" in
+              *"signatures OK"*) ;;
+              *) echo "::error::$(basename "$rpm") is not signed by packaging/RPM-GPG-KEY-noteriv"; exit 1 ;;
+            esac
+          done
 
       - name: Collect bundles
         shell: bash
