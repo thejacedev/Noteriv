@@ -303,7 +303,8 @@ How the search works:
 - Notes are printed in the order of their paths.
 - Case is ignored, unless the query uses `match-case:`.
 - Only notes are searched, and notes in hidden folders are left out. The [Excluded files](../features/file-settings.md#excluded-files) setting is not applied: the command searches every note.
-- At most 500 notes are printed, and 30 matching lines for each note. A line longer than 400 characters is cut off.
+- At most 500 notes are printed, and 30 matching lines for each note. A line longer than 400 characters is cut off. `--limit` can ask for more than 500 notes (after 3.0.0).
+- The notes that are printed are the first ones in the order of their paths (after 3.0.0). In 3.0.0, when more than 500 notes matched, the 500 were picked by note name before they were put in path order, so `--limit` could print a note that was not the first, and never more than 500.
 - When something is left out, a message on standard error says so, and the exit code is still `0`. These messages are not printed with `--json`:
 
   ```text
@@ -347,7 +348,7 @@ With `--json`, the result is printed as one JSON object. This is `noteriv search
 
 | Field | Meaning |
 |---|---|
-| `files` | The matching notes, in the order of their paths, cut to `--limit` if it is given |
+| `files` | The matching notes, in the order of their paths, cut to `--limit` if it is given and to 500 if it is not |
 | `filePath` | The note's full path |
 | `relativePath` | The note's path inside the vault |
 | `name` | The note's file name |
