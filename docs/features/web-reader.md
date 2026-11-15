@@ -147,7 +147,7 @@ A picture the page holds as data inside its own HTML is shown without any reques
 | To another web page | Opens that page in the reader. If the address names a place on the page, the reader scrolls to it |
 | To a place on the page that is open | Scrolls there. Nothing happens when that place is in a part of the page that was left out |
 | To another web page, with the middle button or with `Ctrl`, `Cmd` or `Shift` held | Opens that page in your browser |
-| A mail or phone link | Does nothing |
+| A mail or phone link | Opens your mail program or your phone app (after 3.0.0). In 3.0.0 the click did nothing |
 
 ## Where the Reader Lives
 
@@ -178,12 +178,12 @@ If the note cannot be written, `The note could not be saved.` appears under the 
 
 ### Where the Note Goes
 
-The note goes where the [New notes go](./file-settings.md#where-new-notes-go) setting says, with one difference from a new note made with `Ctrl+N`:
+The note goes where the [New notes go](./file-settings.md#where-new-notes-go) setting says, as a new note made with `Ctrl+N` does:
 
 | New notes go | The page is saved |
 |---|---|
 | At the top of the vault | In the vault folder itself |
-| Beside the open note | At the top of the vault. A saved page is not put beside the note the reader is over |
+| Beside the open note | In the folder of the note the reader is shown over (after 3.0.0). With no note open, at the top of the vault. In 3.0.0 the page was always saved at the top of the vault |
 | In a folder I choose | In the folder named in **Folder for new notes**. The folder is created if it does not exist. If the box is empty, at the top of the vault |
 
 ### The Name of the Note
