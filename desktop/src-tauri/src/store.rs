@@ -180,7 +180,22 @@ pub fn delete_vault(id: &str) -> bool {
         cfg.setup_complete = false;
     }
     write_config(&cfg);
+    // Its sync settings go with it: they hold the address and password of
+    // the server it synced with.
+    let mut settings = load_settings();
+    if forget_vault_sync(&mut settings, id) {
+        save_settings(&Value::Object(settings));
+    }
     true
+}
+
+/// Take a vault's own sync settings out of the settings. True when there
+/// were some.
+fn forget_vault_sync(settings: &mut Map<String, Value>, id: &str) -> bool {
+    settings
+        .get_mut("vaultSync")
+        .and_then(Value::as_object_mut)
+        .is_some_and(|all| all.remove(id).is_some())
 }
 
 pub fn set_active_vault(id: &str) -> Option<Vault> {
@@ -209,4 +224,29 @@ pub fn save_settings(settings: &Value) -> bool {
         .ok()
         .and_then(|s| fs::write(path, s).ok())
         .is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_removed_vaults_sync_settings_are_forgotten() {
+        let settings = json!({
+            "theme": "nord",
+            "vaultSync": { "work": { "extraSyncProvider": "webdav" }, "home": { "extraSyncProvider": "none" } },
+        });
+        let mut settings = settings.as_object().unwrap().clone();
+        assert!(forget_vault_sync(&mut settings, "work"));
+        assert_eq!(
+            Value::Object(settings.clone()),
+            json!({ "theme": "nord", "vaultSync": { "home": { "extraSyncProvider": "none" } } })
+        );
+        // Nothing to forget: the settings are left alone.
+        assert!(!forget_vault_sync(&mut settings, "work"));
+        assert!(!forget_vault_sync(&mut Map::new(), "work"));
+        let odd = json!({ "vaultSync": "not a list" });
+        assert!(!forget_vault_sync(&mut odd.as_object().unwrap().clone(), "work"));
+    }
 }

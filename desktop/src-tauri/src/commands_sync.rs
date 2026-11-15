@@ -91,6 +91,128 @@ fn guard(
     crate::sync_guard::check(record_dir, &vault, &destination, &others)
 }
 
+// ============================================================
+// Sync settings of each vault
+// ============================================================
+
+/// The settings that say where a vault syncs to and what it carries there.
+const VAULT_SYNC_KEYS: [&str; 4] = ["extraSyncProvider", "folderSync", "webdavSync", "syncFilter"];
+
+/// Where the shared settings synced to, when that can be worked out.
+fn shared_destination(
+    provider: &str,
+    shared: &serde_json::Map<String, Value>,
+) -> Option<crate::sync_guard::Destination> {
+    match provider {
+        "folder" => {
+            let cfg: crate::sync_folder::FolderConfig =
+                serde_json::from_value(shared.get("folderSync")?.clone()).ok()?;
+            crate::sync_folder::destination(&cfg).ok()
+        }
+        "webdav" => {
+            let cfg: crate::sync_webdav::WebDavConfig =
+                serde_json::from_value(shared.get("webdavSync")?.clone()).ok()?;
+            crate::sync_webdav::destination(&cfg).ok()
+        }
+        _ => None,
+    }
+}
+
+/// Each vault's own sync settings, made from the one set every vault shared
+/// up to 3.0.0. The result is keyed by the vault's id.
+///
+/// - With no provider chosen nothing syncs, and every vault keeps what was
+///   typed in.
+/// - Otherwise the settings go to the vaults that have a record of syncing
+///   with that place, and the other vaults get sync turned off. Those are
+///   the vaults the shared settings would have dragged into a folder that is
+///   not theirs the next time they were opened.
+/// - When no vault has such a record (sync was set up and never ran, or the
+///   records are gone), they go to the vault that is open: with one vault,
+///   that is the vault they were set up for.
+fn vault_sync_from_shared(
+    settings: &serde_json::Map<String, Value>,
+    vaults: &[crate::store::Vault],
+    active: Option<&str>,
+    records: &std::path::Path,
+) -> serde_json::Map<String, Value> {
+    let mut shared = serde_json::Map::new();
+    for key in VAULT_SYNC_KEYS {
+        if let Some(value) = settings.get(key) {
+            shared.insert(key.to_string(), value.clone());
+        }
+    }
+    let provider = shared
+        .get("extraSyncProvider")
+        .and_then(Value::as_str)
+        .unwrap_or("none")
+        .to_string();
+
+    let mut entries = serde_json::Map::new();
+    if provider != "folder" && provider != "webdav" {
+        for vault in vaults {
+            entries.insert(vault.id.clone(), Value::Object(shared.clone()));
+        }
+        return entries;
+    }
+
+    let mut users: Vec<&str> = match shared_destination(&provider, &shared) {
+        Some(destination) => vaults
+            .iter()
+            .filter(|vault| {
+                dunce::canonicalize(&vault.path)
+                    .is_ok_and(|path| crate::sync_guard::has_synced(records, &path, &destination))
+            })
+            .map(|vault| vault.id.as_str())
+            .collect(),
+        None => Vec::new(),
+    };
+    if users.is_empty() {
+        let open = active
+            .and_then(|id| vaults.iter().find(|vault| vault.id == id))
+            .or(vaults.first());
+        users.extend(open.map(|vault| vault.id.as_str()));
+    }
+
+    let mut off = serde_json::Map::new();
+    off.insert("extraSyncProvider".to_string(), Value::String("none".into()));
+    for vault in vaults {
+        let entry = if users.contains(&vault.id.as_str()) {
+            shared.clone()
+        } else {
+            off.clone()
+        };
+        entries.insert(vault.id.clone(), Value::Object(entry));
+    }
+    entries
+}
+
+/// Give each vault its own sync settings, once. A settings file that has
+/// `vaultSync` in it has been through this already. The shared settings are
+/// left in the file as they were: nothing reads them after this.
+pub fn migrate_vault_sync() {
+    let mut settings = crate::store::load_settings();
+    if settings.contains_key("vaultSync") {
+        return;
+    }
+    let config = crate::store::get_config();
+    // A new installation has nothing to hand out, and the frontend writes
+    // the first vault's settings itself.
+    if settings.is_empty() && config.vaults.is_empty() {
+        return;
+    }
+    let entries = vault_sync_from_shared(
+        &settings,
+        &config.vaults,
+        config.active_vault_id.as_deref(),
+        &record_dir(),
+    );
+    settings.insert("vaultSync".to_string(), Value::Object(entries));
+    if !crate::store::save_settings(&Value::Object(settings)) {
+        log::warn!("[sync] the vaults' own sync settings could not be saved");
+    }
+}
+
 /// What a finished run tells the frontend. A run that could not sync some
 /// files carries an `error`, which the status bar shows; the files that did
 /// sync are already recorded, and their conflicts are still reported.
@@ -455,6 +577,115 @@ mod tests {
         assert!(cloud.join("Diary.md").is_file());
         // Now that it has happened, the vault is not locked out of the folder.
         assert!(folder_run(&home, &cloud, &records, &vaults).is_ok());
+    }
+
+    #[test]
+    fn the_shared_sync_settings_go_to_the_vaults_that_used_them() {
+        let base = scratch("migrate");
+        let (work, home, cloud, records) =
+            (base.join("work"), base.join("home"), base.join("cloud"), base.join("records"));
+        fs::create_dir_all(&work).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        fs::write(work.join("Work note.md"), "for work").unwrap();
+        let (w, h) = (listed("Work", &work), listed("Home", &home));
+        let both = [w.clone(), h.clone()];
+
+        let folder_sync = json!({ "targetPath": cloud.to_string_lossy(), "direction": "both" });
+        let filter = json!({ "images": true, "pdfs": false, "audio": false, "video": false, "settings": true, "excludeFolders": "Archive" });
+        let settings = json!({
+            "theme": "nord",
+            "extraSyncProvider": "folder",
+            "folderSync": folder_sync,
+            "webdavSync": { "url": "", "username": "", "password": "", "remotePath": "/Noteriv", "encryptionPassword": "" },
+            "syncFilter": filter,
+        });
+        let settings = settings.as_object().unwrap();
+        let shared = json!({
+            "extraSyncProvider": "folder",
+            "folderSync": folder_sync,
+            "webdavSync": settings["webdavSync"],
+            "syncFilter": filter,
+        });
+        let off = json!({ "extraSyncProvider": "none" });
+        let entries = |vaults: &[crate::store::Vault], active: Option<&str>| {
+            Value::Object(vault_sync_from_shared(settings, vaults, active, &records))
+        };
+
+        // Set up and never run. One vault: it keeps the settings, whichever is "open".
+        assert_eq!(entries(&[w.clone()], Some("work")), json!({ "work": shared }));
+        assert_eq!(entries(&[w.clone()], None), json!({ "work": shared }));
+        assert_eq!(entries(&[w.clone()], Some("gone")), json!({ "work": shared }));
+        // Two vaults: the open one has them, the other does not sync.
+        assert_eq!(entries(&both, Some("home")), json!({ "work": off, "home": shared }));
+        assert_eq!(entries(&both, None), json!({ "work": shared, "home": off }));
+        assert_eq!(entries(&[], Some("work")), json!({}));
+
+        // Work has synced with the folder. It is Work's, whichever vault is open.
+        folder_run(&work, &cloud, &records, &both).unwrap();
+        assert_eq!(entries(&both, Some("home")), json!({ "work": shared, "home": off }));
+        assert_eq!(entries(&both, Some("work")), json!({ "work": shared, "home": off }));
+        assert_eq!(entries(&[w.clone()], Some("work")), json!({ "work": shared }));
+
+        // Both have synced with it already: both go on as they were.
+        let cfg: crate::sync_folder::FolderConfig = serde_json::from_value(folder_sync.clone()).unwrap();
+        crate::sync_folder::sync(home.to_str().unwrap(), cfg, &records).unwrap();
+        assert_eq!(entries(&both, Some("home")), json!({ "work": shared, "home": shared }));
+
+        // With no provider chosen nothing syncs, and what was typed stays with every vault.
+        let mut none = settings.clone();
+        none.insert("extraSyncProvider".into(), json!("none"));
+        let typed = json!({
+            "extraSyncProvider": "none",
+            "folderSync": folder_sync,
+            "webdavSync": settings["webdavSync"],
+            "syncFilter": filter,
+        });
+        assert_eq!(
+            Value::Object(vault_sync_from_shared(&none, &both, Some("home"), &records)),
+            json!({ "work": typed, "home": typed })
+        );
+        // A settings file with no sync settings in it at all.
+        let bare = json!({ "theme": "nord" });
+        assert_eq!(
+            Value::Object(vault_sync_from_shared(bare.as_object().unwrap(), &both, None, &records)),
+            json!({ "work": {}, "home": {} })
+        );
+    }
+
+    #[test]
+    fn the_shared_webdav_settings_go_by_the_folder_on_the_server() {
+        let base = scratch("migrate-webdav");
+        let (work, home, records) = (base.join("work"), base.join("home"), base.join("records"));
+        fs::create_dir_all(&work).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&records).unwrap();
+        let both = [listed("Work", &work), listed("Home", &home)];
+        let webdav = json!({ "url": "https://dav.example.com/files/me/", "username": "me", "password": "secret", "remotePath": "/Noteriv", "encryptionPassword": "" });
+        let settings = json!({ "extraSyncProvider": "webdav", "webdavSync": webdav });
+        let settings = settings.as_object().unwrap();
+        let shared = json!({ "extraSyncProvider": "webdav", "webdavSync": webdav });
+        let off = json!({ "extraSyncProvider": "none" });
+
+        // Home is the vault that has synced with that folder, encrypted.
+        let record = json!({
+            "version": 1,
+            "vault": home.to_string_lossy(),
+            "remote": "https://dav.example.com/files/me/Noteriv\nme\nencrypted",
+            "files": {},
+        });
+        fs::write(records.join("webdav-1.json"), record.to_string()).unwrap();
+        assert_eq!(
+            Value::Object(vault_sync_from_shared(settings, &both, Some("work"), &records)),
+            json!({ "work": off, "home": shared })
+        );
+
+        // Settings that say WebDAV and give no address that can be read: the open vault keeps them.
+        let broken = json!({ "extraSyncProvider": "webdav", "webdavSync": { "url": "not an address" } });
+        let kept = json!({ "extraSyncProvider": "webdav", "webdavSync": { "url": "not an address" } });
+        assert_eq!(
+            Value::Object(vault_sync_from_shared(broken.as_object().unwrap(), &both, Some("work"), &records)),
+            json!({ "work": kept, "home": off })
+        );
     }
 
     #[test]

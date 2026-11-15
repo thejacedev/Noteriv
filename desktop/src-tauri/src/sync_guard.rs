@@ -124,6 +124,13 @@ fn records(record_dir: &Path) -> Vec<(PathBuf, Destination)> {
     found
 }
 
+/// Whether `vault` has a record of syncing with exactly this place.
+pub(crate) fn has_synced(record_dir: &Path, vault: &Path, destination: &Destination) -> bool {
+    records(record_dir)
+        .iter()
+        .any(|(owner, theirs)| owner == vault && theirs == destination)
+}
+
 /// Refuse a vault's first sync with a place another vault already syncs
 /// with. `vault` is the vault's folder, resolved through links.
 pub(crate) fn check(
@@ -250,6 +257,9 @@ mod tests {
 
         // The vault the folder belongs to goes on syncing with it.
         assert_eq!(check(&records, &work, &target, &[other("Home", &home)]), Ok(()));
+        assert!(has_synced(&records, &work, &target));
+        assert!(!has_synced(&records, &home, &target));
+        assert!(!has_synced(&records, &work, &inside));
     }
 
     #[test]

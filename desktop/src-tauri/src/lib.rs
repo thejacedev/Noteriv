@@ -57,6 +57,8 @@ pub fn run() {
 
     // One-time legacy token migration (Electron safeStorage → Tauri keyring).
     auth::migrate_legacy_tokens();
+    // Once: each vault gets its own folder and WebDAV sync settings.
+    commands_sync::migrate_vault_sync();
 
     let app_state = AppState {
         clipper: Mutex::new(clipper::ClipperState::default()),

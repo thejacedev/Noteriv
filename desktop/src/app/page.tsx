@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import TitleBar from "@/components/TitleBar";
@@ -93,6 +93,13 @@ import {
   formatCommitMessage,
 } from "@/lib/settings";
 import { autoSyncApplies, providerConfig } from "@/lib/sync-providers";
+import {
+  pickVaultSync,
+  settingsToStore,
+  vaultSyncFrom,
+  withVaultSync,
+  type VaultSyncSettings,
+} from "@/lib/vault-sync-settings";
 import { addConflicts, conflictsFor, dismissConflicts, removeConflictCopy, splitPath, type SyncConflict } from "@/lib/sync-conflicts";
 import SyncConflictNotice from "@/components/SyncConflictNotice";
 import {
@@ -363,13 +370,25 @@ function Home() {
   // Hotkeys
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>(DEFAULT_HOTKEYS.map((d) => ({ ...d })));
 
-  // App settings
-  const [settings, setSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
+  // App settings, as the settings file has them. Where a vault syncs to is
+  // kept for each vault, so `settings`, which is what everything reads, has
+  // the open vault's sync settings in it, and "no sync" until those are read.
+  // See `vault-sync-settings.ts`.
+  const [appSettings, setSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
+  const [vaultSync, setVaultSync] = useState<{ vaultId: string; sync: VaultSyncSettings } | null>(null);
+  const activeVaultId = activeVault?.id ?? null;
+  // The vault whose sync settings are the ones in `settings`, when there is one.
+  const syncVaultId = vaultSync && vaultSync.vaultId === activeVaultId ? activeVaultId : null;
+  const settings = useMemo(
+    () => withVaultSync(appSettings, vaultSync && vaultSync.vaultId === activeVaultId ? vaultSync.sync : null),
+    [appSettings, vaultSync, activeVaultId]
+  );
 
   // Timers
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workspaceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsRef = useRef(settings);
+  const syncVaultIdRef = useRef(syncVaultId);
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   const manualSidebarCollapsedRef = useRef(sidebarCollapsed);
   const responsiveSidebarRef = useRef(false);
@@ -378,6 +397,26 @@ function Home() {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    syncVaultIdRef.current = syncVaultId;
+  }, [syncVaultId]);
+
+  // Read the open vault's sync settings. A vault that was just switched to
+  // does not sync until its own are in hand: the last vault's are not used.
+  useEffect(() => {
+    if (!activeVaultId || !window.electronAPI) return;
+    let cancelled = false;
+    window.electronAPI
+      .loadSettings()
+      .then((stored) => {
+        if (!cancelled) setVaultSync({ vaultId: activeVaultId, sync: vaultSyncFrom(stored, activeVaultId) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeVaultId]);
 
   useEffect(() => {
     sidebarCollapsedRef.current = sidebarCollapsed;
@@ -2651,6 +2690,10 @@ function Home() {
   const handleSettingsChange = useCallback(async (newSettings: AppSettings) => {
     settingsRef.current = newSettings;
     setSettings(newSettings);
+    // The sync settings in it are the open vault's, and are kept as that
+    // vault's. When they were nobody's, they are not kept at all.
+    const syncVault = syncVaultIdRef.current;
+    if (syncVault) setVaultSync({ vaultId: syncVault, sync: pickVaultSync(newSettings) });
     applySettings(newSettings);
     // Apply theme if changed
     if (newSettings.theme) {
@@ -2667,8 +2710,7 @@ function Home() {
     }
     if (window.electronAPI) {
       const stored = await window.electronAPI.loadSettings();
-      const { ...appFields } = newSettings;
-      await window.electronAPI.saveSettings({ ...stored, ...appFields });
+      await window.electronAPI.saveSettings(settingsToStore(stored, newSettings, syncVault));
     }
   }, [activeVault]);
 
@@ -2685,7 +2727,7 @@ function Home() {
       fontSizeSaveRef.current = setTimeout(async () => {
         if (!window.electronAPI) return;
         const stored = await window.electronAPI.loadSettings();
-        await window.electronAPI.saveSettings({ ...stored, ...nextSettings });
+        await window.electronAPI.saveSettings(settingsToStore(stored, nextSettings, syncVaultIdRef.current));
       }, 250);
     }
   }, []);

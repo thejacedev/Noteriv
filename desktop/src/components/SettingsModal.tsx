@@ -900,20 +900,29 @@ export default function SettingsModal({
 
       <div className="st-divider" />
       <div className="st-group-label">Additional Sync Provider</div>
-      <Row label="Provider" desc="Sync your vault to a second destination alongside Git.">
-        <select
-          className="st-select"
-          value={settings.extraSyncProvider}
-          onChange={(e) => {
-            update({ extraSyncProvider: e.target.value as SyncProviderType });
-            setTestResult(null);
-          }}
+      {!vault ? (
+        <div className="st-row-desc" style={{ padding: "8px 0" }}>
+          Open a vault to set up folder or WebDAV sync.
+        </div>
+      ) : (
+        <Row
+          label="Provider"
+          desc={`Sync this vault to a second destination alongside Git. Each vault has its own: these settings are for "${vault.name}", and its folder must not be another vault's.`}
         >
-          {SYNC_PROVIDERS.map((p) => (
-            <option key={p.type} value={p.type}>{p.name}</option>
-          ))}
-        </select>
-      </Row>
+          <select
+            className="st-select"
+            value={settings.extraSyncProvider}
+            onChange={(e) => {
+              update({ extraSyncProvider: e.target.value as SyncProviderType });
+              setTestResult(null);
+            }}
+          >
+            {SYNC_PROVIDERS.map((p) => (
+              <option key={p.type} value={p.type}>{p.name}</option>
+            ))}
+          </select>
+        </Row>
+      )}
       {settings.extraSyncProvider !== "none" && (
         <div className="st-provider-desc">
           {SYNC_PROVIDERS.find((p) => p.type === settings.extraSyncProvider)?.description}
