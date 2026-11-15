@@ -74,11 +74,20 @@ jobs:
             https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
           chmod 755 "$HOME/.cache/tauri/AppRun-x86_64"
 
+      # tauri.release.conf.json turns on the files the in-app updater needs: a
+      # signature beside the AppImage and beside each Windows installer, and
+      # the macOS app as a signed .tar.gz. They are signed with the secret
+      # TAURI_SIGNING_PRIVATE_KEY, which has to be the key that belongs to
+      # plugins.updater.pubkey in tauri.conf.json; the "updater" job below
+      # checks that it is. The setting is kept out of tauri.conf.json so that
+      # a build on someone's own machine does not need the key.
+      # Run with bash on every system: PowerShell takes the "--" for itself.
       - name: Build
+        shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npm run build -- ${{ matrix.args }}
+        run: npm run build -- --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
 
       - name: Check the AppImage launcher can be run by anyone (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -122,6 +131,12 @@ jobs:
           DB="$GNUPGHOME/rpmdb"
           rpmkeys --dbpath "$DB" --import ../packaging/RPM-GPG-KEY-noteriv
           for rpm in src-tauri/target/release/bundle/rpm/*.rpm; do
+            # The updater build leaves its own signature of the .rpm beside
+            # it. It is not used, since the .rpm is not an in-app update, and
+            # it has to go: rpmsign has gpg write to that very name, and gpg
+            # stops to ask whether to overwrite it, which fails with "cannot
+            # open '/dev/tty'".
+            rm -f "$rpm.sig"
             rpmsign --addsign \
               --define "__gpg /usr/bin/gpg" \
               --define "_gpg_name $KEYID" \
@@ -148,7 +163,7 @@ jobs:
           # macOS
           find src-tauri/target -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -exec cp {} ../bundles/ \; || true
           # Windows
-          find src-tauri/target -type f \( -name '*.msi' -o -name '*.msi.zip' -o -name '*.msi.zip.sig' -o -name '*-setup.exe' -o -name '*-setup.nsis.zip' -o -name '*-setup.nsis.zip.sig' \) -exec cp {} ../bundles/ \; || true
+          find src-tauri/target -type f \( -name '*.msi' -o -name '*.msi.sig' -o -name '*-setup.exe' -o -name '*-setup.exe.sig' \) -exec cp {} ../bundles/ \; || true
 
       - name: Package Windows portable (lite)
         if: matrix.platform == 'windows-latest'
@@ -235,9 +250,45 @@ jobs:
           name: bundles-android
           path: bundles/
 
+  # Checks every update file against the public key the app carries and writes
+  # latest.json, the file an installed copy reads to find an update. A release
+  # whose signatures are missing or made with another key cannot be installed
+  # from inside the app, which is how every release up to 3.0.1 went out. This
+  # job runs on a manual run too, so a rehearsal proves the signatures before a
+  # tag needs them.
+  updater:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundles/
+          pattern: bundles-*
+          merge-multiple: true
+
+      - name: Install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Check the signatures and write latest.json
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) TAG="$GITHUB_REF_NAME" ;;
+            *) TAG="v$(python3 -c "import json; print(json.load(open('desktop/src-tauri/tauri.conf.json'))['version'])")" ;;
+          esac
+          python3 packaging/updater-manifest.py bundles "$TAG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-updater
+          path: bundles/latest.json
+
   release:
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' }}
-    needs: [build, android]
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && needs.updater.result == 'success' }}
+    needs: [build, updater, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -246,73 +297,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Every job's files, with latest.json from the updater job among them.
       - uses: actions/download-artifact@v4
         with:
           path: bundles/
           merge-multiple: true
 
-      - name: Generate latest.json
-        run: |
-          set -e
-          VERSION="${GITHUB_REF_NAME#v}"
-          PUBDATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          read_sig() { [ -f "$1" ] && cat "$1" || echo ""; }
-
-          LINUX_FILE=$(ls bundles/*.AppImage 2>/dev/null | head -1 || true)
-          LINUX_SIG=$([ -n "$LINUX_FILE" ] && read_sig "${LINUX_FILE}.sig" || echo "")
-          MAC_FILE=$(ls bundles/*.app.tar.gz 2>/dev/null | head -1 || true)
-          MAC_SIG=$([ -n "$MAC_FILE" ] && read_sig "${MAC_FILE}.sig" || echo "")
-          WIN_FILE=$(ls bundles/*-setup.nsis.zip 2>/dev/null | head -1 || ls bundles/*.msi.zip 2>/dev/null | head -1 || true)
-          WIN_SIG=$([ -n "$WIN_FILE" ] && read_sig "${WIN_FILE}.sig" || echo "")
-
-          BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-
-          cat > bundles/latest.json <<EOF
-          {
-            "version": "${VERSION}",
-            "notes": "See release notes on GitHub.",
-            "pub_date": "${PUBDATE}",
-            "platforms": {
-              "linux-x86_64": {
-                "signature": "${LINUX_SIG}",
-                "url": "${BASE_URL}/$(basename "${LINUX_FILE:-noop}")"
-              },
-              "darwin-x86_64": {
-                "signature": "${MAC_SIG}",
-                "url": "${BASE_URL}/$(basename "${MAC_FILE:-noop}")"
-              },
-              "darwin-aarch64": {
-                "signature": "${MAC_SIG}",
-                "url": "${BASE_URL}/$(basename "${MAC_FILE:-noop}")"
-              },
-              "windows-x86_64": {
-                "signature": "${WIN_SIG}",
-                "url": "${BASE_URL}/$(basename "${WIN_FILE:-noop}")"
-              }
-            }
-          }
-          EOF
-          echo "--- latest.json ---"
-          cat bundles/latest.json
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          # The .sig files are not published: latest.json carries each
+          # signature. The .app.tar.gz is what a macOS copy updates from.
           files: |
             bundles/*.AppImage
-            bundles/*.AppImage.sig
             bundles/*.deb
             bundles/*.rpm
             bundles/*.dmg
             bundles/*.app.tar.gz
-            bundles/*.app.tar.gz.sig
             bundles/*-setup.exe
-            bundles/*-setup.nsis.zip
-            bundles/*-setup.nsis.zip.sig
             bundles/*.msi
-            bundles/*.msi.zip
-            bundles/*.msi.zip.sig
             bundles/Noteriv-*-windows-x64-portable.zip
             bundles/Noteriv-*-android.apk
             bundles/latest.json
