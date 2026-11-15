@@ -127,13 +127,24 @@ To uninstall, drag Noteriv from Applications to the Trash.
 
 ## Auto-updater
 
-Noteriv includes a built-in auto-updater powered by `tauri-plugin-updater`. When a new version is available on GitHub Releases, the app detects it and offers to download and install the update.
+Noteriv can look for a new version on GitHub Releases: press **Check for Updates** in **Settings > General > Updates**. What it does when it finds one depends on how your copy was installed.
 
-- **Checking for updates** happens automatically when the app starts, or you can trigger it manually from Settings.
-- **Download and install** -- When an update is found, Noteriv downloads it in the background. Once the download completes, you are prompted to restart the app to apply the update.
-- **Automatic updates** are enabled by default. You can disable them in Settings if you prefer to update manually.
+| Installed from | When a new version is out |
+|---|---|
+| AppImage | **Download Update** downloads the new AppImage and puts it in place of the file you run. **Restart & Install** then starts the new version. |
+| Windows installer (`-setup.exe` or `.msi`) | **Download Update** downloads the same kind of installer and runs it. Noteriv closes, the installer updates it and starts it again. |
+| macOS `.dmg` | **Download Update** downloads the new app and puts it in place of the one in Applications. **Restart & Install** then starts the new version. |
+| `.deb` or `.rpm`, the AUR or COPR package, a build from source | From 3.0.2 on, Noteriv shows the new version number and an **Open Download Page** button. These copies do not replace themselves: install the new package the way you installed this one. |
+| Flatpak | `flatpak update` installs it. The update controls are not shown in Settings. |
+| Windows portable zip | Not looked for. Download the new zip and unpack it over the old folder. |
 
-The auto-updater covers the AppImage on Linux, the installers on Windows, and the DMG on macOS. If you installed through Flatpak, `flatpak update` handles updates instead. The portable Windows build does not auto-update.
+- An update is installed only when its signature matches the key the app was built with. A file that was changed on the way is refused, and the version you have keeps working.
+- If an update cannot be installed, Settings shows the reason, such as a folder that cannot be written to. Versions before 3.0.2 say only "Download failed".
+- **Automatic updates** in Settings is on by default. It makes Noteriv look for a new version each time it starts. That check does not show anything yet: open **Settings > General > Updates** to see whether a new version is out.
+
+Releases up to 3.0.1 were published without those signatures, so **Download Update** ended in "Download failed" for every kind of install. 3.0.2 is the first release that carries them.
+
+A `.deb` or `.rpm` copy of 3.0.1 or earlier still shows **Download Update**. It cannot work there: update the package instead.
 
 ## Mobile app
 
