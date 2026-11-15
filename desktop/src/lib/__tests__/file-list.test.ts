@@ -89,6 +89,18 @@ describe("newNoteFolder", () => {
     expect(newNoteFolder("/v", "folder", "../outside", null)).toBe("/v");
     expect(newNoteFolder("/v", "current", "", "/elsewhere/Note.md")).toBe("/v");
   });
+
+  it("does not take a folder beside the vault for one inside it", () => {
+    expect(newNoteFolder("/v", "current", "", "/v2/Notes/Note.md")).toBe("/v");
+    expect(newNoteFolder("/home/me/notes", "current", "", "/home/me/notes-old/a.md")).toBe("/home/me/notes");
+  });
+
+  it("goes beside whatever file is open, a note or not", () => {
+    expect(newNoteFolder("/v", "current", "", "/v/Boards/Plan.canvas")).toBe("/v/Boards");
+    expect(newNoteFolder("/v", "current", "", "/v/a/b/photo.png")).toBe("/v/a/b");
+    expect(newNoteFolder("C:\\v", "current", "", "C:\\v\\Sub\\Note.md")).toBe("C:\\v\\Sub");
+    expect(newNoteFolder("/v/", "current", "", "/v/Sub/Note.md")).toBe("/v/Sub");
+  });
 });
 
 describe("timestamp names", () => {

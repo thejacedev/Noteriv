@@ -116,9 +116,15 @@ export function newNoteFolder(
   folder: string,
   activeFile: string | null
 ): string {
-  if (location === "current" && activeFile && activeFile.startsWith(vaultPath)) {
-    const cut = Math.max(activeFile.lastIndexOf("/"), activeFile.lastIndexOf("\\"));
-    if (cut >= vaultPath.length) return activeFile.slice(0, cut);
+  if (location === "current" && activeFile) {
+    // Inside this vault, not in a folder beside it whose name starts the
+    // same way: "/notes-old/a.md" is not in "/notes".
+    const root = vaultPath.replace(/[\\/]+$/, "");
+    const after = activeFile.charAt(root.length);
+    if (activeFile.startsWith(root) && (after === "/" || after === "\\")) {
+      const cut = Math.max(activeFile.lastIndexOf("/"), activeFile.lastIndexOf("\\"));
+      if (cut >= root.length) return activeFile.slice(0, cut);
+    }
   }
   if (location === "folder") {
     const clean = folder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");

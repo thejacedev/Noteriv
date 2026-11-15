@@ -1859,7 +1859,8 @@ function Home() {
   /** Save a page from the reader as a note, where new notes go, under the page's title. */
   const saveWebPage = useCallback(async (markdown: string, title: string): Promise<boolean> => {
     if (!window.electronAPI || !activeVault) return false;
-    const folder = newNoteFolder(activeVault.path, settings.newNoteLocation, settings.newNoteFolder, null);
+    // The reader is shown over the open note, so "beside the open note" is beside that one.
+    const folder = newNoteFolder(activeVault.path, settings.newNoteLocation, settings.newNoteFolder, activeTab);
     await window.electronAPI.createDir(folder);
     const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
     // A title is not always fit to be a file name.
@@ -1870,7 +1871,7 @@ function Home() {
     setSidebarRefresh((k) => k + 1);
     showStatusNote(`Saved the page as "${name.replace(/\.md$/, "")}"`);
     return true;
-  }, [activeVault, settings.newNoteLocation, settings.newNoteFolder, showStatusNote]);
+  }, [activeVault, activeTab, settings.newNoteLocation, settings.newNoteFolder, showStatusNote]);
 
   // The open note in a window of its own. Moving it there closes its tab here.
   const openPopout = useCallback(async (move: boolean) => {
