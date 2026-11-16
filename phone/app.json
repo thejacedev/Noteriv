@@ -38,7 +38,8 @@
           "backgroundColor": "#101030"
         }
       ],
-      "./plugins/withAndroidDebugBundle.js"
+      "./plugins/withAndroidDebugBundle.js",
+      "./plugins/withAndroidUserCertificates.js"
     ],
     "experiments": {
       "typedRoutes": true,
