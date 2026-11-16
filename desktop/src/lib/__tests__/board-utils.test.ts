@@ -170,6 +170,13 @@ describe("an annotation", () => {
     expect(after).toBe(board("- [ ] Atelier #equipe @heure(14:00) @lieu(Salle B) @avec(Sam) @due(2026-11-09)"));
   });
 
+  it("typed into the card text replaces every value the card had under that key", () => {
+    const data = parseBoard(board("- [ ] Call back @who(Sam) @urgent() @who(Alex)"));
+    const col = data.columns[0];
+    const after = serializeBoard(updateCard(data, col.id, col.cards[0].id, "Call back @who(Kim)"));
+    expect(after).toBe(board("- [ ] Call back @who(Kim) @urgent()"));
+  });
+
   it("stays when the card text is changed without one", () => {
     const data = parseBoard(board("- [ ] Atelier @heure(09:30)"));
     const col = data.columns[0];
