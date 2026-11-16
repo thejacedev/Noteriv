@@ -12,8 +12,10 @@ import {
   updateCard,
   toggleCard,
   hiddenLineCount,
+  metaSource,
   type BoardData,
   type BoardCard,
+  type BoardMeta,
 } from "@/lib/board-utils";
 
 interface BoardViewProps {
@@ -34,6 +36,26 @@ const TAG_COLORS: Record<string, string> = {
 
 function getTagColor(tag: string): string {
   return TAG_COLORS[tag.toLowerCase()] || TAG_COLORS.default;
+}
+
+/**
+ * An annotation other than the due date, such as @estimate(90): a plain chip
+ * with the key and the value as they are written in the file.
+ */
+function MetaChip({ meta }: { meta: BoardMeta }) {
+  return (
+    <span
+      title={metaSource(meta)}
+      style={{
+        fontSize: 10, padding: "1px 6px", borderRadius: 10,
+        background: "color-mix(in srgb, var(--text-muted) 13%, transparent)",
+        color: "var(--text-secondary)",
+      }}
+    >
+      <span style={{ color: "var(--text-muted)" }}>{meta.value === "" ? meta.key : `${meta.key}: `}</span>
+      {meta.value}
+    </span>
+  );
 }
 
 /** "1 line that the board does not show", for the delete questions. */
@@ -395,7 +417,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                         >{card.text}</span>
                       )}
 
-                      {/* Tags & due date */}
+                      {/* Tags, annotations & due date */}
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                         {card.tags.map((tag) => (
                           <span key={tag} style={{
@@ -403,6 +425,9 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                             background: `color-mix(in srgb, ${getTagColor(tag)} 13%, transparent)`,
                             color: getTagColor(tag),
                           }}>#{tag}</span>
+                        ))}
+                        {(card.meta ?? []).map((meta, i) => (
+                          <MetaChip key={`${meta.key}-${i}`} meta={meta} />
                         ))}
                         {card.dueDate && (
                           <span style={{
@@ -526,7 +551,7 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                     textDecoration: draggedCard.completed ? "line-through" : "none",
                     wordBreak: "break-word",
                   }}>{draggedCard.text}</span>
-                  {(draggedCard.tags.length > 0 || draggedCard.dueDate) && (
+                  {(draggedCard.tags.length > 0 || (draggedCard.meta ?? []).length > 0 || draggedCard.dueDate) && (
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                       {draggedCard.tags.map((tag) => (
                         <span key={tag} style={{
@@ -534,6 +559,9 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                           background: `color-mix(in srgb, ${getTagColor(tag)} 13%, transparent)`,
                           color: getTagColor(tag),
                         }}>#{tag}</span>
+                      ))}
+                      {(draggedCard.meta ?? []).map((meta, i) => (
+                        <MetaChip key={`${meta.key}-${i}`} meta={meta} />
                       ))}
                       {draggedCard.dueDate && (
                         <span style={{

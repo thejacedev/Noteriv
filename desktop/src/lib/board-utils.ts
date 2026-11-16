@@ -3,7 +3,7 @@
  *
  * Format:
  *   ## Column Name
- *   - [ ] Task text #tag @due(2024-03-15)
+ *   - [ ] Task text #tag @estimate(90) @due(2024-03-15)
  *   - [x] Completed task
  *
  * The board rewrites the whole file on every change, so whatever it reads it
@@ -11,12 +11,20 @@
  * sub-items under a card) are kept and written back where they were.
  */
 
+/** An annotation on a card other than the due date: @key(value). */
+export interface BoardMeta {
+  key: string;
+  value: string;
+}
+
 export interface BoardCard {
   id: string;
   text: string;
   completed: boolean;
   tags: string[];
   dueDate: string | null;
+  /** Every @key(value) on the card except the due date, in the order written. */
+  meta?: BoardMeta[];
   /** Lines under the card that the board does not show: sub-items, notes. */
   extra?: string[];
 }
@@ -38,7 +46,8 @@ export interface BoardData {
   eol?: string;
 }
 
-// What the board takes out of a card's text: tags and the due date.
+// What the board takes out of a card's text: tags, the due date and other
+// annotations.
 //
 // A tag opens the text or follows a space, so the # in a web address or in
 // [[Note#Heading]] is not one. It takes letters of any language with their
@@ -48,26 +57,84 @@ export interface BoardData {
 // A due date is @due(YYYY-MM-DD) and nothing else. Anything else, such as
 // @due(friday), is left in the card text.
 //
-// One pattern for both, so that what is taken out of the text is exactly
-// what was read: a second pass over text the first pass had changed could
-// remove something that was never read.
-const TAG_OR_DUE = /(?<=^|\s)#([\p{L}\p{M}\p{N}_\/\u200c\u200d-]+)|@due\((\d{4}-\d{2}-\d{2})\)/gu;
+// Any other @key(value) is an annotation: a key that starts with a letter,
+// then a value in brackets that holds no bracket of its own. Like a tag it
+// opens the text or follows a space, so "me@work(home)" is not one.
+//
+// One pattern for all three, so that what is taken out of the text is
+// exactly what was read: a second pass over text the first pass had changed
+// could remove something that was never read.
+const CARD_TOKEN =
+  /(?<=^|\s)#([\p{L}\p{M}\p{N}_\/\u200c\u200d-]+)|@due\((\d{4}-\d{2}-\d{2})\)|(?<=^|\s)@(\p{L}[\p{L}\p{M}\p{N}_-]*)\(([^()]*)\)/gu;
+
+interface CardParts {
+  text: string;
+  tags: string[];
+  dueDate: string | null;
+  meta: BoardMeta[];
+}
 
 /**
- * Split what follows the checkbox into the text, the tags and the due date.
- * The first date counts and a later one is dropped.
+ * Split what follows the checkbox into the text, the tags, the due date and
+ * the other annotations. The first date counts and a later one is dropped.
  */
-function readCardText(rawText: string): { text: string; tags: string[]; dueDate: string | null } {
+function readCardText(rawText: string): CardParts {
   const tags: string[] = [];
   const dates: string[] = [];
+  const meta: BoardMeta[] = [];
   const text = rawText
-    .replace(TAG_OR_DUE, (_match, tag: string | undefined, due: string | undefined) => {
-      if (tag !== undefined) tags.push(tag);
-      else if (due !== undefined) dates.push(due);
-      return "";
-    })
+    .replace(
+      CARD_TOKEN,
+      (
+        match: string,
+        tag: string | undefined,
+        due: string | undefined,
+        key: string | undefined,
+        value: string | undefined
+      ) => {
+        if (tag !== undefined) tags.push(tag);
+        else if (due !== undefined) dates.push(due);
+        // A due date that is not a date is not an annotation either. It
+        // stays in the text, where it shows that it was not understood.
+        else if (key !== undefined && key.toLowerCase() === "due") return match;
+        else if (key !== undefined) meta.push({ key, value: (value ?? "").trim() });
+        return "";
+      }
+    )
     .trim();
-  return { text, tags, dueDate: dates[0] ?? null };
+  return { text, tags, dueDate: dates[0] ?? null, meta };
+}
+
+/**
+ * The annotations of a card after its text was edited. An annotation typed
+ * into the text takes the place of the ones the card had under that key, where
+ * the first of them stood; a new key goes to the end.
+ */
+function mergeMeta(existing: BoardMeta[], typed: BoardMeta[]): BoardMeta[] {
+  if (typed.length === 0) return existing;
+  const typedFor = (key: string) => typed.filter((m) => m.key === key);
+  const placed = new Set<string>();
+  const merged: BoardMeta[] = [];
+  for (const m of existing) {
+    if (typedFor(m.key).length === 0) {
+      merged.push(m);
+    } else if (!placed.has(m.key)) {
+      merged.push(...typedFor(m.key));
+      placed.add(m.key);
+    }
+  }
+  for (const m of typed) {
+    if (!placed.has(m.key)) {
+      merged.push(...typedFor(m.key));
+      placed.add(m.key);
+    }
+  }
+  return merged;
+}
+
+/** How an annotation is written in the file. */
+export function metaSource(meta: BoardMeta): string {
+  return `@${meta.key}(${meta.value})`;
 }
 
 // The line that opens or closes a fenced code block.
@@ -181,9 +248,9 @@ export function parseBoard(content: string): BoardData {
       const completed = cardMatch[1].toLowerCase() === "x";
       const rawText = cardMatch[2];
 
-      const { text, tags, dueDate } = readCardText(rawText);
+      const { text, tags, dueDate, meta } = readCardText(rawText);
 
-      const card: BoardCard = { id: genId(), text, completed, tags, dueDate, extra: [] };
+      const card: BoardCard = { id: genId(), text, completed, tags, dueDate, meta, extra: [] };
       currentColumn.cards.push(card);
       pending = card.extra!;
       continue;
@@ -229,6 +296,9 @@ export function serializeBoard(board: BoardData): string {
       let line = `- [${check}] ${card.text}`;
       if (card.tags.length > 0) {
         line += " " + card.tags.map((t) => `#${t}`).join(" ");
+      }
+      if (card.meta && card.meta.length > 0) {
+        line += " " + card.meta.map(metaSource).join(" ");
       }
       if (card.dueDate) {
         line += ` @due(${card.dueDate})`;
@@ -295,7 +365,8 @@ export function reorderCard(
 
 /** Add a new card to a column */
 export function addCard(board: BoardData, colId: string, text: string): BoardData {
-  // Tags and a due date typed with the text are the card's from the start.
+  // Tags, a due date and annotations typed with the text are the card's from
+  // the start.
   const typed = readCardText(text);
   const newColumns = board.columns.map((col) => {
     if (col.id !== colId) return col;
@@ -331,10 +402,10 @@ export function removeColumn(board: BoardData, colId: string): BoardData {
 
 /** Update a card's text */
 export function updateCard(board: BoardData, colId: string, cardId: string, text: string): BoardData {
-  // The text box holds the card's text without its tags and date. A tag typed
-  // into it is added to the card's tags, and a date typed into it takes the
-  // place of the one the card had. Without this the file would hold both
-  // dates until the next change to the board.
+  // The text box holds the card's text without its tags, date and
+  // annotations. A tag typed into it is added to the card's tags, and a date
+  // or an annotation typed into it takes the place of the one the card had.
+  // Without this the file would hold both until the next change to the board.
   const typed = readCardText(text);
   const newColumns = board.columns.map((col) => {
     if (col.id !== colId) return col;
@@ -347,6 +418,7 @@ export function updateCard(board: BoardData, colId: string, cardId: string, text
               text: typed.text,
               tags: [...typed.tags, ...c.tags.filter((t) => !typed.tags.includes(t))],
               dueDate: typed.dueDate ?? c.dueDate,
+              meta: mergeMeta(c.meta ?? [], typed.meta),
             }
           : c
       ),

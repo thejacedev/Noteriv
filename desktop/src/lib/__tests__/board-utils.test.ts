@@ -108,6 +108,95 @@ describe("a due date", () => {
   });
 });
 
+describe("an annotation", () => {
+  it("is read as a key and a value, and written back after the tags", () => {
+    const content = board("- [ ] Validation DU @heure(18:00) #reunion @due(2026-11-09)");
+    expect(onlyCard(content)).toMatchObject({
+      text: "Validation DU",
+      tags: ["reunion"],
+      meta: [{ key: "heure", value: "18:00" }],
+      dueDate: "2026-11-09",
+    });
+    const once = rewritten(content);
+    expect(once).toBe(board("- [ ] Validation DU #reunion @heure(18:00) @due(2026-11-09)"));
+    expect(rewritten(once)).toBe(once);
+  });
+
+  it("keeps its place among the others, whatever the key", () => {
+    const content = board("- [ ] Atelier #equipe @heure(09:30) @duree_prevue(90) @durée(1 h 30) @lieu(Salle B-12)");
+    expect(onlyCard(content).meta).toEqual([
+      { key: "heure", value: "09:30" },
+      { key: "duree_prevue", value: "90" },
+      { key: "durée", value: "1 h 30" },
+      { key: "lieu", value: "Salle B-12" },
+    ]);
+    expect(rewritten(content)).toBe(content);
+  });
+
+  it("may have no value, and may be written twice", () => {
+    const content = board("- [ ] Call back @urgent() @who(Sam) @who(Alex)");
+    expect(onlyCard(content).meta).toEqual([
+      { key: "urgent", value: "" },
+      { key: "who", value: "Sam" },
+      { key: "who", value: "Alex" },
+    ]);
+    expect(rewritten(content)).toBe(content);
+  });
+
+  it("is not read where it is something else", () => {
+    // An address, a value with brackets of its own, a key that starts with a
+    // digit, a key with nothing after it: all stay in the text as written.
+    for (const text of ["Write to me@work(home)", "Check @note(a (b) c)", "Room @2b(first floor)", "Ask @sam about it"]) {
+      const content = board(`- [ ] ${text}`);
+      expect(onlyCard(content)).toMatchObject({ text, meta: [] });
+      expect(rewritten(content)).toBe(content);
+    }
+  });
+
+  it("is not made of a due date that is not a date", () => {
+    const content = board("- [ ] Call Bob @due(friday) @heure(18:00)");
+    expect(onlyCard(content)).toMatchObject({
+      text: "Call Bob @due(friday)",
+      dueDate: null,
+      meta: [{ key: "heure", value: "18:00" }],
+    });
+    expect(rewritten(content)).toBe(content);
+  });
+
+  it("typed into the card text replaces the one with that key, where it stood", () => {
+    const data = parseBoard(board("- [ ] Atelier #equipe @heure(09:30) @lieu(Salle B) @due(2026-11-09)"));
+    const col = data.columns[0];
+    const after = serializeBoard(updateCard(data, col.id, col.cards[0].id, "Atelier @heure(14:00) @avec(Sam)"));
+    expect(after).toBe(board("- [ ] Atelier #equipe @heure(14:00) @lieu(Salle B) @avec(Sam) @due(2026-11-09)"));
+  });
+
+  it("stays when the card text is changed without one", () => {
+    const data = parseBoard(board("- [ ] Atelier @heure(09:30)"));
+    const col = data.columns[0];
+    const after = serializeBoard(updateCard(data, col.id, col.cards[0].id, "Atelier de rentrée"));
+    expect(after).toBe(board("- [ ] Atelier de rentrée @heure(09:30)"));
+  });
+
+  it("typed into a new card is the card's at once", () => {
+    const data = parseBoard(board("- [ ] One"));
+    const added = addCard(data, data.columns[0].id, "Two @heure(18:00) #home");
+    expect(added.columns[0].cards[1]).toMatchObject({
+      text: "Two",
+      tags: ["home"],
+      meta: [{ key: "heure", value: "18:00" }],
+    });
+    expect(serializeBoard(added)).toBe(board("- [ ] One", "- [ ] Two #home @heure(18:00)"));
+  });
+
+  it("goes with the card when it moves", () => {
+    const data = parseBoard(["## To Do", "", "- [ ] Atelier @heure(09:30)", "", "## Done", "", ""].join("\n"));
+    const [todo, done] = data.columns;
+    expect(serializeBoard(moveCard(data, todo.cards[0].id, todo.id, done.id, 0))).toBe(
+      ["## To Do", "", "", "## Done", "", "- [ ] Atelier @heure(09:30)", ""].join("\n"),
+    );
+  });
+});
+
 describe("a # that is not a tag", () => {
   it("in a web address stays in the address", () => {
     const content = board("- [ ] Read https://example.com/guide#install");
