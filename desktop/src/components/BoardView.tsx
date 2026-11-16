@@ -11,6 +11,7 @@ import {
   removeColumn,
   updateCard,
   toggleCard,
+  hiddenLineCount,
   type BoardData,
   type BoardCard,
 } from "@/lib/board-utils";
@@ -33,6 +34,11 @@ const TAG_COLORS: Record<string, string> = {
 
 function getTagColor(tag: string): string {
   return TAG_COLORS[tag.toLowerCase()] || TAG_COLORS.default;
+}
+
+/** "1 line that the board does not show", for the delete questions. */
+function hiddenLinesLabel(count: number): string {
+  return `${count} ${count === 1 ? "line" : "lines"} that the board does not show`;
 }
 
 // Movement (px) before a pointer-down becomes a drag. Below this, treat as a click.
@@ -197,7 +203,20 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
     setAddingToCol(null);
   }, [board, newCardText, emitChange]);
 
-  const handleRemoveCard = useCallback((colId: string, cardId: string) => {
+  const handleRemoveCard = useCallback(async (colId: string, cardId: string) => {
+    // Sub-items and notes under a card are in the file but not on the board,
+    // so deleting the card would take them without a word.
+    const card = board.columns.find((c) => c.id === colId)?.cards.find((c) => c.id === cardId);
+    const hidden = card ? hiddenLineCount(card) : 0;
+    if (card && hidden > 0) {
+      const confirmed = await confirmDialog({
+        title: `Delete "${card.text}"?`,
+        message: `${hiddenLinesLabel(hidden)} under this card will be removed with it.`,
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     emitChange(removeCard(board, colId, cardId));
   }, [board, emitChange]);
 
@@ -227,10 +246,15 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
 
   const handleRemoveColumn = useCallback(async (colId: string) => {
     const col = board.columns.find((c) => c.id === colId);
-    if (col && col.cards.length > 0) {
+    const hidden = col ? hiddenLineCount(col) : 0;
+    if (col && (col.cards.length > 0 || hidden > 0)) {
+      const cards = col.cards.length > 0
+        ? ` and its ${col.cards.length} ${col.cards.length === 1 ? "card" : "cards"}`
+        : "";
+      const lines = hidden > 0 ? `, with ${hiddenLinesLabel(hidden).toLowerCase()}` : "";
       const confirmed = await confirmDialog({
         title: `Delete "${col.title}"?`,
-        message: `The column and its ${col.cards.length} ${col.cards.length === 1 ? "card" : "cards"} will be removed.`,
+        message: `The column${cards} will be removed${lines}.`,
         confirmLabel: "Delete",
         danger: true,
       });

@@ -5,6 +5,10 @@
  *   ## Column Name
  *   - [ ] Task text #tag @due(2024-03-15)
  *   - [x] Completed task
+ *
+ * The board rewrites the whole file on every change, so whatever it reads it
+ * must be able to write back. Lines it does not show (a title, a note or
+ * sub-items under a card) are kept and written back where they were.
  */
 
 export interface BoardCard {
@@ -13,17 +17,74 @@ export interface BoardCard {
   completed: boolean;
   tags: string[];
   dueDate: string | null;
+  /** Lines under the card that the board does not show: sub-items, notes. */
+  extra?: string[];
 }
 
 export interface BoardColumn {
   id: string;
   title: string;
   cards: BoardCard[];
+  /** Lines between the heading and the first card. */
+  extra?: string[];
 }
 
 export interface BoardData {
   columns: BoardColumn[];
   frontmatter: string;
+  /** Lines between the front matter and the first column. */
+  preamble?: string[];
+  /** The line ending the file came with. "\n" when it is not set. */
+  eol?: string;
+}
+
+// What the board takes out of a card's text: tags and the due date.
+//
+// A tag opens the text or follows a space, so the # in a web address or in
+// [[Note#Heading]] is not one. It takes letters of any language with their
+// marks and joiners, digits, "_", "-" and "/", so #réunion, #हिंदी and
+// #work/urgent are each one tag.
+//
+// A due date is @due(YYYY-MM-DD) and nothing else. Anything else, such as
+// @due(friday), is left in the card text.
+//
+// One pattern for both, so that what is taken out of the text is exactly
+// what was read: a second pass over text the first pass had changed could
+// remove something that was never read.
+const TAG_OR_DUE = /(?<=^|\s)#([\p{L}\p{M}\p{N}_\/\u200c\u200d-]+)|@due\((\d{4}-\d{2}-\d{2})\)/gu;
+
+/**
+ * Split what follows the checkbox into the text, the tags and the due date.
+ * The first date counts and a later one is dropped.
+ */
+function readCardText(rawText: string): { text: string; tags: string[]; dueDate: string | null } {
+  const tags: string[] = [];
+  const dates: string[] = [];
+  const text = rawText
+    .replace(TAG_OR_DUE, (_match, tag: string | undefined, due: string | undefined) => {
+      if (tag !== undefined) tags.push(tag);
+      else if (due !== undefined) dates.push(due);
+      return "";
+    })
+    .trim();
+  return { text, tags, dueDate: dates[0] ?? null };
+}
+
+// The line that opens or closes a fenced code block.
+const FENCE = /^\s*(`{3,}|~{3,})/;
+
+/**
+ * Take the empty lines off the end of a run of lines, and off the start too
+ * unless `keepLeading`. The writer puts the empty lines around a block back.
+ */
+function trimBlankLines(lines: string[], keepLeading = false): string[] {
+  let start = 0;
+  let end = lines.length;
+  while (end > start && lines[end - 1].trim() === "") end--;
+  if (!keepLeading) {
+    while (start < end && lines[start].trim() === "") start++;
+  }
+  return lines.slice(start, end);
 }
 
 let nextId = 1;
@@ -34,7 +95,7 @@ function genId(): string {
 /** Check if content represents a board */
 export function isBoardContent(content: string): boolean {
   // Check frontmatter for board: true
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (fmMatch) {
     if (/^board:\s*true/m.test(fmMatch[1])) return true;
   }
@@ -51,7 +112,8 @@ export function parseBoard(content: string): BoardData {
   const columns: BoardColumn[] = [];
   let frontmatter = "";
 
-  const lines = content.split("\n");
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(/\r?\n/);
   let i = 0;
 
   // Extract frontmatter
@@ -70,9 +132,34 @@ export function parseBoard(content: string): BoardData {
   }
 
   let currentColumn: BoardColumn | null = null;
+  // Lines that are neither a column nor a card. They belong to the card
+  // above them, or to the column when it has no card yet, or to the top of
+  // the file when there is no column yet.
+  let preamble: string[] = [];
+  let pending: string[] = preamble;
+  // The marker of the code block the loop is inside. A "## " or "- [ ]" line
+  // in a code block is code.
+  let fence: string | null = null;
 
   for (; i < lines.length; i++) {
     const line = lines[i];
+
+    const fenceMatch = line.match(FENCE);
+    if (fence) {
+      pending.push(line);
+      const closes =
+        fenceMatch &&
+        fenceMatch[1][0] === fence[0] &&
+        fenceMatch[1].length >= fence.length &&
+        line.trim() === fenceMatch[1];
+      if (closes) fence = null;
+      continue;
+    }
+    if (fenceMatch) {
+      fence = fenceMatch[1];
+      pending.push(line);
+      continue;
+    }
 
     // Column header (## Heading)
     const colMatch = line.match(/^##\s+(.+)/);
@@ -81,44 +168,39 @@ export function parseBoard(content: string): BoardData {
         id: `col-${Date.now()}-${columns.length}`,
         title: colMatch[1].trim(),
         cards: [],
+        extra: [],
       };
       columns.push(currentColumn);
+      pending = currentColumn.extra!;
       continue;
     }
 
     // Card (- [ ] or - [x])
-    if (currentColumn) {
-      const cardMatch = line.match(/^-\s*\[([ xX])\]\s*(.*)/);
-      if (cardMatch) {
-        const completed = cardMatch[1].toLowerCase() === "x";
-        const rawText = cardMatch[2];
+    const cardMatch = currentColumn ? line.match(/^-\s*\[([ xX])\]\s*(.*)/) : null;
+    if (currentColumn && cardMatch) {
+      const completed = cardMatch[1].toLowerCase() === "x";
+      const rawText = cardMatch[2];
 
-        // Extract tags
-        const tags: string[] = [];
-        const tagMatches = rawText.matchAll(/#([\w-]+)/g);
-        for (const m of tagMatches) tags.push(m[1]);
+      const { text, tags, dueDate } = readCardText(rawText);
 
-        // Extract due date
-        const dueMatch = rawText.match(/@due\((\d{4}-\d{2}-\d{2})\)/);
-        const dueDate = dueMatch ? dueMatch[1] : null;
-
-        const text = rawText
-          .replace(/@due\([^)]+\)/g, "")
-          .replace(/#[\w-]+/g, "")
-          .trim();
-
-        currentColumn.cards.push({
-          id: genId(),
-          text,
-          completed,
-          tags,
-          dueDate,
-        });
-      }
+      const card: BoardCard = { id: genId(), text, completed, tags, dueDate, extra: [] };
+      currentColumn.cards.push(card);
+      pending = card.extra!;
+      continue;
     }
+
+    pending.push(line);
   }
 
-  return { columns, frontmatter };
+  preamble = trimBlankLines(preamble);
+  for (const col of columns) {
+    col.extra = trimBlankLines(col.extra ?? []);
+    // An empty line between a card and a paragraph under it stays, or the
+    // paragraph would read as part of the card.
+    for (const card of col.cards) card.extra = trimBlankLines(card.extra ?? [], true);
+  }
+
+  return { columns, frontmatter, preamble, eol };
 }
 
 /** Serialize board back to markdown */
@@ -130,9 +212,18 @@ export function serializeBoard(board: BoardData): string {
     parts.push("");
   }
 
+  if (board.preamble && board.preamble.length > 0) {
+    parts.push(...board.preamble);
+    parts.push("");
+  }
+
   for (const col of board.columns) {
     parts.push(`## ${col.title}`);
     parts.push("");
+    if (col.extra && col.extra.length > 0) {
+      parts.push(...col.extra);
+      if (col.cards.length > 0) parts.push("");
+    }
     for (const card of col.cards) {
       const check = card.completed ? "x" : " ";
       let line = `- [${check}] ${card.text}`;
@@ -143,11 +234,23 @@ export function serializeBoard(board: BoardData): string {
         line += ` @due(${card.dueDate})`;
       }
       parts.push(line);
+      if (card.extra && card.extra.length > 0) parts.push(...card.extra);
     }
     parts.push("");
   }
 
-  return parts.join("\n");
+  const text = parts.join("\n");
+  return board.eol === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
+}
+
+/**
+ * How many lines of text a card holds that the board does not show, or a
+ * column with its cards. Deleting the card or the column deletes them.
+ */
+export function hiddenLineCount(item: BoardCard | BoardColumn): number {
+  const own = (item.extra ?? []).filter((line) => line.trim() !== "").length;
+  if ("cards" in item) return own + item.cards.reduce((n, card) => n + hiddenLineCount(card), 0);
+  return own;
 }
 
 /** Move a card from one column to another */
@@ -192,11 +295,13 @@ export function reorderCard(
 
 /** Add a new card to a column */
 export function addCard(board: BoardData, colId: string, text: string): BoardData {
+  // Tags and a due date typed with the text are the card's from the start.
+  const typed = readCardText(text);
   const newColumns = board.columns.map((col) => {
     if (col.id !== colId) return col;
     return {
       ...col,
-      cards: [...col.cards, { id: genId(), text, completed: false, tags: [], dueDate: null }],
+      cards: [...col.cards, { id: genId(), ...typed, completed: false }],
     };
   });
   return { ...board, columns: newColumns };
@@ -226,11 +331,25 @@ export function removeColumn(board: BoardData, colId: string): BoardData {
 
 /** Update a card's text */
 export function updateCard(board: BoardData, colId: string, cardId: string, text: string): BoardData {
+  // The text box holds the card's text without its tags and date. A tag typed
+  // into it is added to the card's tags, and a date typed into it takes the
+  // place of the one the card had. Without this the file would hold both
+  // dates until the next change to the board.
+  const typed = readCardText(text);
   const newColumns = board.columns.map((col) => {
     if (col.id !== colId) return col;
     return {
       ...col,
-      cards: col.cards.map((c) => (c.id === cardId ? { ...c, text } : c)),
+      cards: col.cards.map((c) =>
+        c.id === cardId
+          ? {
+              ...c,
+              text: typed.text,
+              tags: [...typed.tags, ...c.tags.filter((t) => !typed.tags.includes(t))],
+              dueDate: typed.dueDate ?? c.dueDate,
+            }
+          : c
+      ),
     };
   });
   return { ...board, columns: newColumns };
