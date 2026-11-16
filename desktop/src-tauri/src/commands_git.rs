@@ -39,6 +39,17 @@ struct GitRunResult {
 fn run_git(args: &[&str], cwd: &Path, token: Option<&str>) -> GitRunResult {
     let mut cmd = Command::new("git");
 
+    // The release build on Windows has no console, and Windows opens a new
+    // console window for every console program such an app starts, so each git
+    // call flashed a terminal. With this flag git gets a console that has no
+    // window, and the ssh or askpass it starts in turn share it.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
     // Disable every credential helper (libsecret, manager, store, gnome-keyring,
     // etc.) and any custom askpass for THIS invocation. We pass auth via
     // GIT_ASKPASS + URL when we have a token; if we don't, git must fail fast
