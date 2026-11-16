@@ -121,7 +121,6 @@ fn run_git(args: &[&str], cwd: &Path, token: Option<&str>) -> GitRunResult {
 }
 
 fn run_with_timeout(mut cmd: Command, timeout: Duration) -> GitRunResult {
-    use std::io::Read;
     use std::process::Stdio;
     use wait_timeout::ChildExt;
 
@@ -137,10 +136,17 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration) -> GitRunResult {
         }
     };
 
+    // Both pipes are read while git runs. A pipe holds only so much (64 KB on
+    // Linux), and with nobody reading it git stops when it is full and never
+    // exits: a commit of a few thousand new notes, a status with that many
+    // changes or an old version of a long note ended in a timeout.
+    let stdout = read_in_background(child.stdout.take());
+    let stderr = read_in_background(child.stderr.take());
+
     let status = match child.wait_timeout(timeout) {
         Ok(Some(s)) => s,
         Ok(None) => {
-            // Timed out — kill it.
+            // Timed out — kill it. The readers end when the pipes close.
             let _ = child.kill();
             let _ = child.wait();
             return GitRunResult {
@@ -160,20 +166,28 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration) -> GitRunResult {
         }
     };
 
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-    if let Some(mut s) = child.stdout.take() {
-        let _ = s.read_to_string(&mut stdout);
-    }
-    if let Some(mut s) = child.stderr.take() {
-        let _ = s.read_to_string(&mut stderr);
-    }
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
 
     GitRunResult {
         stdout: stdout.trim().to_string(),
         stderr: stderr.trim().to_string(),
         success: status.success(),
     }
+}
+
+/// Read a pipe to its end on a thread of its own.
+fn read_in_background<R>(pipe: Option<R>) -> std::thread::JoinHandle<String>
+where
+    R: std::io::Read + Send + 'static,
+{
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
+    })
 }
 
 /// Mask the user-info part of every URL in `text`. Git echoes remote URLs in
@@ -745,6 +759,28 @@ mod tests {
             message: Some("test sync".into()),
             vault_id: None,
         }))
+    }
+
+    #[test]
+    fn reads_more_output_than_a_pipe_holds() {
+        let dir = vault("large-output");
+        // A status line for each of these comes to well over 64 KB.
+        for i in 0..2500 {
+            let name = format!("a-note-with-a-fairly-long-name-{i:05}.md");
+            fs::write(dir.join(name), "x").unwrap();
+        }
+        let started = std::time::Instant::now();
+        let status = git(&dir, &["status", "--porcelain"]);
+        assert!(status.success, "{}", status.stderr);
+        assert_eq!(status.stdout.lines().count(), 2500);
+        assert!(status.stdout.len() > 64 * 1024);
+
+        // The commit prints a line for every new file.
+        git(&dir, &["add", "-A"]);
+        let commit = git(&dir, &["commit", "-m", "many notes"]);
+        assert!(commit.success, "{}", commit.stderr);
+        assert!(commit.stdout.len() > 64 * 1024);
+        assert!(started.elapsed() < Duration::from_secs(25), "git was left waiting");
     }
 
     #[test]
