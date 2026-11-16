@@ -764,23 +764,24 @@ mod tests {
     #[test]
     fn reads_more_output_than_a_pipe_holds() {
         let dir = vault("large-output");
-        // A status line for each of these comes to well over 64 KB.
-        for i in 0..2500 {
-            let name = format!("a-note-with-a-fairly-long-name-{i:05}.md");
-            fs::write(dir.join(name), "x").unwrap();
+        // A status line for each of these comes to well over 64 KB. Few files
+        // with long names, so that a slow disk does not make git itself slow.
+        let padding = "a-note-with-a-long-name-".repeat(4);
+        for i in 0..800 {
+            fs::write(dir.join(format!("{padding}{i:04}.md")), "x").unwrap();
         }
-        let started = std::time::Instant::now();
+        // A command that was left waiting comes back as a failure: "git
+        // command timed out after 30s".
         let status = git(&dir, &["status", "--porcelain"]);
         assert!(status.success, "{}", status.stderr);
-        assert_eq!(status.stdout.lines().count(), 2500);
+        assert_eq!(status.stdout.lines().count(), 800);
         assert!(status.stdout.len() > 64 * 1024);
 
         // The commit prints a line for every new file.
-        git(&dir, &["add", "-A"]);
+        assert!(git(&dir, &["add", "-A"]).success);
         let commit = git(&dir, &["commit", "-m", "many notes"]);
         assert!(commit.success, "{}", commit.stderr);
         assert!(commit.stdout.len() > 64 * 1024);
-        assert!(started.elapsed() < Duration::from_secs(25), "git was left waiting");
     }
 
     #[test]
