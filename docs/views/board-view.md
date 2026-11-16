@@ -35,6 +35,7 @@ The board view reads and writes standard Markdown. The format is straightforward
 - **Cards** are task list items (`- [ ]` for incomplete, `- [x]` for complete) under each column heading.
 - **Tags** are inline hashtags like `#urgent` or `#frontend`.
 - **Due dates** use the syntax `@due(YYYY-MM-DD)`.
+- **Other annotations** use the syntax `@key(value)`, for example `@estimate(90)`.
 
 ### Example
 
@@ -145,6 +146,22 @@ Only this form is read as a due date. Anything else, such as `@due(friday)`, sta
 
 Due dates also appear in the calendar view as yellow dots on the corresponding day, creating a bridge between board and calendar workflows.
 
+## Other Annotations
+
+A card can carry any other piece of information written as `@key(value)`. The board shows each one as a chip with the key and the value, between the tags and the due date.
+
+```markdown
+- [ ] Team workshop #team @time(09:30) @estimate(90) @room(B-12)
+```
+
+- The key starts with a letter and can hold letters, digits, `_` and `-`. The value is what stands between the brackets. It can be empty, as in `@urgent()`, and it cannot hold brackets of its own.
+- Like a tag, an annotation starts the card text or follows a space.
+- The board gives no key a meaning of its own except `due`. Which keys you use is up to you.
+- To add an annotation or change its value, type it into the card text. A value typed for a key the card already has takes the place of the old one.
+- The calendar shows a task's line as it is written, annotations included.
+
+Versions up to 3.0.2 showed these as part of the card text.
+
 ## Auto-Save
 
 The board view automatically saves changes to disk every 5 seconds while the board is open and has unsaved modifications. This ensures that drag-and-drop operations, card edits, and checkbox toggles are persisted without requiring a manual save. You can also trigger a save at any time with `Ctrl+S`.
@@ -165,7 +182,7 @@ The board shows columns and cards. Every other line in the file is kept and writ
 
 The board does not show these lines. Switch to the editor to read or change them.
 
-Two things are tidied when the board writes the file: empty lines between cards are removed, and a card's tags and due date are moved to the end of its line.
+Two things are tidied when the board writes the file: empty lines between cards are removed, and a card's tags, annotations and due date are moved to the end of its line, in that order.
 
 Up to version 3.0.2 the board deleted every line it did not show the first time you changed a card. It also cut a `#` out of web addresses and heading links, and removed a due date that was not written as `YYYY-MM-DD`.
 
@@ -174,7 +191,7 @@ Up to version 3.0.2 the board deleted every line it did not show the first time 
 Internally, the board is represented as a `BoardData` structure:
 
 - **columns**: An array of `BoardColumn` objects, each containing an `id`, `title`, an array of `cards`, and `extra`, the lines between the heading and the first card.
-- **cards**: Each `BoardCard` has an `id`, `text`, `completed` boolean, `tags` array, an optional `dueDate` string, and `extra`, the lines under the card that the board does not show.
+- **cards**: Each `BoardCard` has an `id`, `text`, `completed` boolean, `tags` array, an optional `dueDate` string, `meta`, the other annotations as `{ key, value }` pairs, and `extra`, the lines under the card that the board does not show.
 - **frontmatter**: The raw YAML frontmatter string, preserved verbatim.
 - **preamble**: The lines between the frontmatter and the first column.
 - **eol**: The line ending the file came with, so a file with Windows line endings is written back with them.

@@ -301,7 +301,7 @@ board: true
 - [x] Set up CI
 ```
 
-Cards support: tags (`#tag`), due dates (`@due(YYYY-MM-DD)`), drag-and-drop between columns, and completion toggle.
+Cards support: tags (`#tag`), due dates (`@due(YYYY-MM-DD)`), other annotations (`@key(value)`, shown as chips), drag-and-drop between columns, and completion toggle.
 
 ---
 
