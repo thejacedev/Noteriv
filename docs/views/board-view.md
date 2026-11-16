@@ -98,7 +98,7 @@ Click the "+" button at the bottom of any column to add a new card. A text input
 
 ### Editing Cards
 
-Click a card to edit its text inline. Changes are saved automatically when you click away or press `Enter`.
+Double-click a card to edit its text inline. Changes are saved automatically when you click away or press `Enter`.
 
 ### Completing Cards
 
@@ -120,9 +120,11 @@ The board supports both mouse and touch drag on supported platforms.
 
 ## Tags
 
-Tags are extracted from the card text using the `#tag-name` syntax. Any word prefixed with `#` is treated as a tag. Tags are rendered as colored pills on the card, making it easy to scan for categories at a glance.
+Tags are extracted from the card text using the `#tag-name` syntax. A tag is a `#` followed by letters, digits, `_`, `-` or `/`, at the start of the card text or after a space. Letters of any language count, so `#réunion` is one tag, and so is a nested tag like `#work/urgent`. Tags are rendered as colored pills on the card, making it easy to scan for categories at a glance.
 
-Tags are preserved exactly as written in the Markdown. When the board serializes back to Markdown, tags are appended after the card text in the same position they originally occupied.
+A `#` inside a word is not a tag. The one in a web address (`https://example.com/guide#install`) or in a link to a heading (`[[Plan#Risks]]`) stays where it is.
+
+When the board writes the file, a card's tags come after its text, in the order they were written.
 
 ### Examples
 
@@ -139,6 +141,8 @@ Due dates use the `@due(YYYY-MM-DD)` syntax. When present, the date is displayed
 - [ ] Submit quarterly report @due(2026-03-31)
 ```
 
+Only this form is read as a due date. Anything else, such as `@due(friday)`, stays in the card text. To change a card's date, type the new `@due(...)` into the card text: it takes the place of the old one.
+
 Due dates also appear in the calendar view as yellow dots on the corresponding day, creating a bridge between board and calendar workflows.
 
 ## Auto-Save
@@ -153,15 +157,27 @@ Because the board format is plain Markdown, you can switch between the board vie
 2. Switch to the editor to make bulk text edits, add long descriptions, or restructure the file.
 3. Switch back to the board view -- it re-parses the file on every open.
 
-Any Markdown that the board parser does not understand (paragraphs, images, code blocks outside the column/card structure) is preserved in the frontmatter section and written back unmodified.
+The board shows columns and cards. Every other line in the file is kept and written back where it was:
+
+- A title or text above the first column stays above it.
+- Text under a column heading, before its first card, stays with the column.
+- Anything under a card stays with that card: sub-items, a note, an image, a code block. It moves with the card when you drag it, and it is deleted with the card. The board asks before it deletes a card or a column that holds lines it does not show.
+
+The board does not show these lines. Switch to the editor to read or change them.
+
+Two things are tidied when the board writes the file: empty lines between cards are removed, and a card's tags and due date are moved to the end of its line.
+
+Up to version 3.0.2 the board deleted every line it did not show the first time you changed a card. It also cut a `#` out of web addresses and heading links, and removed a due date that was not written as `YYYY-MM-DD`.
 
 ## Data Model
 
 Internally, the board is represented as a `BoardData` structure:
 
-- **columns**: An array of `BoardColumn` objects, each containing an `id`, `title`, and an array of `cards`.
-- **cards**: Each `BoardCard` has an `id`, `text`, `completed` boolean, `tags` array, and an optional `dueDate` string.
+- **columns**: An array of `BoardColumn` objects, each containing an `id`, `title`, an array of `cards`, and `extra`, the lines between the heading and the first card.
+- **cards**: Each `BoardCard` has an `id`, `text`, `completed` boolean, `tags` array, an optional `dueDate` string, and `extra`, the lines under the card that the board does not show.
 - **frontmatter**: The raw YAML frontmatter string, preserved verbatim.
+- **preamble**: The lines between the frontmatter and the first column.
+- **eol**: The line ending the file came with, so a file with Windows line endings is written back with them.
 
 Operations like `moveCard`, `reorderCard`, `addCard`, `removeCard`, `toggleCard`, `addColumn`, and `removeColumn` produce a new immutable copy of the board data, which is then serialized back to Markdown and written to disk.
 
