@@ -144,6 +144,8 @@ Use the HTTPS remote URL and provide an access token in **Settings → Sync → 
 | Bitbucket | `x-token-auth` | Repository or workspace access token |
 | Other / self-hosted | usually your login username | Access / app token |
 
+These scopes are for the desktop app, which runs `git`. The phone app talks to each host's REST API instead and needs a different GitLab scope (`api`); see [Mobile Sync](./mobile-sync.md#generating-a-token).
+
 Noteriv builds the authenticated URL as `https://<username>:<token>@host/...`. A blank username defaults to `oauth2` (works for GitHub and GitLab). The token is stored encrypted on your device and used only as the HTTPS password.
 
 > Token validation (the account avatar) and the repository picker work for GitHub only, since they use the GitHub API. For other hosts, paste the remote URL and credentials manually — they are saved without an online check.

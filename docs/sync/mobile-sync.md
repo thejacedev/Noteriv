@@ -23,34 +23,64 @@ The trade-off is that mobile sync is slower for large vaults (each file requires
 
 ## Setup
 
-### Connecting a Repository
+> **Which builds have this.** GitLab, Gitea and Forgejo sync was added to the app after the builds on Google Play and the App Store, and the APK kept in the repository, were made. Those builds connect to GitHub only. A build made from the current source has everything on this page.
 
-1. Open the Noteriv mobile app.
-2. Go to Settings (gear icon).
-3. Tap "Git Sync" under the vault settings.
-4. For GitHub, use the repository picker. For GitLab or Gitea/Forgejo, select the provider and enter the HTTPS clone URL, including the hostname for self-hosted instances.
-   - `https://github.com/username/repo`
-   - `https://github.com/username/repo.git`
-   SSH URLs (`git@github.com:username/repo.git`) are also parsed correctly.
-5. Enter a personal access token with repository read and write access. GitHub requires the `repo` scope; GitLab and Gitea/Forgejo use the permissions configured when the token is created.
-6. Tap "Save".
+### Connecting GitHub
 
-The app parses the URL to extract the repository owner and name, which are used to construct API endpoint URLs.
+1. Open the Noteriv mobile app and go to Settings (gear icon).
+2. Scroll to **Git Sync** and tap **Connect GitHub**.
+3. Paste a personal access token with the `repo` scope and tap **Connect**.
+4. Pick the repository from the list and tap **Connect & Sync**.
+
+The first-start setup offers the same GitHub steps. For any other provider, tap **Skip & Create** there and connect it in Settings afterwards.
+
+### Connecting GitLab, Gitea or Forgejo
+
+1. Open Settings and scroll to **Git Sync**. The form is under the **Connect GitHub** button.
+2. Choose **GitLab** or **Gitea / Forgejo**. This tells the app which API to speak, so it also works for a server of your own whose host name does not contain "gitlab", "gitea" or "forgejo".
+3. Enter the HTTPS clone URL of the repository:
+   - `https://gitlab.com/you/notes.git`
+   - `https://git.example.com/group/subgroup/notes.git`
+
+   The `.git` ending and a trailing slash are optional. The address of a page inside the project (one that contains `/-/`) does not work. An SSH address (`git@host:you/notes.git`) is read as `https://host/you/notes`, because the phone has no SSH.
+4. Enter an access token (see below for the scope each provider needs).
+5. Tap **Save & Sync Remote**.
+
+Before anything is saved the app asks the server about the repository. If the address, the token or the token's scope is wrong, the reason is shown under the form and nothing is saved. A repository with no commits yet is fine: the first sync uploads your notes into it. The app syncs the repository's default branch, whatever it is called.
 
 ### Generating a Token
+
+**GitHub**
 
 1. Go to [github.com/settings/tokens](https://github.com/settings/tokens) on your computer or phone browser.
 2. Click "Generate new token (classic)".
 3. Give it a descriptive name like "Noteriv Mobile".
 4. Select the `repo` scope (full control of private repositories).
 5. Generate the token and copy it.
-6. Paste it into Noteriv's GitHub Sync settings.
 
 Fine-grained tokens are also supported as long as they have read and write access to the repository's contents.
 
+**GitLab**
+
+1. Open the personal access tokens page: [gitlab.com/-/user_settings/personal_access_tokens](https://gitlab.com/-/user_settings/personal_access_tokens), or the same path on your own server.
+2. Add a new token and select the **`api`** scope.
+3. Create the token and copy it.
+
+The phone app reads and writes notes through the GitLab REST API, and only the `api` scope allows both. The scopes the [desktop app](./git-sync.md#https-with-an-access-token) uses, `read_repository` and `write_repository`, are for git over HTTPS; the API refuses a token that has only those with `403`. A `read_api` token can download notes but never upload them. The token's account also has to be allowed to push to the default branch: on a protected branch that means the Maintainer role unless the project says otherwise.
+
+**Gitea / Forgejo**
+
+Create an access token under **Settings > Applications** with read and write access to repositories.
+
+### Your Own Server and Certificates
+
+- The address has to start with `https://`. The Android app does not make plain `http://` connections.
+- A certificate from a public authority (Let's Encrypt, for example) needs nothing extra.
+- A certificate signed by a private or company authority has to be trusted by the phone first. On Android, install the authority's CA certificate under **Settings > Security > Encryption & credentials > Install a certificate > CA certificate** (the path differs a little between manufacturers). On iOS, install the profile and then switch it on under **Settings > General > About > Certificate Trust Settings**. Noteriv trusts the authorities you install this way; it never skips the certificate check.
+
 ### Token Storage
 
-The GitHub token is stored securely in the app's per-vault configuration. It is associated with a specific vault, so different vaults can use different tokens and different repositories.
+The token is stored in the app's per-vault configuration. It is associated with a specific vault, so different vaults can use different tokens and different repositories.
 
 ## Sync Operations
 
@@ -155,6 +185,7 @@ All other files participate in sync.
 ## Limitations
 
 - **Supported providers**: Mobile sync supports GitHub, GitLab, Gitea, and Forgejo. GitLab and Gitea/Forgejo can use self-hosted instances when their HTTPS clone URL is entered in Settings. Bitbucket and arbitrary Git servers are not supported.
+- **Fresh Clone is GitHub only**: for GitLab and Gitea/Forgejo, a new device gets its notes from the first sync instead.
 - **No merge/rebase**: If the same file is modified both locally and remotely, the last writer wins. There are no conflict markers or merge logic on mobile.
 - **Individual commits per file**: Each pushed file creates its own commit, resulting in verbose commit history.
 - **Markdown files only for pull**: The pull operation filters to `.md` and `.markdown` files. Other file types (images, PDFs, canvases) are not pulled unless using Fresh Clone.
@@ -172,3 +203,10 @@ All other files participate in sync.
 | Sync is slow | Normal for large vaults. Each file requires an API request. Increase the sync interval. |
 | Files missing after Fresh Clone | Fresh Clone only downloads files that exist on the remote. Local-only files are deleted. |
 | "Failed to put file" | The token may lack write permission. Ensure the `repo` scope is granted. |
+| "the token is not allowed to do this (403)" on GitLab | The token lacks the `api` scope. `read_repository` and `write_repository` are not enough on the phone. Create a new token with `api`. |
+| "the server rejected the token (401)" | The token is mistyped, expired or revoked. |
+| "You are not allowed to push into this branch" | The token works, but its account may not push to the protected default branch. Change the branch protection or the account's role in the project. |
+| "repository not found (404)" | Check the clone URL, and that the token's account can see the repository. |
+| "Could not reach https://..." | The server did not answer, the address is not `https://`, or its certificate is not trusted by the phone. See [Your Own Server and Certificates](#your-own-server-and-certificates). |
+| "the repository has no branch ..." | The vault was connected while the repository had a different default branch. Tap **Disconnect Remote**, then connect it again; the app reads the default branch when it connects. |
+| "Unknown Git provider" | The host name does not say which provider it is. Disconnect, then connect again in Settings with **GitLab** or **Gitea / Forgejo** selected. |

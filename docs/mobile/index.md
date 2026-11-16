@@ -117,6 +117,8 @@ To set up sync:
 3. Enter a personal access token with `repo` scope.
 4. Choose a sync interval (1, 5, 10, or 30 minutes) or sync manually.
 
+GitLab, Gitea and Forgejo repositories, including ones on your own server, are connected from the same screen. [Mobile Sync](../sync/mobile-sync.md) has the steps, the token scope each provider needs, and what to do about private certificates.
+
 The sync engine handles:
 
 - **Pulling remote changes** and merging them with local files.
