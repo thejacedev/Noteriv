@@ -146,7 +146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         syncInFlight.current = false;
       }
     })();
-  }, [vault?.id, vault?.gitRemote]);
+  }, [vault?.id, vault?.gitRemote, vault?.gitBranch]);
 
   // Auto-sync every 5 seconds (pull + push if changes)
   useEffect(() => {
@@ -189,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         autoSyncTimer.current = null;
       }
     };
-  }, [vault?.id, vault?.gitRemote]);
+  }, [vault?.id, vault?.gitRemote, vault?.gitBranch]);
 
   const refreshFiles = useCallback(() => {
     if (!currentDir) return;

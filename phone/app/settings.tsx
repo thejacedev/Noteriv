@@ -55,6 +55,7 @@ export default function SettingsScreen() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [remoteInput, setRemoteInput] = useState('');
   const [providerInput, setProviderInput] = useState<GitProvider>('gitlab');
+  const [remoteError, setRemoteError] = useState<string | null>(null);
 
   // Repo picker state (inside token modal)
   const [validatingToken, setValidatingToken] = useState(false);
@@ -132,7 +133,8 @@ export default function SettingsScreen() {
 
     // Save the repo URL on the vault
     const { updateVault } = await import('@/lib/vault');
-    await updateVault(vault.id, { gitRemote: selectedRepoUrl, gitProvider: 'github' });
+    // GitHub sync has always used "main"; say so, in case this vault last synced another provider's branch.
+    await updateVault(vault.id, { gitRemote: selectedRepoUrl, gitProvider: 'github', gitBranch: 'main' });
     await refreshVaults();
 
     // Reset modal state
@@ -147,9 +149,9 @@ export default function SettingsScreen() {
     setSyncStatus('Syncing...');
     setSyncing(true);
     try {
-      const result = await GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, vault.gitBranch || undefined, 'github');
+      const result = await GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, 'main', 'github');
       setLastSyncTime(new Date().toLocaleTimeString());
-      setSyncStatus(`Pulled: ${result.pulled}, Pushed: ${result.pushed}`);
+      setSyncStatus(GitSync.describeResult(result));
     } catch (err) {
       setSyncStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -188,13 +190,7 @@ export default function SettingsScreen() {
       refreshFiles();
       const now = new Date().toLocaleTimeString();
       setLastSyncTime(now);
-      if (result.errors.length > 0) {
-        setSyncStatus(
-          `Pulled: ${result.pulled}, Pushed: ${result.pushed}, Errors: ${result.errors.length}`
-        );
-      } else {
-        setSyncStatus(`Pulled: ${result.pulled}, Pushed: ${result.pushed}`);
-      }
+      setSyncStatus(GitSync.describeResult(result));
     } catch (err) {
       setSyncStatus(
         `Sync failed: ${err instanceof Error ? err.message : String(err)}`
@@ -209,18 +205,27 @@ export default function SettingsScreen() {
     const provider = GitSync.detectProvider(remoteInput.trim(), providerInput);
     if (!provider || provider === 'github') return;
     const token = tokenInput.trim();
-    await setItem(KEYS.GIT_TOKEN(vault.id), token);
-    const { updateVault } = await import('@/lib/vault');
-    await updateVault(vault.id, { gitRemote: remoteInput.trim(), gitProvider: provider });
-    setGhToken(token);
-    setTokenInput('');
-    await refreshVaults();
+    setRemoteError(null);
     setSyncing(true);
     try {
-      const result = await GitSync.sync(vault.path, token, remoteInput.trim(), vault.gitBranch || undefined, provider);
+      // Ask the server first: a remote that cannot work is not saved, and the
+      // reason is shown under the form instead of a "connected" vault that never syncs.
+      const check = await GitSync.checkRemote(remoteInput.trim(), token, provider);
+      if (!check.ok) {
+        setRemoteError(check.problem);
+        return;
+      }
+      await setItem(KEYS.GIT_TOKEN(vault.id), token);
+      const { updateVault } = await import('@/lib/vault');
+      // Sync the branch the repository really has; a vault starts out assuming "main".
+      await updateVault(vault.id, { gitRemote: remoteInput.trim(), gitProvider: provider, gitBranch: check.branch });
+      setGhToken(token);
+      setTokenInput('');
+      await refreshVaults();
+      const result = await GitSync.sync(vault.path, token, remoteInput.trim(), check.branch, provider);
       refreshFiles();
       setLastSyncTime(new Date().toLocaleTimeString());
-      setSyncStatus(`Pulled: ${result.pulled}, Pushed: ${result.pushed}${result.errors.length ? `, Errors: ${result.errors.length}` : ''}`);
+      setSyncStatus(GitSync.describeResult(result));
     } catch (err) {
       setSyncStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -831,19 +836,24 @@ export default function SettingsScreen() {
               </Text>
             </TouchableOpacity>
             <View style={s.customRemoteForm}>
-              <Text style={[s.modalHint, { color: colors.textMuted }]}>For GitLab or Gitea/Forgejo, enter the clone URL and a token with repository read/write access.</Text>
+              <Text style={[s.modalHint, { color: colors.textMuted }]}>
+                {providerInput === 'gitlab'
+                  ? 'For GitLab, enter the HTTPS clone URL and an access token with the "api" scope. A token with only read_repository and write_repository will not work here.'
+                  : 'For Gitea or Forgejo, enter the HTTPS clone URL and an access token with read and write access to repositories.'}
+              </Text>
               <View style={s.providerRow}>
                 {(['gitlab', 'gitea'] as GitProvider[]).map((item) => (
-                  <TouchableOpacity key={item} style={[s.providerOption, { backgroundColor: colors.bgSecondary }, providerInput === item && { backgroundColor: colors.accent }]} onPress={() => setProviderInput(item)}>
+                  <TouchableOpacity key={item} style={[s.providerOption, { backgroundColor: colors.bgSecondary }, providerInput === item && { backgroundColor: colors.accent }]} onPress={() => { setProviderInput(item); setRemoteError(null); }}>
                     <Text style={{ color: providerInput === item ? colors.bgPrimary : colors.textSecondary, fontWeight: '600' }}>{item === 'gitlab' ? 'GitLab' : 'Gitea / Forgejo'}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="https://git.example.com/group/repo.git" placeholderTextColor={colors.textMuted} value={remoteInput} onChangeText={setRemoteInput} autoCapitalize="none" autoCorrect={false} />
-              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Personal access token" placeholderTextColor={colors.textMuted} value={tokenInput} onChangeText={setTokenInput} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="https://git.example.com/group/repo.git" placeholderTextColor={colors.textMuted} value={remoteInput} onChangeText={(text) => { setRemoteInput(text); setRemoteError(null); }} autoCapitalize="none" autoCorrect={false} />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Personal access token" placeholderTextColor={colors.textMuted} value={tokenInput} onChangeText={(text) => { setTokenInput(text); setRemoteError(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry />
               <TouchableOpacity style={[s.connectButton, { backgroundColor: colors.accent }, (!remoteInput.trim() || !tokenInput.trim() || syncing) && { opacity: 0.5 }]} onPress={handleSaveCustomRemote} disabled={!remoteInput.trim() || !tokenInput.trim() || syncing}>
                 <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{syncing ? 'Saving...' : 'Save & Sync Remote'}</Text>
               </TouchableOpacity>
+              {remoteError ? <Text style={[s.modalHint, { color: colors.red }]}>{remoteError}</Text> : null}
             </View>
           </View>
         )}
