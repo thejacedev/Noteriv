@@ -11,7 +11,6 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import * as FileSystem from 'expo-file-system';
 import { useTheme } from '@/context/ThemeContext';
 import { parseQuery, executeQuery, parseNoteData, QueryResult } from '@/lib/dataview';
 import { listAllMarkdownFiles, readFile } from '@/lib/file-system';
@@ -831,26 +830,28 @@ function EmbedBlock({
   const [embedContent, setEmbedContent] = useState<string | null>(null);
 
   useEffect(() => {
+    let current = true;
     async function load() {
       const base = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
       const candidates = [
         base + name,
         base + name + '.md',
-        ...name.includes('/') ? [] : await findInVault(base, name),
+        ...(name.includes('/') ? [] : await findInVault(vaultPath, name)),
       ];
       for (const path of candidates) {
-        try {
-          const info = await FileSystem.getInfoAsync(path);
-          if (info.exists) {
-            const text = await FileSystem.readAsStringAsync(path);
-            setEmbedContent(text);
-            return;
-          }
-        } catch {}
+        // readFile gives null for a file that is not there.
+        const text = await readFile(path);
+        if (text !== null) {
+          if (current) setEmbedContent(text);
+          return;
+        }
       }
-      setEmbedContent(null);
+      if (current) setEmbedContent(null);
     }
     load();
+    return () => {
+      current = false;
+    };
   }, [name, vaultPath]);
 
   if (embedContent === null) {
@@ -871,24 +872,15 @@ function EmbedBlock({
   );
 }
 
-async function findInVault(base: string, name: string): Promise<string[]> {
-  try {
-    const items = await FileSystem.readDirectoryAsync(base);
-    const results: string[] = [];
-    for (const item of items) {
-      const full = base + item;
-      const info = await FileSystem.getInfoAsync(full);
-      if (info.isDirectory) {
-        const nested = await findInVault(full + '/', name);
-        results.push(...nested);
-      } else if (item === name || item === name + '.md') {
-        results.push(full);
-      }
-    }
-    return results;
-  } catch {
-    return [];
-  }
+/**
+ * The notes anywhere in the vault that have this name, with or without its
+ * ".md". This used the file library's old functions (getInfoAsync and the
+ * like), which throw since Expo SDK 54, so an embedded note was never found.
+ */
+async function findInVault(vaultPath: string, name: string): Promise<string[]> {
+  const wanted = name.replace(/\.(md|markdown)$/i, '');
+  const files = await listAllMarkdownFiles(vaultPath);
+  return files.filter((file) => file.fileName === wanted).map((file) => file.filePath);
 }
 
 function DataviewBlock({ code, vaultPath, fontSize, colors }: {
