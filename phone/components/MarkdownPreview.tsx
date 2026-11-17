@@ -250,7 +250,7 @@ type BlockNode =
   | { type: 'paragraph'; text: string; line: number }
   | { type: 'code_block'; language: string; code: string; line: number }
   | { type: 'blockquote'; lines: string[]; line: number }
-  | { type: 'callout'; kind: string; title: string; lines: string[]; line: number }
+  | { type: 'callout'; kind: string; title: string; fold: '+' | '-' | null; lines: string[]; line: number }
   | { type: 'hr'; line: number }
   | { type: 'ul'; items: { text: string; checked: boolean | null }[]; line: number }
   | { type: 'ol'; items: { text: string; num: number }[]; line: number }
@@ -360,11 +360,14 @@ function parseBlocks(content: string): BlockNode[] {
       continue;
     }
 
-    // Callout (> [!TYPE] ...)
-    const calloutMatch = line.match(/^>\s*\[!(\w+)\]\s*(.*)?$/);
+    // Callout: `> [!type]`, a `+` or `-` straight after it for one that can be
+    // folded, then the title. The desktop reads the header the same way
+    // (CALLOUT_HEADER in desktop/src/components/markdown/callout-folds.ts).
+    const calloutMatch = line.match(/^>\s*\[!(\w+)\]([+-])?\s*(.*)$/);
     if (calloutMatch) {
       const kind = calloutMatch[1].toLowerCase();
-      const title = calloutMatch[2] || kind.charAt(0).toUpperCase() + kind.slice(1);
+      const fold = (calloutMatch[2] as '+' | '-' | undefined) ?? null;
+      const title = calloutMatch[3] || kind.charAt(0).toUpperCase() + kind.slice(1);
       const contentLines: string[] = [];
       const startLine = i;
       i++;
@@ -372,7 +375,7 @@ function parseBlocks(content: string): BlockNode[] {
         contentLines.push(lines[i].replace(/^>\s?/, ''));
         i++;
       }
-      blocks.push({ type: 'callout', kind, title, lines: contentLines, line: startLine });
+      blocks.push({ type: 'callout', kind, title, fold, lines: contentLines, line: startLine });
       continue;
     }
 
@@ -978,6 +981,47 @@ function EmbedBlockItem({ block, fontSize, colors, onLinkPress, onWikiLinkPress 
   return null;
 }
 
+/**
+ * A callout. One written `> [!tip]-` or `> [!tip]+` can be folded: it starts
+ * closed for "-" and open for "+", and a tap on its title folds or opens it.
+ * The fold is only on the screen; the note is not changed.
+ */
+function CalloutBlock({
+  title,
+  fold,
+  accentColor,
+  children,
+}: {
+  title: string;
+  fold: '+' | '-' | null;
+  accentColor: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(fold !== '-');
+  const header = (
+    <Text style={[styles.calloutTitle, { color: accentColor }, !open && { marginBottom: 0 }]}>
+      {title}
+      {fold ? (open ? '  \u25BE' : '  \u25B8') : ''}
+    </Text>
+  );
+  return (
+    <View style={[styles.callout, { borderLeftColor: accentColor, backgroundColor: accentColor + '10' }]}>
+      {fold ? (
+        <TouchableOpacity
+          onPress={() => setOpen((o) => !o)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+        >
+          {header}
+        </TouchableOpacity>
+      ) : (
+        header
+      )}
+      {open && children}
+    </View>
+  );
+}
+
 export default function MarkdownPreview({
   content,
   fontSize,
@@ -1161,13 +1205,7 @@ export default function MarkdownPreview({
         case 'callout': {
           const accentColor = calloutColors[block.kind] || colors.blue;
           return (
-            <View
-              key={index}
-              style={[styles.callout, { borderLeftColor: accentColor, backgroundColor: accentColor + '10' }]}
-            >
-              <Text style={[styles.calloutTitle, { color: accentColor }]}>
-                {block.title}
-              </Text>
+            <CalloutBlock key={index} title={block.title} fold={block.fold} accentColor={accentColor}>
               {block.lines.map((line, li) => (
                 <InlineText
                   key={li}
@@ -1179,7 +1217,7 @@ export default function MarkdownPreview({
                   style={{ color: colors.textSecondary, lineHeight: lineHeight * 0.95 }}
                 />
               ))}
-            </View>
+            </CalloutBlock>
           );
         }
 
