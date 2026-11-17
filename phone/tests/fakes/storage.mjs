@@ -2,6 +2,11 @@
 const store = new Map();
 
 export const KEYS = {
+  VAULTS: 'noteriv:vaults',
+  ACTIVE_VAULT: 'noteriv:activeVault',
+  SETTINGS: 'noteriv:settings',
+  SETUP_COMPLETE: 'noteriv:setupComplete',
+  WORKSPACE: (vaultId) => `noteriv:workspace:${vaultId}`,
   GITHUB_TOKEN: (vaultId) => `noteriv:ghToken:${vaultId}`,
   GIT_TOKEN: (vaultId) => `noteriv:gitToken:${vaultId}`,
 };

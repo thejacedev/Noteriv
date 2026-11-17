@@ -5,6 +5,7 @@ import { ThemeDefinition } from '@/constants/theme';
 import { loadCustomThemes } from '@/lib/community';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -23,6 +24,21 @@ function AppThemeWrapper({ children }: { children: React.ReactNode }) {
       {children}
     </ThemeProvider>
   );
+}
+
+/**
+ * Writes the open note when the app leaves the foreground. Android may close
+ * an app in the background without a word, and the unsaved text with it.
+ */
+function SaveOnBackground() {
+  const { flushFile } = useApp();
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushFile();
+    });
+    return () => subscription.remove();
+  }, [flushFile]);
+  return null;
 }
 
 function ThemedNavigation() {
@@ -190,6 +206,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppProvider>
+        <SaveOnBackground />
         <AppThemeWrapper>
           <ThemedNavigation />
         </AppThemeWrapper>

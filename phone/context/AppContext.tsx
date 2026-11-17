@@ -4,6 +4,8 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import * as VaultOps from '@/lib/vault';
 import * as FS from '@/lib/file-system';
 import * as GitSync from '@/lib/provider-sync';
+import { NoteSession } from '@/lib/note-session';
+import { conflictCopyPath, vaultFileUri, vaultRelativePath } from '@/lib/sync-state';
 
 interface AppContextType {
   // Vault
@@ -28,6 +30,8 @@ interface AppContextType {
   setCurrentFile: (path: string | null) => void;
   setContent: (content: string) => void;
   saveFile: () => Promise<boolean>;
+  /** Write the open note if it has unsaved text. True when nothing is left unsaved. */
+  flushFile: () => boolean;
   files: FileEntry[];
   currentDir: string;
   setCurrentDir: (dir: string) => void;
@@ -71,6 +75,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentDirRef = useRef(currentDir);
   currentDirRef.current = currentDir;
 
+  // The open note's latest text lives outside React state. A timer, the back
+  // button or a sync runs with the state of an older render, and used to save
+  // the text of that render: auto-save wrote the note as it was after the
+  // first keystroke and then marked it saved. Every save goes through here.
+  const [note] = useState(() => new NoteSession(FS.writeFile));
+
+  const flushFile = useCallback((): boolean => {
+    const ok = note.flush();
+    setIsDirty(note.dirty);
+    return ok;
+  }, [note]);
+
+  /**
+   * After a sync pulled: if it replaced the open note's file, show the new
+   * text. If the editor has unsaved text by then, that text stays and the
+   * pulled version is kept beside the note as a conflict copy, the way sync
+   * itself keeps both.
+   */
+  const takeOpenNoteFromDisk = useCallback(async (vaultPath: string) => {
+    const file = note.file;
+    if (!file) return;
+    const onDisk = await FS.readFile(file);
+    if (note.file !== file) return; // another note was opened meanwhile
+    const change = note.reconcile(onDisk);
+    if (change === 'reloaded') {
+      setContentState(note.content);
+      setIsDirty(false);
+    } else if (change === 'conflict' && onDisk !== null) {
+      const copyPath = conflictCopyPath(vaultRelativePath(vaultPath, file));
+      const copy = vaultFileUri(vaultPath, copyPath);
+      const existing = await FS.readFile(copy);
+      if (existing === null) {
+        FS.writeFile(copy, onDisk);
+      } else if (existing !== onDisk) {
+        // A copy from earlier today holds something else: keep both.
+        const time = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+        FS.writeFile(vaultFileUri(vaultPath, copyPath.replace(/\)(\.[a-z]+)?$/i, ` ${time})$1`)), onDisk);
+      }
+    }
+  }, [note]);
+
   // Initialize
   useEffect(() => {
     (async () => {
@@ -108,13 +153,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
     if (settings.autoSaveInterval > 0 && currentFile) {
       autoSaveTimer.current = setInterval(() => {
-        if (isDirty) saveFile();
+        flushFile();
       }, settings.autoSaveInterval * 1000);
     }
     return () => {
       if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
     };
-  }, [settings.autoSaveInterval, currentFile, isDirty]);
+  }, [settings.autoSaveInterval, currentFile, flushFile]);
 
   // Save workspace on changes
   useEffect(() => {
@@ -137,8 +182,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.log('[Noteriv] Auto-pulling from remote...');
         const result = await GitSync.pull(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
         console.log(`[Noteriv] Pull complete: ${result.pulled} files, ${result.errors.length} errors`);
-        if (result.pulled > 0 && currentDirRef.current) {
-          setFiles(FS.readDir(currentDirRef.current));
+        if (result.pulled > 0) {
+          await takeOpenNoteFromDisk(vault.path);
+          if (currentDirRef.current) setFiles(FS.readDir(currentDirRef.current));
         }
       } catch (err) {
         console.warn('[Noteriv] Auto-pull failed:', err);
@@ -163,19 +209,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const token = await GitSync.getVaultToken(vault.id);
         if (!token) return;
-        // Save current file before sync
-        if (isDirty && currentFile) {
-          FS.writeFile(currentFile, content);
-          setIsDirty(false);
-        }
+        // Sync compares what is on disk, so the open note's latest text goes
+        // there first.
+        flushFile();
         const result = await GitSync.sync(vault.path, token, vault.gitRemote!, vault.gitBranch || undefined, vault.gitProvider);
         if (result.errors.length > 0) {
           console.warn('[Noteriv] Sync errors:', result.errors);
         }
         // Pulled changes include notes deleted on the remote; refresh so the
-        // list doesn't keep offering a note that no longer exists.
-        if (result.pulled > 0 && currentDirRef.current) {
-          setFiles(FS.readDir(currentDirRef.current));
+        // list doesn't keep offering a note that no longer exists. A newer
+        // version of the open note has to reach the editor too, or the next
+        // edit would write the old text back over it.
+        if (result.pulled > 0) {
+          await takeOpenNoteFromDisk(vault.path);
+          if (currentDirRef.current) setFiles(FS.readDir(currentDirRef.current));
         }
       } catch {
       } finally {
@@ -214,6 +261,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const v = await VaultOps.getActiveVault();
     if (v) {
       hasPulledOnOpen.current = false; // Reset so new vault triggers pull
+      flushFile();
+      note.open(null, '');
       setVault(v);
       setCurrentDirState(v.path);
       setCurrentFileState(null);
@@ -222,7 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const ws = await VaultOps.loadWorkspace(v.id);
       setWorkspace(ws);
     }
-  }, [vault, workspace]);
+  }, [vault, workspace, note, flushFile]);
 
   const createVaultFn = useCallback(async (name: string) => {
     const v = await VaultOps.createVault(name);
@@ -259,16 +308,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setCurrentFile = useCallback(async (path: string | null) => {
-    // Save current file if dirty
-    if (isDirty && currentFile) {
-      FS.writeFile(currentFile, content);
-      setIsDirty(false);
-    }
+    // The note being left is saved first. Opening the note that is already
+    // open means "read it again" (a snapshot was just restored over it), so
+    // its unsaved text must not be written back over the file.
+    if (path !== note.file) flushFile();
 
     setCurrentFileState(path);
     if (path) {
       const fileContent = await FS.readFile(path);
-      setContentState(fileContent ?? '');
+      note.open(path, fileContent ?? '');
+      setContentState(note.content);
       setIsDirty(false);
       // Update open tabs
       setWorkspace((prev) => {
@@ -278,22 +327,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { ...prev, openTabs: tabs, activeTab: path };
       });
     } else {
+      note.open(null, '');
       setContentState('');
       setIsDirty(false);
     }
-  }, [currentFile, content, isDirty]);
+  }, [note, flushFile]);
 
   const setContent = useCallback((newContent: string) => {
+    note.edit(newContent);
     setContentState(newContent);
     setIsDirty(true);
-  }, []);
+  }, [note]);
 
   const saveFile = useCallback(async (): Promise<boolean> => {
-    if (!currentFile) return false;
-    const ok = FS.writeFile(currentFile, content);
-    if (ok) setIsDirty(false);
+    const ok = note.save();
+    setIsDirty(note.dirty);
     return ok;
-  }, [currentFile, content]);
+  }, [note]);
 
   const setCurrentDir = useCallback((dir: string) => {
     setCurrentDirState(dir);
@@ -325,6 +375,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCurrentFile,
         setContent,
         saveFile,
+        flushFile,
         files,
         currentDir,
         setCurrentDir,

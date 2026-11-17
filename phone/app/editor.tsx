@@ -36,6 +36,7 @@ export default function EditorScreen() {
     setContent,
     setCurrentFile,
     saveFile,
+    flushFile,
     isDirty,
     settings,
     workspace,
@@ -67,11 +68,11 @@ export default function EditorScreen() {
   }, [siblingNotes, currentFile]);
 
   const navigateToNote = useCallback(async (notePath: string) => {
-    if (isDirty) await saveFile();
+    flushFile();
     hasLoaded.current = false;
     setCurrentFile(null);
     router.replace({ pathname: '/editor', params: { path: notePath } });
-  }, [isDirty, saveFile, setCurrentFile, router]);
+  }, [flushFile, setCurrentFile, router]);
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-30, 30])
@@ -94,6 +95,15 @@ export default function EditorScreen() {
     }
   }, [path, setCurrentFile]);
 
+  // Leaving the note saves it. flushFile writes the text that is on the
+  // screen now; this used to save the text of an older render when it was
+  // reached through the system back button.
+  const handleBack = useCallback(async () => {
+    flushFile();
+    setCurrentFile(null);
+    router.back();
+  }, [flushFile, setCurrentFile, router]);
+
   // Handle hardware back button
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -104,15 +114,7 @@ export default function EditorScreen() {
       }
     );
     return () => subscription.remove();
-  }, [isDirty]);
-
-  const handleBack = useCallback(async () => {
-    if (isDirty) {
-      await saveFile();
-    }
-    setCurrentFile(null);
-    router.back();
-  }, [isDirty, saveFile, setCurrentFile, router]);
+  }, [handleBack]);
 
   const handleSave = useCallback(async () => {
     const ok = await saveFile();
@@ -164,11 +166,11 @@ export default function EditorScreen() {
     if (!vault) return;
     const resolved = await resolveWikiLink(name, vault.path);
     if (resolved) {
-      if (isDirty) await saveFile();
+      flushFile();
       setCurrentFile(null);
       router.push({ pathname: '/editor', params: { path: resolved } });
     }
-  }, [vault, isDirty, saveFile, setCurrentFile, router]);
+  }, [vault, flushFile, setCurrentFile, router]);
 
   const handleLint = useCallback(async () => {
     setMenuVisible(false);

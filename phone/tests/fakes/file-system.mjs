@@ -41,3 +41,19 @@ export async function listAllMarkdownFiles(dir) {
   }
   return found;
 }
+
+// What lib/vault.ts and context/AppContext.tsx call besides reading and
+// writing. Folders are not modelled: a listing is empty.
+export function ensureVaultsDir() {}
+
+export function getVaultPath(name) {
+  return `file:///data/vaults/${encodeURIComponent(name)}/`;
+}
+
+export function createDir() {
+  return true;
+}
+
+export function readDir() {
+  return [];
+}
