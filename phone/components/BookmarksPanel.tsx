@@ -173,7 +173,7 @@ export default function BookmarksPanel({
         ListFooterComponent={
           bookmarks.length > 0 ? (
             <Text style={[styles.swipeHint, { color: colors.textMuted }]}>Swipe left to remove</Text>
-          ) : null
+          ) : undefined
         }
       />
     </View>

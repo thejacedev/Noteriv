@@ -12,6 +12,7 @@ import {
   Animated,
   Platform,
   Keyboard,
+  type TextInputInstance,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +34,7 @@ export default function VaultSwitcher({ visible, onClose }: VaultSwitcherProps) 
   const [isCreating, setIsCreating] = useState(false);
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   sheet: {

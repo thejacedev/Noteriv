@@ -86,8 +86,8 @@ Noteriv is built with modern web technologies on both platforms:
 
 | Layer | Desktop | Mobile |
 |---|---|---|
-| Framework | Next.js 16 | Expo 54 |
-| UI | React 19 | React Native 0.81 |
+| Framework | Next.js 16 | Expo 58 |
+| UI | React 19 | React Native 0.88 |
 | Editor | CodeMirror 6 | TextInput + custom renderer |
 | Runtime | Tauri 2 (Rust) | Expo Router 6 |
 | File I/O | Rust std::fs | expo-file-system |

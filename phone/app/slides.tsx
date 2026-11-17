@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Dimensions,
   FlatList,
-  ViewToken,
+  type ListViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -28,10 +28,9 @@ export default function SlidesScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-        setCurrentIndex(viewableItems[0].index);
-      }
+    ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+      const index = viewableItems[0]?.index;
+      if (typeof index === 'number') setCurrentIndex(index);
     },
     []
   );

@@ -22,8 +22,8 @@ To run the app from source instead, see [Mobile Setup](./setup.md).
 
 The mobile app is built on the following technologies:
 
-- **React Native 0.81** for native UI rendering on Android and iOS.
-- **Expo SDK 54** for build tooling, file system access, routing, and device APIs.
+- **React Native 0.88** for native UI rendering on Android and iOS.
+- **Expo SDK 58** for build tooling, file system access, routing, and device APIs.
 - **Expo Router** for file-based navigation between screens.
 - **React Native Gesture Handler** for swipe navigation between notes, pull-to-refresh, and other touch interactions.
 - **React Native WebView** for rendering math (KaTeX), Mermaid diagrams, and syntax-highlighted code blocks in the preview.

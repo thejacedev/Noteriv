@@ -37,7 +37,7 @@ export function writeFile(filePath: string, content: string): boolean {
     if (!parentDir.exists) {
       parentDir.create({ intermediates: true });
     }
-    file.write(content);
+    file.writeSync(content);
     return true;
   } catch {
     return false;
@@ -100,10 +100,10 @@ export function movePath(oldPath: string, newPath: string): boolean {
     const pathInfo = Paths.info(oldPath);
     if (pathInfo.isDirectory) {
       const dir = new Directory(oldPath);
-      dir.move(new Directory(newPath));
+      dir.moveSync(new Directory(newPath));
     } else {
       const file = new File(oldPath);
-      file.move(new File(newPath));
+      file.moveSync(new File(newPath));
     }
     return true;
   } catch {
@@ -224,7 +224,7 @@ export function trashFile(filePath: string, vaultPath: string): boolean {
     // Avoid name collisions by prefixing timestamp
     const base = vaultPath.replace(/\/$/, '') + '/.trash/';
     const destName = Date.now() + '_' + file.name;
-    file.move(new File(base + destName));
+    file.moveSync(new File(base + destName));
     return true;
   } catch {
     return false;
@@ -237,7 +237,7 @@ export function restoreFromTrash(trashedPath: string, vaultPath: string): boolea
     if (!file.exists) return false;
     // Strip timestamp prefix (e.g. 1234567890_note.md -> note.md)
     const originalName = file.name.replace(/^\d+_/, '');
-    file.move(new File(vaultPath.replace(/\/$/, '') + '/' + originalName));
+    file.moveSync(new File(vaultPath.replace(/\/$/, '') + '/' + originalName));
     return true;
   } catch {
     return false;

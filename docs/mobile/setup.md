@@ -11,7 +11,7 @@ This guide walks you through setting up the Noteriv mobile app for local develop
 
 Before you begin, make sure you have the following installed:
 
-- **Node.js 18+** -- Download from [nodejs.org](https://nodejs.org/) or install via your package manager.
+- **Node.js 22.13+** -- Download from [nodejs.org](https://nodejs.org/) or install via your package manager.
 - **npm** -- Comes bundled with Node.js.
 - **Expo Go** -- Install the Expo Go app on your phone from the App Store or Google Play. This lets you run the development build without compiling native code.
 - **Git** -- For cloning the repository.
@@ -179,7 +179,7 @@ npx expo start --clear
 
 ### Build fails with "SDK version mismatch"
 
-Make sure you are using a compatible version of Expo Go. The app currently targets Expo SDK 54. Update Expo Go on your phone to the latest version.
+Make sure you are using a compatible version of Expo Go. The app currently targets Expo SDK 58. Update Expo Go on your phone to the latest version.
 
 ## Next Steps
 

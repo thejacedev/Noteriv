@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Text,
   Platform,
-  NativeSyntheticEvent,
-  TextInputSelectionChangeEventData,
+  type TextInputSelectionChangeEvent,
   KeyboardAvoidingView,
+  type TextInputInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -137,11 +137,11 @@ const toolbarActions: ToolbarAction[] = [
 
 export default function MarkdownEditor({ content, onChange, fontSize, focusMode, onToggleFocusMode }: MarkdownEditorProps) {
   const { colors } = useTheme();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [selection, setSelection] = useState<Selection>({ start: 0, end: 0 });
 
   const handleSelectionChange = useCallback(
-    (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+    (e: TextInputSelectionChangeEvent) => {
       setSelection(e.nativeEvent.selection);
     },
     []

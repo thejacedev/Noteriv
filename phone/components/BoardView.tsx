@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
+  type TextInputInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -48,8 +49,8 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
   const [newCardText, setNewCardText] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
-  const editRef = useRef<TextInput>(null);
-  const newCardRef = useRef<TextInput>(null);
+  const editRef = useRef<TextInputInstance>(null);
+  const newCardRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     setBoard(parseBoard(content));

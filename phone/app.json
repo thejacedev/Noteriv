@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "noteriv",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ironstacksoftware.noteriv",
@@ -20,7 +19,6 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#101030"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.ironstacksoftware.noteriv"
     },

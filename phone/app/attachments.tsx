@@ -123,7 +123,7 @@ export default function AttachmentsScreen() {
       const destPath = `${attachDir.endsWith('/') ? attachDir : attachDir + '/'}${asset.name}`;
       const source = new ExpoFile(asset.uri);
       const dest = new ExpoFile(destPath);
-      source.move(dest);
+      source.moveSync(dest);
 
       loadAttachments();
     } catch (err) {

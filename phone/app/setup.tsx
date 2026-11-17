@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Switch,
   Linking,
+  type TextInputInstance,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -64,8 +65,8 @@ export default function SetupScreen() {
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const inputRef = useRef<TextInput>(null);
-  const tokenRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
+  const tokenRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     if (vaultName && !newRepoName) {

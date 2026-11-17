@@ -222,7 +222,8 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.token.outputs.present == 'true'
         with:
-          node-version: 20
+          # Expo SDK 58 needs Node 22.13 or later.
+          node-version: 22
           cache: npm
           cache-dependency-path: phone/package-lock.json
 

@@ -36,7 +36,7 @@ export default function PublishScreen() {
       const safeName = fileName.replace(/[^a-zA-Z0-9-_ ]/g, '');
       const tmpPath = `${Paths.cache.uri}/${safeName}.html`;
       const file = new File(tmpPath);
-      file.write(html);
+      file.writeSync(html);
       await shareAsync(tmpPath, {
         mimeType: 'text/html',
         dialogTitle: `Share ${fileName}`,

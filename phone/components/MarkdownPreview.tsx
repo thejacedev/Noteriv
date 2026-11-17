@@ -8,6 +8,7 @@ import {
   Platform,
   Image,
   LayoutChangeEvent,
+  type ScrollViewInstance,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
@@ -1032,7 +1033,7 @@ export default function MarkdownPreview({
   const { colors } = useTheme();
   const blocks = useMemo(() => parseBlocks(content), [content]);
   const lineHeight = fontSize * 1.65;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const headingYMap = useRef<Map<number, number>>(new Map());
 
   // Maps a fenced code-block language (lowercased) to the absolute path of

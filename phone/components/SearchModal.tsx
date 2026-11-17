@@ -11,6 +11,7 @@ import {
   Keyboard,
   Platform,
   KeyboardAvoidingView,
+  type TextInputInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -81,7 +82,7 @@ export default function SearchModal({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load all files when modal opens
@@ -352,7 +353,7 @@ export default function SearchModal({
                 <Text style={[styles.resultCount, { color: colors.textMuted }]}>
                   {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
                 </Text>
-              ) : null
+              ) : undefined
             }
           />
         )}

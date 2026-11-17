@@ -11,6 +11,7 @@ import {
   Animated,
   Platform,
   KeyboardAvoidingView,
+  type TextInputInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -35,7 +36,7 @@ export default function CreateModal({
   const [name, setName] = useState('');
   const [createType, setCreateType] = useState<CreateType>('file');
   const [isCreating, setIsCreating] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   menuOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     top: 56,
     zIndex: 99,
   },

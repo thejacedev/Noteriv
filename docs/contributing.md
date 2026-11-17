@@ -55,7 +55,7 @@ Documentation improvements are valuable contributions. Fix typos, add missing de
 
 ### Prerequisites
 
-- **Node.js 20.19+** with npm
+- **Node.js 20.19+** with npm (22.13+ to work on the phone app)
 - **Git**
 - A code editor (VS Code, Cursor, or any editor you prefer)
 
@@ -187,7 +187,7 @@ Key abstractions:
 
 The mobile app uses:
 
-- **Expo SDK 54** for build tooling and device APIs.
+- **Expo SDK 58** for build tooling and device APIs.
 - **Expo Router** for file-based navigation.
 - **React Native Gesture Handler** for touch interactions.
 - **React Native WebView** for rendering math, Mermaid diagrams, and syntax-highlighted code.
