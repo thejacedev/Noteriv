@@ -21,6 +21,7 @@ import {
   updateCard,
   toggleCard,
   moveCard,
+  hiddenLineCount,
   type BoardData,
   type BoardCard,
   type BoardColumn,
@@ -32,6 +33,11 @@ interface BoardViewProps {
 }
 
 const COL_WIDTH = Dimensions.get('window').width * 0.7;
+
+/** "1 line that the board does not show", for the delete questions. */
+function hiddenLinesLabel(count: number): string {
+  return `${count} ${count === 1 ? 'line' : 'lines'} that the board does not show`;
+}
 
 export default function BoardView({ content, onChange }: BoardViewProps) {
   const { colors } = useTheme();
@@ -66,7 +72,14 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
   }, [board, newCardText, emit]);
 
   const handleRemoveCard = useCallback((colId: string, cardId: string) => {
-    Alert.alert('Delete Card', 'Remove this card?', [
+    // Sub-items and notes under a card are in the file but not on the board,
+    // so deleting the card would take them without a word.
+    const card = board.columns.find((c) => c.id === colId)?.cards.find((c) => c.id === cardId);
+    const hidden = card ? hiddenLineCount(card) : 0;
+    const msg = hidden > 0
+      ? `Remove this card? ${hiddenLinesLabel(hidden)} under it will be removed with it.`
+      : 'Remove this card?';
+    Alert.alert('Delete Card', msg, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => emit(removeCard(board, colId, cardId)) },
     ]);
@@ -110,9 +123,12 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
   const handleRemoveColumn = useCallback((colId: string) => {
     const col = board.columns.find((c) => c.id === colId);
     if (!col) return;
-    const msg = col.cards.length > 0
-      ? `Delete "${col.title}" and its ${col.cards.length} cards?`
-      : `Delete "${col.title}"?`;
+    const hidden = hiddenLineCount(col);
+    const cards = col.cards.length > 0
+      ? ` and its ${col.cards.length} ${col.cards.length === 1 ? 'card' : 'cards'}`
+      : '';
+    const lines = hidden > 0 ? ` ${hiddenLinesLabel(hidden)} will be removed with it.` : '';
+    const msg = `Delete "${col.title}"${cards}?${lines}`;
     Alert.alert('Delete Column', msg, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => emit(removeColumn(board, colId)) },
@@ -192,11 +208,23 @@ export default function BoardView({ content, onChange }: BoardViewProps) {
                       </TouchableOpacity>
                     )}
 
-                    {(card.tags.length > 0 || card.dueDate) && (
+                    {(card.tags.length > 0 || card.dueDate || (card.meta?.length ?? 0) > 0) && (
                       <View style={styles.tagRow}>
                         {card.tags.map((tag) => (
                           <Text key={tag} style={[styles.tag, { color: getTagColor(tag), backgroundColor: getTagColor(tag) + '18' }]}>
                             #{tag}
+                          </Text>
+                        ))}
+                        {/* Annotations other than the due date, such as @estimate(90):
+                            the key and the value as they are written in the file. A
+                            key may be written twice, so the place is part of the key. */}
+                        {(card.meta ?? []).map((meta, i) => (
+                          <Text
+                            key={`${meta.key}-${i}`}
+                            style={[styles.tag, { color: colors.textSecondary, backgroundColor: colors.textMuted + '22' }]}
+                          >
+                            <Text style={{ color: colors.textMuted }}>{meta.value === '' ? meta.key : `${meta.key}: `}</Text>
+                            {meta.value}
                           </Text>
                         ))}
                         {card.dueDate && (

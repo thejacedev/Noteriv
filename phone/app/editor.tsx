@@ -23,7 +23,7 @@ import MarkdownPreview from '@/components/MarkdownPreview';
 import BoardView from '@/components/BoardView';
 import { rename as renameFile, listAllMarkdownFiles } from '@/lib/file-system';
 import { lintMarkdown, LintWarning } from '@/lib/markdown-lint';
-import { isBoardContent } from '@/lib/board-utils';
+import { isBoardContent, isBoardFile } from '@/lib/board-utils';
 import { resolveWikiLink } from '@/lib/wiki-links';
 
 export default function EditorScreen() {
@@ -51,6 +51,10 @@ export default function EditorScreen() {
   const [lintVisible, setLintVisible] = useState(false);
   const [lintWarnings, setLintWarnings] = useState<LintWarning[]>([]);
   const hasLoaded = useRef(false);
+
+  // A board is a file named *.board.md or one whose front matter says
+  // "board: true", as on the desktop.
+  const isBoard = (!!currentFile && isBoardFile(currentFile)) || isBoardContent(content);
 
   // Sibling notes for swipe navigation
   const siblingNotes = useMemo(() => {
@@ -384,7 +388,7 @@ export default function EditorScreen() {
       )}
 
       {/* Word count bar + note position */}
-      {!focusMode && !isBoardContent(content) && (
+      {!focusMode && !isBoard && (
         <View style={[styles.statsBar, { backgroundColor: colors.bgSecondary, borderTopColor: colors.border }]}>
           <Text style={[styles.statsText, { color: colors.textMuted }]}>
             {content.trim() ? content.trim().split(/\s+/).length : 0} words
@@ -406,7 +410,7 @@ export default function EditorScreen() {
       {/* Editor / Preview / Board */}
       <GestureDetector gesture={swipeGesture}>
         <View style={styles.editorContainer}>
-          {isBoardContent(content) ? (
+          {isBoard ? (
             <BoardView content={content} onChange={setContent} />
           ) : workspace.viewMode === 'edit' ? (
             <MarkdownEditor
