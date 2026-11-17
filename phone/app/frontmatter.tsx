@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
+import { readFile } from '@/lib/file-system';
 import {
-  parseFrontmatter,
-  serializeFrontmatter,
-  hasFrontmatter,
-} from '@/lib/frontmatter';
+  hasInvalidProperties,
+  hasProperties,
+  parsePropertyTypes,
+  type PropertyType,
+} from '@/lib/properties';
+import { applyRows, newRow, toRows, type PropertyRow } from '@/lib/property-edits';
 
 const COMMON_PROPERTIES = [
   'title',
@@ -30,25 +33,33 @@ const COMMON_PROPERTIES = [
   'draft',
 ];
 
-interface PropertyRow {
-  key: string;
-  value: string;
-}
-
 export default function FrontmatterScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { content, setContent } = useApp();
+  const { content, setContent, vault } = useApp();
 
-  const parsed = useMemo(() => parseFrontmatter(content), [content]);
-  const hasExisting = useMemo(() => hasFrontmatter(content), [content]);
+  const hasExisting = useMemo(() => hasProperties(content), [content]);
+  // A block that is not valid YAML is never rewritten: the screen only says so.
+  const unreadable = useMemo(() => hasInvalidProperties(content), [content]);
 
-  const [properties, setProperties] = useState<PropertyRow[]>(() => {
-    return Object.entries(parsed.data).map(([key, value]) => ({
-      key,
-      value: Array.isArray(value) ? value.join(', ') : String(value),
-    }));
-  });
+  const [properties, setProperties] = useState<PropertyRow[]>(() => toRows(content));
+  // The keys of the properties whose rows were deleted here. Save removes
+  // these and nothing else, so it never removes a property it did not show.
+  const [removed, setRemoved] = useState<string[]>([]);
+
+  // The types the vault has recorded for its properties (the desktop writes
+  // them), so a new "people" property is a list here too.
+  const [knownTypes, setKnownTypes] = useState<Record<string, PropertyType>>({});
+  useEffect(() => {
+    if (!vault) return;
+    let current = true;
+    readFile(`${vault.path.replace(/\/$/, '')}/.noteriv/types.json`).then((text) => {
+      if (current) setKnownTypes(parsePropertyTypes(text));
+    });
+    return () => {
+      current = false;
+    };
+  }, [vault]);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -74,52 +85,42 @@ export default function FrontmatterScreen() {
   }, []);
 
   const handleAddProperty = useCallback((key?: string) => {
-    setProperties((prev) => [...prev, { key: key ?? '', value: '' }]);
+    setProperties((prev) => [...prev, newRow(key ?? '')]);
     setShowSuggestions(false);
   }, []);
 
   const handleDeleteProperty = useCallback((index: number) => {
+    const original = properties[index]?.original;
+    if (original) setRemoved((prev) => [...prev, original.key]);
     setProperties((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [properties]);
 
   const handleSave = useCallback(() => {
-    const data: Record<string, any> = {};
-
-    for (const prop of properties) {
-      const key = prop.key.trim();
-      if (!key) continue;
-
-      let value: any = prop.value;
-
-      // Parse arrays (comma-separated values in brackets or with commas)
-      if (value.includes(',')) {
-        const items = value.split(',').map((s: string) => s.trim()).filter(Boolean);
-        if (items.length > 1) {
-          value = items;
-        }
-      }
-
-      // Parse booleans
-      if (value === 'true') value = true;
-      else if (value === 'false') value = false;
-      // Parse numbers
-      else if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
-        value = Number(value);
-      }
-
-      data[key] = value;
-    }
-
-    const newContent = serializeFrontmatter(data, parsed.body);
-    setContent(newContent);
+    // Only what was changed here is changed in the note; the rest of the
+    // block stays as it was written (see lib/property-edits.ts).
+    setContent(applyRows(content, properties, { removed, known: knownTypes }));
     router.back();
-  }, [properties, parsed.body, setContent, router]);
+  }, [content, properties, removed, knownTypes, setContent, router]);
 
   const handleAddFrontmatter = useCallback(() => {
-    setProperties([{ key: 'title', value: '' }]);
+    setProperties([newRow('title')]);
   }, []);
 
   const styles = makeStyles(colors);
+
+  if (unreadable) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.empty}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>Properties cannot be read</Text>
+          <Text style={styles.emptySubtitle}>
+            The block at the top of this note is not valid YAML, so it is left as it is. Fix it in the note&apos;s text.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // No frontmatter and no properties being edited
   if (!hasExisting && properties.length === 0) {
@@ -162,24 +163,32 @@ export default function FrontmatterScreen() {
         {/* Property rows */}
         {properties.map((prop, index) => (
           <View key={index} style={styles.propertyRow}>
-            <View style={styles.propertyInputs}>
-              <TextInput
-                style={styles.keyInput}
-                value={prop.key}
-                onChangeText={(text) => handleUpdateKey(index, text)}
-                placeholder="key"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TextInput
-                style={styles.valueInput}
-                value={prop.value}
-                onChangeText={(text) => handleUpdateValue(index, text)}
-                placeholder="value"
-                placeholderTextColor={colors.textMuted}
-                autoCorrect={false}
-              />
+            <View style={styles.propertyBody}>
+              <View style={styles.propertyInputs}>
+                <TextInput
+                  style={styles.keyInput}
+                  value={prop.key}
+                  onChangeText={(text) => handleUpdateKey(index, text)}
+                  placeholder="key"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TextInput
+                  style={[styles.valueInput, !prop.editable && styles.valueInputLocked]}
+                  value={prop.value}
+                  onChangeText={(text) => handleUpdateValue(index, text)}
+                  placeholder="value"
+                  placeholderTextColor={colors.textMuted}
+                  autoCorrect={false}
+                  editable={prop.editable}
+                />
+              </View>
+              {!prop.editable && (
+                <Text style={styles.lockedHint}>
+                  Too long for one line here. Edit it in the note&apos;s text.
+                </Text>
+              )}
             </View>
             <TouchableOpacity
               style={styles.deletePropertyBtn}
@@ -281,10 +290,20 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: 8,
       marginBottom: 10,
     },
-    propertyInputs: {
+    propertyBody: {
       flex: 1,
+    },
+    propertyInputs: {
       flexDirection: 'row',
       gap: 8,
+    },
+    valueInputLocked: {
+      color: colors.textMuted,
+    },
+    lockedHint: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 4,
     },
     keyInput: {
       flex: 2,
