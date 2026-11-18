@@ -54,21 +54,17 @@ export function ancestorFoldersOf(path: string): string[] {
   return folders;
 }
 
-/** The separator to put after a folder: its own, so the result reads like the paths the system lists. */
-function separatorAfter(folder: string): string {
-  if (!isWindowsPath(folder)) return "/";
-  return folder.includes("\\") || !folder.includes("/") ? "\\" : "/";
-}
-
 /**
  * The full path of `name` inside `folder`. On Windows the two are joined
- * with a backslash, so the path is the same text the file list gives for
- * that file, and a tab opened from one is found again from the other.
+ * with a backslash, whatever the folder itself is written with: that is
+ * how the system joins them, so the path is the same text the file list
+ * gives for that file, and a tab opened from one is found again from the
+ * other.
  */
 export function childPath(folder: string, name: string): string {
-  const separator = separatorAfter(folder);
-  const trimmed = folder.replace(isWindowsPath(folder) ? /[\\/]+$/ : /\/+$/, "");
-  return `${trimmed}${separator}${name}`;
+  const windows = isWindowsPath(folder);
+  const trimmed = folder.replace(windows ? /[\\/]+$/ : /\/+$/, "");
+  return `${trimmed}${windows ? "\\" : "/"}${name}`;
 }
 
 /** The path of a file with another name, in the same folder. */
@@ -94,4 +90,26 @@ export function isInsideFolder(path: string, folder: string): boolean {
 export function pathAfterRename(path: string, oldPath: string, newPath: string): string {
   if (path === oldPath) return newPath;
   return isInsideFolder(path, oldPath) ? newPath + path.slice(oldPath.length) : path;
+}
+
+/**
+ * A path inside `root`, written the way the file list writes it: the root
+ * as it stands, then every part joined with a backslash. Versions up to
+ * 3.0.5 built some paths on Windows with a forward slash
+ * (`C:\Notes/Plan.md`), which names the same file under another text.
+ * A path outside the root, and every path on Linux and macOS, comes back
+ * unchanged.
+ */
+export function listedPath(path: string, root: string): string {
+  if (!isWindowsPath(path) || !isWindowsPath(root)) return path;
+  const flat = (text: string) => text.replace(/\//g, "\\");
+  const base = root.replace(/[\\/]+$/, "");
+  if (!flat(path).startsWith(`${flat(base)}\\`)) return path;
+  const rest = flat(path).slice(base.length + 1).split("\\").filter((part) => part !== "");
+  return [base, ...rest].join("\\");
+}
+
+/** Saved paths as the file list writes them, each file once and in the order they came. */
+export function listedPaths(paths: string[], root: string): string[] {
+  return [...new Set(paths.map((path) => listedPath(path, root)))];
 }

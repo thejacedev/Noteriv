@@ -5,6 +5,8 @@ import {
   fileNameOf,
   isInsideFolder,
   isWindowsPath,
+  listedPath,
+  listedPaths,
   noteTitleOf,
   parentFolderOf,
   pathAfterRename,
@@ -107,7 +109,8 @@ describe("childPath", () => {
   it("joins the way the folder is written", () => {
     expect(childPath("D:\\a\\_temp\\vault", "New.md")).toBe("D:\\a\\_temp\\vault\\New.md");
     expect(childPath("/home/me/vault", "New.md")).toBe("/home/me/vault/New.md");
-    expect(childPath("C:/Notes", "New.md")).toBe("C:/Notes/New.md");
+    // The system joins with a backslash even when the folder was typed with forward slashes.
+    expect(childPath("C:/Notes", "New.md")).toBe("C:/Notes\\New.md");
     expect(childPath("\\\\server\\share", "New.md")).toBe("\\\\server\\share\\New.md");
   });
 
@@ -199,5 +202,50 @@ describe("pathAfterRename", () => {
 
   it("changes the folder once when its name comes up again further down", () => {
     expect(pathAfterRename("/v/a/a/Plan.md", "/v/a", "/v/b")).toBe("/v/b/a/Plan.md");
+  });
+});
+
+describe("listedPath", () => {
+  // The two paths 3.0.5 saved for one note: made with Ctrl+N, then clicked in the file list.
+  const root = "D:\\a\\_temp\\vault-up";
+
+  it("writes a path the app built with a forward slash the way the file list does", () => {
+    expect(listedPath(`${root}/Untitled.md`, root)).toBe(`${root}\\Untitled.md`);
+    expect(listedPath(`${root}/Daily/2026-11-18.md`, root)).toBe(`${root}\\Daily\\2026-11-18.md`);
+    expect(listedPath(`${root}\\Projects/Plan.md`, root)).toBe(`${root}\\Projects\\Plan.md`);
+  });
+
+  it("leaves a path from the file list as it is", () => {
+    expect(listedPath(`${root}\\Untitled.md`, root)).toBe(`${root}\\Untitled.md`);
+  });
+
+  it("keeps the root as it is written", () => {
+    expect(listedPath("C:/Notes/sub/Plan.md", "C:/Notes")).toBe("C:/Notes\\sub\\Plan.md");
+    expect(listedPath("D:/Plan.md", "D:\\")).toBe("D:\\Plan.md");
+  });
+
+  it("leaves a path outside the root alone", () => {
+    expect(listedPath("E:\\other/Plan.md", root)).toBe("E:\\other/Plan.md");
+    expect(listedPath(`${root}2/Plan.md`, root)).toBe(`${root}2/Plan.md`);
+  });
+
+  it("changes nothing on Linux and macOS", () => {
+    expect(listedPath("/home/me/vault/a\\b.md", "/home/me/vault")).toBe("/home/me/vault/a\\b.md");
+    expect(listedPath("/home/me/vault/sub/Plan.md", "/home/me/vault")).toBe("/home/me/vault/sub/Plan.md");
+  });
+});
+
+describe("listedPaths", () => {
+  it("keeps one tab for a note that was saved under two paths", () => {
+    const root = "D:\\a\\_temp\\vault-up";
+    expect(listedPaths([`${root}\\A-crlf.md`, `${root}/Untitled.md`, `${root}\\Untitled.md`], root)).toEqual([
+      `${root}\\A-crlf.md`,
+      `${root}\\Untitled.md`,
+    ]);
+  });
+
+  it("keeps every tab on Linux and macOS", () => {
+    const tabs = ["/home/me/vault/A.md", "/home/me/vault/sub/B.md"];
+    expect(listedPaths(tabs, "/home/me/vault")).toEqual(tabs);
   });
 });

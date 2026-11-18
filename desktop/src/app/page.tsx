@@ -24,7 +24,7 @@ import WorkspacesModal from "@/components/WorkspacesModal";
 import BaseView from "@/components/BaseView";
 import { addText, freeNoteName, headingLine, linkWriteQuestion, type AppRequest } from "@/lib/app-requests";
 import { fromVaultRelative, toVaultRelative } from "@/lib/vault-paths";
-import { ancestorFoldersOf, childPath, fileNameOf, noteTitleOf, parentFolderOf, pathAfterRename, siblingPath } from "@/lib/file-path";
+import { ancestorFoldersOf, childPath, fileNameOf, listedPath, listedPaths, noteTitleOf, parentFolderOf, pathAfterRename, siblingPath } from "@/lib/file-path";
 import ImportModal from "@/components/ImportModal";
 import { NEW_BASE, isBaseFile } from "@/lib/bases-data";
 import {
@@ -605,12 +605,16 @@ function Home() {
     setExpandedFolders(ws.expandedFolders ?? []);
     setFileOrder(ws.fileOrder ?? {});
     setFileViewModes(ws.fileViewModes ?? {});
-    setPinnedTabs(new Set(ws.pinnedTabs ?? []));
+    // Versions up to 3.0.5 saved some tabs on Windows under a path with a
+    // forward slash, and the same note again under the path the file list
+    // gives it. Each note comes back once, under the file list's path.
+    setPinnedTabs(new Set(listedPaths(ws.pinnedTabs ?? [], vault.path)));
 
     // Restore tabs
-    const restoredTabs = await readTabs(ws.openTabs || []);
+    const restoredTabs = await readTabs(listedPaths(ws.openTabs || [], vault.path));
+    const wasActive = ws.activeTab ? listedPath(ws.activeTab, vault.path) : null;
     setTabs(restoredTabs);
-    setActiveTab(ws.activeTab && restoredTabs.some((t) => t.filePath === ws.activeTab) ? ws.activeTab : restoredTabs[0]?.filePath || null);
+    setActiveTab(wasActive && restoredTabs.some((t) => t.filePath === wasActive) ? wasActive : restoredTabs[0]?.filePath || null);
   }, [readTabs]);
 
   // ============================================================
