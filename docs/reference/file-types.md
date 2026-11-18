@@ -22,6 +22,14 @@ Markdown files can contain:
 
 Both `.md` and `.markdown` extensions are treated identically. The `.md` extension is used by default when creating new notes.
 
+#### Line Endings
+
+A note keeps the line endings its file has (after 3.0.3). A note written on Windows, with `\r\n` at the end of each line, is saved with `\r\n`, and only the lines you edit change in the file. Opening such a note does not mark it as changed.
+
+- New notes are written with `\n`.
+- A file that mixes both kinds of line ending is left as it is until you change the note. It is then saved with the kind most of its lines have.
+- Versions up to 3.0.3 show a note with `\r\n` as changed as soon as it is opened, and write `\n` on every line at the next save. With auto-save on, that happens without a key being pressed. Notes rewritten that way are not converted back.
+
 ### .board.md
 
 Board notes are standard markdown files with `board: true` in their frontmatter. They are rendered as Kanban boards instead of regular notes. The `.board.md` extension is a naming convention, not a requirement -- any `.md` file with `board: true` in frontmatter is treated as a board.

@@ -53,8 +53,8 @@ Image syntax (`![alt](url)`) is replaced with the actual image, rendered inline 
 
 You can put a picture into a note without writing the link yourself (after 3.0.3):
 
-- **Paste.** Copy a picture, such as a screenshot or **Copy image** in a browser, and press `Ctrl+V` in the note. The picture is saved in the [attachment folder](../features/file-settings.md#attachment-folder) under a name made of the date and time, such as `pasted-image-20261117-185230.png`, and it is shown at the cursor.
-- **Drop.** Drag image files from your file manager onto the note. Each one is copied into the attachment folder and shown where you let go of it.
+- **Drop.** Drag image files from your file manager onto the note. Each one is copied into the [attachment folder](../features/file-settings.md#attachment-folder) and shown where you let go of it.
+- **Paste.** Copy a picture, such as a screenshot or **Copy image** in a browser, and press `Ctrl+V` in the note. The picture is saved in the attachment folder under a name made of the date and time, such as `pasted-image-20261117-185230.png`, and it is shown at the cursor. This does not work on every system yet: see below.
 
 Things to know:
 
@@ -63,9 +63,10 @@ Things to know:
 - A dropped file keeps its name, with spaces turned into dashes and brackets removed so that the link works: `my cat (1).png` becomes `my-cat-1.png`. If the folder already has a file of that name, a number is added, as in `photo-1.png`. No file is written over.
 - A file that is already in the vault is not copied. The link points to it where it is.
 - If the clipboard holds text as well as a picture, as it does for cells copied from a spreadsheet, the text is pasted.
-- Whether an image file you copied in a file manager can be pasted depends on your system. On Linux it cannot: drag the file onto the note instead.
+- Pasting needs the system to hand the picture to Noteriv, and not every system does. On Linux it worked with WebKitGTK 2.54.2 and did nothing with WebKitGTK 2.50.4, which is the version the AppImage carries and the one Ubuntu 22.04 has. Where `Ctrl+V` does nothing, save the picture to a file and drag it in.
+- An image file you copied in a file manager cannot be pasted on Linux. Drag the file onto the note instead.
 - A drop on any other part of the window, such as the file list, adds nothing.
-- Both also work in [Source Mode](./source-mode.md), where the link is written and the cursor stays behind it. View mode is read-only.
+- In [Source Mode](./source-mode.md) the link is written and the cursor stays behind it. View mode is read-only.
 - Versions up to 3.0.3 cannot paste a picture, and in 3.0.3 an image dropped onto the editor is not added.
 
 ### Links
