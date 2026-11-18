@@ -14,7 +14,7 @@ The mobile app is a work in progress: features land on desktop first, then come 
 ## Install
 
 - **iOS**: [App Store](https://apps.apple.com/app/id6761115699)
-- **Android**: [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the [APK](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk)
+- **Android**: [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the [APK](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk) (version 1.1.0). If you installed an APK from before November 2026, read [Installation](../getting-started/installation.md#mobile-app) before you update.
 
 To run the app from source instead, see [Mobile Setup](./setup.md).
 

@@ -23,7 +23,7 @@ The trade-off is that mobile sync is slower for large vaults (each file requires
 
 ## Setup
 
-> **Which builds have this.** GitLab, Gitea and Forgejo sync was added to the app after the builds on Google Play and the App Store, and the APK kept in the repository, were made. Those builds connect to GitHub only. A build made from the current source has everything on this page.
+> **Which builds have this.** GitLab, Gitea and Forgejo sync needs version 1.1.0 of the app or later. Google Play and the APK kept in the repository have 1.1.0. Version 1.0 connects to GitHub only; if the App Store still shows 1.0, its update to 1.1.0 is on the way.
 
 ### Connecting GitHub
 

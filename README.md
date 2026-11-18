@@ -312,7 +312,7 @@ scoop install noteriv
 
 > **Expo + React Native**: Android, iOS. **Work in progress**: features land on desktop first, then mobile.
 
-The mobile app aims for parity with desktop, adapted for touch. Notes live in the app's document directory and sync through the GitHub REST API. Get it on the [App Store](https://apps.apple.com/app/id6761115699) or [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the [APK](app-apk/noteriv.apk).
+The mobile app aims for parity with desktop, adapted for touch. Notes live in the app's document directory and sync through the GitHub REST API. Get it on the [App Store](https://apps.apple.com/app/id6761115699) or [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the [APK](app-apk/noteriv.apk) (version 1.1.0). That APK is signed with a different key than the one kept here before November 2026: if you installed the older one, sync your notes, uninstall it, then install this one.
 
 <details>
 <summary><b>Mobile vs desktop</b></summary>

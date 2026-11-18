@@ -6,7 +6,7 @@
 #   2. rebuild the SRPM and upload to COPR (see README notes at bottom)
 
 Name:           noteriv
-Version:        2.3.0
+Version:        3.0.5
 Release:        1%{?dist}
 Summary:        Modern markdown editor with plugins, themes, and sync
 
@@ -57,6 +57,10 @@ cp -a usr %{buildroot}/
 %{_datadir}/icons/hicolor/*/apps/noteriv.png
 
 %changelog
+* Wed Nov 18 2026 Jace Sleeman <jace@noteriv.com> - 3.0.5-1
+- Repackage upstream v3.0.5 .deb (the 3.0 line: update notice in Settings,
+  pictures pasted and dropped into notes, Windows line endings kept)
+
 * Fri Jun 19 2026 Jace Sleeman <jace@noteriv.com> - 2.3.0-1
 - Repackage upstream v2.3.0 .deb (any-remote git sync, URL/email autolinks,
   macOS app-menu shortcuts, mobile vault-switcher keyboard fix)

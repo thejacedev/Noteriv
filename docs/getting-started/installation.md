@@ -153,7 +153,9 @@ A `.deb` or `.rpm` copy of 3.0.1 or earlier still shows **Download Update**. It 
 The mobile app for Android and iOS is a work in progress. Features land on desktop first, then come to mobile. See [Mobile App](../mobile/) for what it can do today.
 
 - **iOS**: install from the [App Store](https://apps.apple.com/app/id6761115699).
-- **Android**: install from [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the APK. A prebuilt [`noteriv.apk`](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk) is kept in the repository, and tagged releases attach one as `Noteriv-<version>-android.apk`. To sideload, open the APK on your phone and allow installs from that source when Android asks.
+- **Android**: install from [Google Play](https://play.google.com/store/apps/details?id=com.ironstacksoftware.noteriv), or sideload the APK. A prebuilt [`noteriv.apk`](https://github.com/thejacedev/Noteriv/raw/main/app-apk/noteriv.apk) (version 1.1.0) is kept in the repository. To sideload, open the APK on your phone and allow installs from that source when Android asks.
+
+  Android refuses to install an APK over a copy that was signed with another key. The APK kept in the repository before November 2026 was signed with a different key, and the Google Play copy may be too. If you have one of those, sync your notes first, uninstall it, then install the APK. Uninstalling deletes notes that were not synced.
 
 Mobile notes live in the app's document directory and sync through the GitHub REST API. See [Mobile Sync](../sync/mobile-sync.md) to connect a vault.
 
