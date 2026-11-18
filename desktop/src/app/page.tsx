@@ -130,6 +130,7 @@ import PluginSidebarPanel, { PluginPanelIcon } from "@/components/PluginSidebarP
 import { BUILT_IN_THEMES, applyTheme, loadCustomThemes } from "@/lib/theme-utils";
 import { loadSnippets, refreshSnippets, type CSSSnippet } from "@/lib/css-snippets";
 import { hashContent } from "@/lib/knowledge/knowledge-service";
+import { sameText, withLineEndingsOf } from "@/lib/line-endings";
 import { relativePathFromVault } from "@/lib/knowledge/path-safety";
 import type { KnowledgeSourcePreset } from "@/components/KnowledgeIngest";
 import type { EditorView } from "@codemirror/view";
@@ -168,13 +169,33 @@ function pathIdentity(filePath: string, platform: string): string {
   return platform === "win32" ? normalized.toLocaleLowerCase() : normalized;
 }
 
-async function writeTabGuarded(tab: TabState, content: string) {
-  const baseHash = await hashContent(tab.savedContent);
-  return window.electronAPI.writeFileGuarded(tab.filePath, content, baseHash);
+/**
+ * The text to write for a tab: `content` with the line endings its file has.
+ * The editor holds every note with "\n", so a note that came with "\r\n"
+ * is given those back, and only the lines that were edited change on disk.
+ */
+function textForDisk(tab: TabState, content: string): string {
+  return withLineEndingsOf(content, tab.savedContent);
 }
 
+/**
+ * Write a tab's text, unless its file is no longer what the tab was loaded
+ * from. `written` is what went to disk, which is what the tab is saved as.
+ */
+async function writeTabGuarded(tab: TabState, content: string) {
+  const written = textForDisk(tab, content);
+  const baseHash = await hashContent(tab.savedContent);
+  const result = await window.electronAPI.writeFileGuarded(tab.filePath, written, baseHash);
+  return { ...result, written };
+}
+
+/**
+ * True when a tab holds something its file does not. Line endings do not
+ * count: `savedContent` is the file as it is on disk and `content` is the
+ * editor's text, which has "\n" for every line break.
+ */
 function isTabDirty(tab: TabState): boolean {
-  return tab.content !== tab.savedContent;
+  return !sameText(tab.content, tab.savedContent);
 }
 
 // Closing a tab drops its unsaved edits, so check with the user first.
@@ -433,7 +454,7 @@ function Home() {
   const drawingFile = currentTab?.kind === "drawing" ? currentTab.filePath : null;
   const pdfFile = currentTab?.kind === "pdf" ? currentTab.filePath : null;
   const content = currentTab?.content || "";
-  const isDirty = currentTab ? currentTab.content !== currentTab.savedContent : false;
+  const isDirty = currentTab ? isTabDirty(currentTab) : false;
 
   useEffect(() => {
     const title = activeTab ? `${activeTab} - Noteriv` : activeVault ? `${activeVault.path} - Noteriv` : "Noteriv";
@@ -509,7 +530,7 @@ function Home() {
   const tabInfos = tabs.map((t) => ({
     filePath: t.filePath,
     name: (t.filePath.split("/").pop()?.split("\\").pop() || "Untitled").replace(/\.(md|markdown)$/i, ""),
-    isDirty: t.content !== t.savedContent,
+    isDirty: isTabDirty(t),
   }));
 
   // ============================================================
@@ -778,13 +799,13 @@ function Home() {
     autoSaveRef.current = setInterval(async () => {
       if (!window.electronAPI) return;
       for (const tab of tabs) {
-        if (tab.content !== tab.savedContent && !tab.externalConflict) {
+        if (isTabDirty(tab) && !tab.externalConflict) {
           const result = await writeTabGuarded(tab, tab.content);
           if (result.status === "written") {
             setTabs((prev) =>
               prev.map((t) =>
                 t.filePath === tab.filePath
-                  ? { ...t, savedContent: tab.content, externalConflict: false }
+                  ? { ...t, savedContent: result.written, externalConflict: false }
                   : t
               )
             );
@@ -813,13 +834,13 @@ function Home() {
     const interval = setInterval(async () => {
       if (!window.electronAPI) return;
       for (const tab of tabs) {
-        if (tab.content !== tab.savedContent && !tab.externalConflict && (isBoardFile(tab.filePath) || isBoardContent(tab.content))) {
+        if (isTabDirty(tab) && !tab.externalConflict && (isBoardFile(tab.filePath) || isBoardContent(tab.content))) {
           const result = await writeTabGuarded(tab, tab.content);
           if (result.status === "written") {
             setTabs((prev) =>
               prev.map((t) =>
                 t.filePath === tab.filePath
-                  ? { ...t, savedContent: tab.content, externalConflict: false }
+                  ? { ...t, savedContent: result.written, externalConflict: false }
                   : t
               )
             );
@@ -863,7 +884,7 @@ function Home() {
                 // rename has rewritten the note's links and the tab with them.
                 if (newContent === t.savedContent) return t;
                 // Preserve a local edit that arrived after an external write began.
-                return t.content === t.savedContent
+                return !isTabDirty(t)
                   ? { ...t, content: newContent, savedContent: newContent, externalConflict: false }
                   : { ...t, externalConflict: true };
               })
@@ -992,12 +1013,13 @@ function Home() {
 
   const saveDirtyTabs = useCallback(async (): Promise<boolean> => {
     if (!window.electronAPI) return false;
-    const dirtyTabs = tabs.filter((tab) => !tab.kind && tab.content !== tab.savedContent);
+    const dirtyTabs = tabs.filter((tab) => !tab.kind && isTabDirty(tab));
     const savedContents = new Map<string, string>();
     for (const tab of dirtyTabs) {
+      const written = textForDisk(tab, tab.content);
       if (tab.externalConflict) {
         const overwrite = window.confirm(`The note changed on disk after it was opened:\n\n${tab.filePath}\n\nOverwrite the external version with your unsaved editor content?`);
-        if (!overwrite || !await window.electronAPI.writeFile(tab.filePath, tab.content)) return false;
+        if (!overwrite || !await window.electronAPI.writeFile(tab.filePath, written)) return false;
       } else {
         const result = await writeTabGuarded(tab, tab.content);
         if (result.status !== "written") {
@@ -1009,7 +1031,7 @@ function Home() {
           return false;
         }
       }
-      savedContents.set(tab.filePath, tab.content);
+      savedContents.set(tab.filePath, written);
     }
     if (dirtyTabs.length > 0) {
       setTabs((current) => current.map((tab) =>
@@ -1478,7 +1500,7 @@ function Home() {
       const open = openTabs
         .filter((t) => !t.kind)
         .map((t) => {
-          const unsaved = t.content !== t.savedContent ? t.content : null;
+          const unsaved = isTabDirty(t) ? t.content : null;
           sent.set(t.filePath, unsaved ?? undefined);
           return { path: t.filePath, unsaved };
         });
@@ -1628,7 +1650,7 @@ function Home() {
   const isKnowledgeTargetDirty = useCallback((absolutePath: string) => {
     const normalizedTarget = pathIdentity(absolutePath, platform);
     return tabsRef.current.some((tab) => (
-      tab.content !== tab.savedContent
+      isTabDirty(tab)
       && pathIdentity(tab.filePath, platform) === normalizedTarget
     ));
   }, [platform]);
@@ -1660,7 +1682,7 @@ function Home() {
       const match = refreshed.find((item) => (
         pathIdentity(item.filePath, platform) === tabIdentity && item.content !== null
       ));
-      return match && tab.content === tab.savedContent
+      return match && !isTabDirty(tab)
         ? { ...tab, content: match.content!, savedContent: match.content! }
         : tab;
     }));
@@ -1819,14 +1841,17 @@ function Home() {
         }
       } catch {}
     }
+    // What goes to disk has the file's own line endings, and that is what
+    // the tab is saved as.
+    const written = textForDisk(currentTab, contentToSave);
     const result = overwriteConflict
-      ? { status: await window.electronAPI.writeFile(currentTab.filePath, contentToSave) ? "written" : "error" }
+      ? { status: await window.electronAPI.writeFile(currentTab.filePath, written) ? "written" : "error" }
       : await writeTabGuarded(currentTab, contentToSave);
     if (result.status === "written") {
       setTabs((prev) =>
         prev.map((t) =>
           t.filePath === currentTab.filePath
-            ? { ...t, savedContent: contentToSave, externalConflict: false }
+            ? { ...t, savedContent: written, externalConflict: false }
             : t
         )
       );
@@ -1850,14 +1875,16 @@ function Home() {
     if (!filePath) return;
 
     const contentToSave = currentTab?.content || "";
-    const success = await window.electronAPI.writeFile(filePath, contentToSave);
+    // The copy keeps the line endings of the note it is a copy of.
+    const written = currentTab ? textForDisk(currentTab, contentToSave) : contentToSave;
+    const success = await window.electronAPI.writeFile(filePath, written);
     if (success) {
       // Replace current tab or add new
       if (currentTab) {
         setTabs((prev) =>
           prev.map((t) =>
             t.filePath === currentTab.filePath
-              ? { filePath, content: contentToSave, savedContent: contentToSave }
+              ? { filePath, content: contentToSave, savedContent: written }
               : t
           )
         );
@@ -1917,7 +1944,7 @@ function Home() {
     if (!currentTab || currentTab.kind || !window.electronAPI) return;
     const filePath = currentTab.filePath;
     // The new window reads the file, so what is typed here has to be in it first.
-    if (currentTab.content !== currentTab.savedContent && !await saveDirtyTabs()) return;
+    if (isTabDirty(currentTab) && !await saveDirtyTabs()) return;
     try {
       await window.electronAPI.openPopout(filePath);
       if (move) removeTab(filePath);
@@ -2183,7 +2210,7 @@ function Home() {
 
     const view = viewMode === "view" ? readViewRef.current : editorViewRef.current;
     // Not mounted yet, or still showing the previous note: a later run handles it.
-    if (!view || !view.dom.isConnected || view.state.doc.toString() !== content) return;
+    if (!view || !view.dom.isConnected || !sameText(view.state.doc.toString(), content)) return;
     // Done on this view already. The request stays until it expires so that a
     // view replaced right after opening (a per-file view mode) gets it too.
     if (pending.appliedTo === view) return;
@@ -2487,7 +2514,7 @@ function Home() {
     }
     const target = full;
     const tab = tabs.find((t) => t.filePath === target && !t.kind);
-    if (tab && tab.content !== tab.savedContent) {
+    if (tab && isTabDirty(tab)) {
       // The note is open with changes not saved yet: the text joins them.
       setTabs((prev) => prev.map((t) => (t.filePath === target ? { ...t, content: next } : t)));
     } else {

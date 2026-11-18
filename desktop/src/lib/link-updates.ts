@@ -4,6 +4,8 @@
  * (`src-tauri/src/links.rs`); this keeps the open tabs in step with it.
  */
 
+import { sameText } from "./line-endings";
+
 /** One link as it was written and as it is now, brackets included. */
 export interface LinkChange {
   from: string;
@@ -63,7 +65,9 @@ export function updateOpenNote(
   sentUnsaved: string | undefined
 ): { content: string; savedContent: string } {
   const savedContent = update.saved ?? tab.savedContent;
-  if (tab.content === tab.savedContent) {
+  // Line endings do not make an edit: the editor holds "\n" for a note
+  // whose file has "\r\n".
+  if (sameText(tab.content, tab.savedContent)) {
     return { content: savedContent, savedContent };
   }
   if (sentUnsaved !== undefined && tab.content === sentUnsaved) {

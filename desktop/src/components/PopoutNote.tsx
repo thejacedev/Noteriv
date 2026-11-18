@@ -6,6 +6,7 @@ import { applySettings, mergeSettings } from "@/lib/settings";
 import { BUILT_IN_THEMES, applyTheme, loadCustomThemes } from "@/lib/theme-utils";
 import { setVaultPrefs } from "@/lib/vault-prefs";
 import { hashContent } from "@/lib/knowledge/knowledge-service";
+import { sameText, withLineEndingsOf } from "@/lib/line-endings";
 import "@/styles/popout.css";
 
 const NOTE = /\.(md|markdown)$/i;
@@ -89,9 +90,11 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
   // the meantime, or it was moved or deleted. Saving then would overwrite
   // the other change, or bring a deleted note back, so it stops and asks.
   useEffect(() => {
-    if (content === null || content === saved || stuck?.path === path) return;
+    // Line endings do not make a change: the editor holds "\n" for a note
+    // whose file has "\r\n", and the note is written with its file's own.
+    if (content === null || sameText(content, saved) || stuck?.path === path) return;
     const timer = setTimeout(async () => {
-      const text = content;
+      const text = withLineEndingsOf(content, saved);
       const api = window.electronAPI;
       if (!api) return;
       const result = await api.writeFileGuarded(path, text, await hashContent(saved));
@@ -113,15 +116,15 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
   // Take up a change made to the file elsewhere, unless something here is unsaved.
   useEffect(() => {
     const timer = setInterval(async () => {
-      if (document.hidden || contentRef.current === null || contentRef.current !== savedRef.current) return;
+      if (document.hidden || contentRef.current === null || !sameText(contentRef.current, savedRef.current)) return;
       const text = await window.electronAPI?.readFile(path);
       if (text === undefined) return;
       if (text === null) {
         setProblem({ path, text: "This note is no longer there." });
         return;
       }
-      if (contentRef.current === savedRef.current && text !== savedRef.current) {
-        setDoc((d) => (d && d.path === path && d.content === d.saved ? { path, content: text, saved: text } : d));
+      if (sameText(contentRef.current, savedRef.current) && text !== savedRef.current) {
+        setDoc((d) => (d && d.path === path && sameText(d.content, d.saved) ? { path, content: text, saved: text } : d));
       }
     }, 2000);
     return () => clearInterval(timer);
@@ -132,9 +135,10 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
   // what is pending is saved at once, with the same check as any other save.
   useEffect(() => {
     const flush = () => {
-      const text = contentRef.current;
+      const typed = contentRef.current;
       const before = savedRef.current;
-      if (text === null || text === before || stuckRef.current) return;
+      if (typed === null || sameText(typed, before) || stuckRef.current) return;
+      const text = withLineEndingsOf(typed, before);
       void (async () => {
         const result = await window.electronAPI?.writeFileGuarded(path, text, await hashContent(before));
         if (result?.status === "written") setDoc((d) => (d && d.path === path ? { ...d, saved: text } : d));
@@ -162,8 +166,9 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
 
   /** After a refused save: write what is here over whatever is on disk. */
   const saveAnyway = useCallback(async () => {
-    const text = contentRef.current;
-    if (text === null) return;
+    const typed = contentRef.current;
+    if (typed === null) return;
+    const text = withLineEndingsOf(typed, savedRef.current);
     if (await window.electronAPI?.writeFile(path, text)) {
       setDoc((d) => (d && d.path === path ? { ...d, saved: text } : d));
       setProblem(null);
@@ -189,10 +194,10 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
       const found = files.find((f) => strip(f.fileName) === wanted || strip(f.relativePath) === wanted);
       if (found && found.filePath !== path) {
         // What is typed here is saved before the window moves on.
-        if (contentRef.current !== null && contentRef.current !== savedRef.current) {
+        if (contentRef.current !== null && !sameText(contentRef.current, savedRef.current)) {
           const result = await window.electronAPI.writeFileGuarded(
             path,
-            contentRef.current,
+            withLineEndingsOf(contentRef.current, savedRef.current),
             await hashContent(savedRef.current)
           );
           // Stay on this note when it could not be saved: leaving would lose the text.
@@ -223,7 +228,7 @@ export default function PopoutNote({ initialPath }: { initialPath: string }) {
           </span>
         ) : (
           <span className="popout-state">
-            {problem?.path === path ? problem.text : content === null ? "" : content === saved ? "Saved" : "Saving…"}
+            {problem?.path === path ? problem.text : content === null ? "" : sameText(content, saved) ? "Saved" : "Saving…"}
           </span>
         )}
       </div>

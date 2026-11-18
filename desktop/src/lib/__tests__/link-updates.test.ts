@@ -64,6 +64,16 @@ describe("updateOpenNote", () => {
     });
   });
 
+  it("does not take the editor's line endings for an unsaved edit", () => {
+    // The file has Windows line endings; the editor holds the same note with "\n".
+    const tab = { content: "see [[Inbox]]\n", savedContent: "see [[Inbox]]\r\n" };
+    const onDisk = { ...update, saved: "see [[Home]]\r\n", unsaved: null };
+    expect(updateOpenNote(tab, onDisk, undefined)).toEqual({
+      content: "see [[Home]]\r\n",
+      savedContent: "see [[Home]]\r\n",
+    });
+  });
+
   it("keeps unsaved edits and rewrites the links in them", () => {
     const sent = "see [[Inbox]]\nand a new line with [[Inbox#Top]]\n";
     const tab = { content: sent, savedContent: "see [[Inbox]]\n" };
