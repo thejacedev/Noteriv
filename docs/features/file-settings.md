@@ -55,7 +55,7 @@ The note is created where **New notes go** says. The command has no default shor
 
 **Attachment folder** is the folder inside the vault that new attachments are saved to. It is used for:
 
-- Images you drop onto the editor.
+- Images you [paste or drop](../editor/live-mode.md#pasting-and-dropping-images) into the editor.
 - Recordings made with the Audio Recorder.
 - Files you add in the Attachment Manager. The manager also lists what is in this folder, and the links it inserts point to it.
 - An image you add to a [canvas](../views/canvas.md) from outside the vault. It is copied into this folder.
@@ -67,7 +67,7 @@ How the link to an attachment is written depends on where it comes from:
 | Added by | What is put in the note |
 |---|---|
 | The Attachment Manager, the Audio Recorder | A link in the format chosen under [Link Format](./wiki-links.md#link-format). With the default settings a picture, a sound file or a video is embedded as `![[photo.png]]`, and a PDF or any other file is linked as `[[paper.pdf]]`. Versions up to 2.4.13 write `![photo.png](attachments/photo.png)` |
-| Dropping an image onto the editor | `![](attachments/photo.png)`, with the attachment folder at the start of the path |
+| Pasting or dropping an image into the editor | `![](attachments/photo.png)`, with the attachment folder at the start of the path |
 
 Things to know:
 

@@ -216,6 +216,16 @@ interface ElectronAPI {
   // Vault file watcher
   onVaultChanged: (callback: (filePath: string) => void) => () => void;
 
+  /**
+   * Files dragged onto this window from outside the app. The app takes these
+   * drops itself, so the page gets no "drop" event for them. `paths` comes
+   * with "enter" and "drop"; `x` and `y` are in the platform's own units
+   * (`dropPoint` in `lib/image-insert.ts` turns them into page coordinates).
+   */
+  onFileDrag?: (
+    callback: (event: { type: "enter" | "over" | "drop" | "leave"; paths: string[]; x: number; y: number }) => void
+  ) => () => void;
+
   // Web Clipper
   clipperGetPort: () => Promise<number>;
   clipperSetEnabled: (enabled: boolean) => Promise<void>;

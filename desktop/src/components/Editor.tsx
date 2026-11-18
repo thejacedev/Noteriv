@@ -22,9 +22,7 @@ import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 import { notePathSetting } from "@/lib/note-path";
 import { setEditorViewForImages } from "./markdown/renderers/images";
 import { folding, multipleCursors } from "@/lib/editor-extensions";
-import { attachmentFolderName } from "@/lib/vault-prefs";
-
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"]);
+import { imagePaste, listenForImageDrops, type ImageTarget } from "@/lib/editor-images";
 
 interface EditorProps {
   content: string;
@@ -44,10 +42,19 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, note
   const [noteSetting] = useState(() => notePathSetting(notePath));
   const onChangeRef = useRef(onChange);
   const vaultPathRef = useRef(vaultPath);
+  const notePathRef = useRef(notePath);
   const [isDragOver, setIsDragOver] = useState(false);
+  // Where a pasted or dropped picture goes: asked for when it arrives, since
+  // the same editor shows whichever note's tab is in front.
+  const [imageTarget] = useState<ImageTarget>(() => ({
+    vaultPath: () => vaultPathRef.current,
+    notePath: () => notePathRef.current,
+    ownLine: true,
+  }));
 
   useEffect(() => { onChangeRef.current = onChange; });
   useEffect(() => { vaultPathRef.current = vaultPath; }, [vaultPath]);
+  useEffect(() => { notePathRef.current = notePath; }, [notePath]);
 
   const createEditor = useCallback(() => {
     if (!editorRef.current) return;
@@ -71,6 +78,7 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, note
         liveMarkdownPlugin,
         mathExtension(),
         search({ top: true }),
+        imagePaste(imageTarget),
         // App shortcuts win over the editor's own bindings for the same keys.
         // The key press still reaches the app's handler on the window.
         Prec.highest(EditorView.domEventHandlers({ keydown: (e) => isAppHotkey(e) })),
@@ -120,120 +128,13 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, note
     editorRef.current.classList.toggle("editor-focus-mode", focusMode);
   }, [focusMode]);
 
-  // Image drag & drop — native DOM on the container div, NOT inside CodeMirror
-  // This works because the container div wraps the entire CodeMirror instance
+  // A picture dragged in from outside the app is saved in the attachment
+  // folder and linked where it is dropped.
   useEffect(() => {
     const container = editorRef.current;
     if (!container) return;
-
-    let dragCounter = 0;
-
-    const onDragEnter = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      e.preventDefault();
-      dragCounter++;
-      setIsDragOver(true);
-    };
-
-    const onDragOver = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    };
-
-    const onDragLeave = () => {
-      dragCounter--;
-      if (dragCounter <= 0) {
-        dragCounter = 0;
-        setIsDragOver(false);
-      }
-    };
-
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounter = 0;
-      setIsDragOver(false);
-
-      const vp = vaultPathRef.current;
-      if (!vp || !window.electronAPI || !viewRef.current || !e.dataTransfer) return;
-
-      const files = Array.from(e.dataTransfer.files);
-      const imgs = files.filter((f) => {
-        const ext = f.name.split(".").pop()?.toLowerCase() || "";
-        return IMAGE_EXTENSIONS.has(ext);
-      });
-      if (imgs.length === 0) return;
-
-      (async () => {
-        const api = window.electronAPI!;
-        // The folder chosen under "Attachment folder" in the settings.
-        const attachFolder = attachmentFolderName();
-        const attachDir = `${vp}/${attachFolder}`;
-        await api.createDir(attachDir);
-
-        let insertText = "";
-
-        for (const file of imgs) {
-          const ext = file.name.split(".").pop() || "png";
-          const baseName = file.name.replace(/\.[^.]+$/, "");
-          let destName = file.name;
-          let destPath = `${attachDir}/${destName}`;
-
-          let counter = 1;
-          while (true) {
-            const existing = await api.readFile(destPath);
-            if (existing === null) break;
-            destName = `${baseName}-${counter}.${ext}`;
-            destPath = `${attachDir}/${destName}`;
-            counter++;
-          }
-
-          const electronPath = (file as any).path as string | undefined;
-          let success = false;
-
-          if (electronPath) {
-            success = await api.copyFile(electronPath, destPath);
-          }
-
-          if (!success) {
-            try {
-              const buffer = await file.arrayBuffer();
-              const bytes = new Uint8Array(buffer);
-              let binary = "";
-              for (let i = 0; i < bytes.length; i++) {
-                binary += String.fromCharCode(bytes[i]);
-              }
-              const base64 = btoa(binary);
-              success = await api.writeBinaryFile?.(destPath, base64) ?? false;
-            } catch {}
-          }
-
-          if (success) {
-            insertText += `![](${attachFolder}/${destName})\n`;
-          }
-        }
-
-        if (insertText && viewRef.current) {
-          const pos = viewRef.current.state.selection.main.head;
-          viewRef.current.dispatch({ changes: { from: pos, insert: insertText } });
-        }
-      })();
-    };
-
-    // Use capture phase to get the event before CodeMirror
-    container.addEventListener("dragenter", onDragEnter);
-    container.addEventListener("dragover", onDragOver);
-    container.addEventListener("dragleave", onDragLeave);
-    container.addEventListener("drop", onDrop, true);
-
-    return () => {
-      container.removeEventListener("dragenter", onDragEnter);
-      container.removeEventListener("dragover", onDragOver);
-      container.removeEventListener("dragleave", onDragLeave);
-      container.removeEventListener("drop", onDrop, true);
-    };
-  }, []);
+    return listenForImageDrops(container, () => viewRef.current, imageTarget, setIsDragOver);
+  }, [imageTarget]);
 
   return (
     <div

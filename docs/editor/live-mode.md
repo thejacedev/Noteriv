@@ -49,6 +49,25 @@ Inline math (`$...$`) and display math (`$$...$$`) are rendered using KaTeX. Inl
 
 Image syntax (`![alt](url)`) is replaced with the actual image, rendered inline in the document. The image is sized to fit the editor width with a maximum height constraint so that a single large image does not push the rest of your content out of view. When you place your cursor on the image line, the raw syntax is revealed for editing the alt text or URL.
 
+#### Pasting and Dropping Images
+
+You can put a picture into a note without writing the link yourself (after 3.0.3):
+
+- **Paste.** Copy a picture, such as a screenshot or **Copy image** in a browser, and press `Ctrl+V` in the note. The picture is saved in the [attachment folder](../features/file-settings.md#attachment-folder) under a name made of the date and time, such as `pasted-image-20261117-185230.png`, and it is shown at the cursor.
+- **Drop.** Drag image files from your file manager onto the note. Each one is copied into the attachment folder and shown where you let go of it.
+
+Things to know:
+
+- The picture is written as `![](attachments/photo.png)`. When it ends its line, the cursor moves to a new line below it, so that the picture shows at once.
+- These kinds of file are taken: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` and `.bmp`. Other files in a drop are left out.
+- A dropped file keeps its name, with spaces turned into dashes and brackets removed so that the link works: `my cat (1).png` becomes `my-cat-1.png`. If the folder already has a file of that name, a number is added, as in `photo-1.png`. No file is written over.
+- A file that is already in the vault is not copied. The link points to it where it is.
+- If the clipboard holds text as well as a picture, as it does for cells copied from a spreadsheet, the text is pasted.
+- Whether an image file you copied in a file manager can be pasted depends on your system. On Linux it cannot: drag the file onto the note instead.
+- A drop on any other part of the window, such as the file list, adds nothing.
+- Both also work in [Source Mode](./source-mode.md), where the link is written and the cursor stays behind it. View mode is read-only.
+- Versions up to 3.0.3 cannot paste a picture, and in 3.0.3 an image dropped onto the editor is not added.
+
 ### Links
 
 `[text](url)` links are rendered as clickable styled text. The URL portion is hidden on non-cursor lines. Click a web link to open it in your default browser, or in the [web page reader](../features/web-reader.md) if you have turned that on. Click a link whose address is a path, such as `[the plan](Projects/Plan.md)`, to open that note or file (after 2.4.13). See [Markdown Links](../features/wiki-links.md#markdown-links).

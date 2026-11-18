@@ -31,6 +31,10 @@ pub struct PathScope {
     /// Exactly the paths the user picked — never their children. See
     /// [`PathScope::is_openable`] for why this set is not the one above.
     openable: Mutex<HashSet<PathBuf>>,
+    /// Image files the user dropped onto a window during this session. They
+    /// may be copied from and nothing else: see
+    /// [`PathScope::is_copy_source`].
+    dropped: Mutex<HashSet<PathBuf>>,
 }
 
 impl PathScope {
@@ -49,6 +53,54 @@ impl PathScope {
         if let Ok(mut set) = self.openable.lock() {
             set.insert(resolved);
         }
+    }
+
+    /// Record an image file the user dropped onto a window.
+    ///
+    /// Dropping a file on the app is a choice of that file, as picking it in a
+    /// dialog is, so the editor may copy it into the vault. That is all the
+    /// drop gives: the file can be the source of a copy
+    /// ([`is_copy_source`](Self::is_copy_source)), but it cannot be read,
+    /// written, deleted or opened through any other command. It is narrower
+    /// than [`grant`](Self::grant) in two more ways. Only a file counts,
+    /// because a dropped folder would hand over everything under it. And only
+    /// an image counts, the one kind of file a drop is used for (the list is
+    /// the editor's, `IMAGE_EXTENSIONS` in `src/lib/image-insert.ts`).
+    ///
+    /// Returns whether the file was recorded.
+    pub fn grant_dropped_image(&self, path: &Path) -> bool {
+        let resolved = resolve(path);
+        // The name is checked after links are followed: `photo.png` may point
+        // at any file.
+        if !is_comparable(&resolved) || !has_image_extension(&resolved) || !resolved.is_file() {
+            return false;
+        }
+        if in_user_data_dir(&resolved) {
+            return false;
+        }
+        self.dropped
+            .lock()
+            .map(|mut set| {
+                set.insert(resolved);
+                true
+            })
+            .unwrap_or(false)
+    }
+
+    /// True when a file may be copied from: any path that
+    /// [`is_allowed`](Self::is_allowed), or an image the user dropped onto a
+    /// window this session.
+    pub fn is_copy_source(&self, path: &Path) -> bool {
+        if self.is_allowed(path) {
+            return true;
+        }
+        let target = resolve(path);
+        is_comparable(&target)
+            && self
+                .dropped
+                .lock()
+                .map(|set| set.contains(&target))
+                .unwrap_or(false)
     }
 
     /// True when the user picked this exact path in a native dialog this
@@ -93,10 +145,8 @@ impl PathScope {
             return false;
         }
 
-        if let Ok(data_dir) = dunce::canonicalize(paths::user_data_dir()) {
-            if target.starts_with(&data_dir) {
-                return false;
-            }
+        if in_user_data_dir(&target) {
+            return false;
         }
 
         let granted = self
@@ -123,6 +173,25 @@ fn is_comparable(path: &Path) -> bool {
         && !path
             .components()
             .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+}
+
+/// True when a resolved path lies in the application's own data directory,
+/// where the credential store is.
+fn in_user_data_dir(target: &Path) -> bool {
+    dunce::canonicalize(paths::user_data_dir())
+        .map(|data_dir| target.starts_with(&data_dir))
+        .unwrap_or(false)
+}
+
+/// The kinds of picture the editor shows. Kept the same as `IMAGE_EXTENSIONS`
+/// in `src/lib/image-insert.ts`.
+const IMAGE_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+
+fn has_image_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| IMAGE_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
 }
 
 /// Canonicalized paths of every vault the user has registered.
@@ -209,6 +278,68 @@ mod tests {
         scope.grant(&file.to_string_lossy());
         assert!(scope.is_allowed(&file));
         assert!(scope.is_openable(&file));
+    }
+
+    #[test]
+    fn dropped_image_can_be_copied_from_and_nothing_else() {
+        let root = tmp("dropped-image");
+        let image = root.join("Photo.PNG");
+        let _ = fs::write(&image, "x");
+        let scope = PathScope::default();
+        assert!(!scope.is_copy_source(&image));
+        assert!(scope.grant_dropped_image(&image));
+        assert!(scope.is_copy_source(&image));
+        // Not readable, writable or deletable through the other commands,
+        // and not something to hand to the opener.
+        assert!(!scope.is_allowed(&image));
+        assert!(!scope.is_openable(&image));
+        // Its neighbours stay out of reach.
+        let beside = root.join("notes.md");
+        let _ = fs::write(&beside, "x");
+        assert!(!scope.is_copy_source(&beside));
+    }
+
+    #[test]
+    fn a_path_that_is_allowed_is_a_copy_source() {
+        let root = tmp("copy-source");
+        let file = root.join("picked.pdf");
+        let _ = fs::write(&file, "x");
+        let scope = PathScope::default();
+        scope.grant(&file.to_string_lossy());
+        assert!(scope.is_copy_source(&file));
+    }
+
+    #[test]
+    fn dropped_folder_or_other_file_is_not_granted() {
+        let root = tmp("dropped-other");
+        let folder = root.join("pictures.png");
+        let _ = fs::create_dir_all(&folder);
+        let inside = folder.join("a.png");
+        let _ = fs::write(&inside, "x");
+        let key = root.join("id_rsa");
+        let _ = fs::write(&key, "x");
+        let missing = root.join("gone.png");
+        let scope = PathScope::default();
+        assert!(!scope.grant_dropped_image(&folder));
+        assert!(!scope.grant_dropped_image(&key));
+        assert!(!scope.grant_dropped_image(&missing));
+        assert!(!scope.is_copy_source(&inside));
+        assert!(!scope.is_copy_source(&key));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dropped_link_is_judged_by_what_it_points_at() {
+        let root = tmp("dropped-link");
+        let secret = root.join("secret.txt");
+        let _ = fs::write(&secret, "x");
+        let link = root.join("photo.png");
+        let _ = fs::remove_file(&link);
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+        let scope = PathScope::default();
+        assert!(!scope.grant_dropped_image(&link));
+        assert!(!scope.is_copy_source(&secret));
+        assert!(!scope.is_copy_source(&link));
     }
 
     #[test]

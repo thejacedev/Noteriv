@@ -281,6 +281,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // A picture dropped on a window, the main one or a pop-out, is one
+            // the user chose: the editor may copy it into the vault. The page
+            // hears of the drop only after this has run, since both happen on
+            // the same thread.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let state: tauri::State<AppState> = window.app_handle().state();
+                for path in paths {
+                    state.scope.grant_dropped_image(path);
+                }
+            }
             // Only the main window owns the watcher and the clipper: closing
             // a pop-out must leave them running.
             if window.label() != "main" {

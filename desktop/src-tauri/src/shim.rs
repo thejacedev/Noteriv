@@ -132,6 +132,25 @@ pub const SHIM_JS: &str = r#"
       // ---- vault watcher
       onVaultChanged: function (cb) { return on("vault:changed", cb); },
 
+      // ---- files dragged onto this window from outside the app
+      // The app takes these drops itself, so the page gets no "drop" event
+      // for them. `x` and `y` are as the platform gives them: see
+      // `dropPoint` in src/lib/image-insert.ts.
+      onFileDrag: function (cb) {
+        var unlisten = null;
+        var stopped = false;
+        try {
+          var webview = T.webview && T.webview.getCurrentWebview && T.webview.getCurrentWebview();
+          if (!webview || !webview.onDragDropEvent) return function () {};
+          webview.onDragDropEvent(function (e) {
+            var p = (e && e.payload) || {};
+            var at = p.position || {};
+            try { cb({ type: p.type, paths: p.paths || [], x: at.x || 0, y: at.y || 0 }); } catch (err) { /* swallow */ }
+          }).then(function (un) { if (stopped) { un(); } else { unlisten = un; } });
+        } catch (err) { /* swallow */ }
+        return function () { stopped = true; try { unlisten && unlisten(); } catch (e) {} };
+      },
+
       // ---- clipper
       clipperGetPort: function () { return invoke("clipper_get_port"); },
       clipperSetEnabled: function (enabled) { return invoke("clipper_set_enabled", { enabled: enabled }); },

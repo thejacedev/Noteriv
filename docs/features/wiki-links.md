@@ -354,7 +354,7 @@ This is what the Attachment Manager inserts into `Projects/Plan.md` for files in
 
 Versions up to 2.4.13 insert `![photo.png](attachments/photo.png)` for a picture, `![Audio](attachments/rec.webm)` for a sound file or a recording, and `[paper.pdf](attachments/paper.pdf)` for a PDF.
 
-An image you drop onto the editor does not follow these settings. It is inserted as `![](attachments/photo.png)`: an image with a path from the top of the vault, starting with the attachment folder.
+An image you [paste or drop](../editor/live-mode.md#pasting-and-dropping-images) into the editor does not follow these settings. It is inserted as `![](attachments/photo.png)`: an image with a path from the top of the vault, starting with the attachment folder.
 
 Both settings apply only to links Noteriv adds from now on. Links that are already in your notes are not converted, and a [rename](#renaming-and-moving-notes) keeps each link in the form it was written in. Links you type yourself are read in every form, whatever the settings say.
 

@@ -15,6 +15,7 @@ import { tags } from "@lezer/highlight";
 import { wikilinkAutocompletion } from "@/lib/wikilink-completion";
 import { notePathSetting } from "@/lib/note-path";
 import { folding, multipleCursors } from "@/lib/editor-extensions";
+import { imagePaste, listenForImageDrops, type ImageTarget } from "@/lib/editor-images";
 
 const sourceHighlight = HighlightStyle.define([
   { tag: tags.heading1, color: "var(--accent)", fontWeight: "bold", fontSize: "1.2em" },
@@ -63,7 +64,21 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
   const historyConfig = useRef(new Compartment());
   const [noteSetting] = useState(() => notePathSetting(notePath));
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const vaultPathRef = useRef(vaultPath);
+  const notePathRef = useRef(notePath);
+  const [isDragOver, setIsDragOver] = useState(false);
+  // Where a pasted or dropped picture goes: asked for when it arrives, since
+  // the same editor shows whichever note's tab is in front. Nothing is drawn
+  // here, so the cursor stays right behind the link.
+  const [imageTarget] = useState<ImageTarget>(() => ({
+    vaultPath: () => vaultPathRef.current,
+    notePath: () => notePathRef.current,
+    ownLine: false,
+  }));
+
+  useEffect(() => { onChangeRef.current = onChange; });
+  useEffect(() => { vaultPathRef.current = vaultPath; }, [vaultPath]);
+  useEffect(() => { notePathRef.current = notePath; }, [notePath]);
 
   const createEditor = useCallback(() => {
     if (!editorRef.current) return;
@@ -85,6 +100,7 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
         syntaxHighlighting(sourceHighlight),
         sourceTheme,
         search({ top: true }),
+        imagePaste(imageTarget),
         // App shortcuts win over the editor's own bindings for the same keys.
         // The key press still reaches the app's handler on the window.
         Prec.highest(EditorView.domEventHandlers({ keydown: (e) => isAppHotkey(e) })),
@@ -118,5 +134,19 @@ export default function SourceEditor({ content, onChange, onViewReady, vaultPath
     if (viewRef.current) noteSetting.set(viewRef.current, notePath);
   }, [noteSetting, notePath]);
 
-  return <div ref={editorRef} data-note-path={notePath} className={`h-full overflow-hidden ${className}`} />;
+  // A picture dragged in from outside the app is saved in the attachment
+  // folder and linked where it is dropped.
+  useEffect(() => {
+    const container = editorRef.current;
+    if (!container) return;
+    return listenForImageDrops(container, () => viewRef.current, imageTarget, setIsDragOver);
+  }, [imageTarget]);
+
+  return (
+    <div
+      ref={editorRef}
+      data-note-path={notePath}
+      className={`h-full overflow-hidden ${className}${isDragOver ? " editor-drop-active" : ""}`}
+    />
+  );
 }

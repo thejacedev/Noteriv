@@ -857,7 +857,13 @@ pub struct CopyInput {
 
 #[tauri::command]
 pub async fn fs_copy_file(app: tauri::AppHandle, args: CopyInput) -> bool {
-    if !allowed(&app, &args.src) || !allowed(&app, &args.dest) {
+    // A picture dropped onto a window may be copied from, and that is all
+    // that may be done with it: it is not in the scope the other commands ask.
+    let source_ok = app.state::<AppState>().scope.is_copy_source(Path::new(&args.src));
+    if !source_ok {
+        log::warn!("[fs] refused to copy from outside the permitted scope: {}", args.src);
+    }
+    if !source_ok || !allowed(&app, &args.dest) {
         return false;
     }
     let _guard = lock_file_mutations();
