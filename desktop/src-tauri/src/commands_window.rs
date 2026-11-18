@@ -103,6 +103,7 @@ pub async fn window_open_popout(app: tauri::AppHandle, path: String) -> Result<(
         .map(|window| {
             // The app's menu drives the main window; on a note of its own it would only mislead.
             let _ = window.remove_menu();
+            crate::clipboard::watch_paste_keys(&window);
         })
 }
 

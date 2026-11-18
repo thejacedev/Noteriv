@@ -132,6 +132,11 @@ pub const SHIM_JS: &str = r#"
       // ---- vault watcher
       onVaultChanged: function (cb) { return on("vault:changed", cb); },
 
+      // ---- what is on the clipboard, for a paste that reached the page
+      // empty (WebKitGTK 2.50). Answered only right after the paste keys were
+      // pressed in this window, once: see src/clipboard.rs.
+      takeClipboardPaste: function () { return invoke("clipboard_take_paste"); },
+
       // ---- files dragged onto this window from outside the app
       // The app takes these drops itself, so the page gets no "drop" event
       // for them. `x` and `y` are as the platform gives them: see

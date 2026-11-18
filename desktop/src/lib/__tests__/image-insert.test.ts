@@ -9,6 +9,7 @@ import {
   imageExtensionFor,
   imageInsertion,
   isImageName,
+  pasteIsEmpty,
   pastedImageName,
   safeImageName,
   saveImages,
@@ -74,6 +75,38 @@ describe("names", () => {
     expect(freeName(new Set(["cat.png"]), "cat.png")).toBe("cat-1.png");
     expect(freeName(new Set(["cat.png", "cat-1.png"]), "Cat.PNG")).toBe("Cat-2.PNG");
     expect(freeName(new Set(["noext"]), "noext")).toBe("noext-1");
+  });
+});
+
+describe("pasteIsEmpty", () => {
+  const paste = (files: number, data: Record<string, string>, size = 10) => ({
+    files: Array.from({ length: files }, () => ({ size })),
+    getData: (type: string) => data[type] ?? "",
+  });
+
+  it("is true for a paste with no file, no text and no addresses", () => {
+    expect(pasteIsEmpty(paste(0, {}))).toBe(true);
+    expect(pasteIsEmpty({ files: null, getData: () => "" })).toBe(true);
+  });
+
+  it("is true when the only file has nothing in it", () => {
+    // WebKitGTK 2.54 with a bitmap that is not a PNG on the clipboard.
+    expect(pasteIsEmpty(paste(1, {}, 0))).toBe(true);
+    expect(pasteIsEmpty(paste(1, { "text/plain": "hello" }, 0))).toBe(false);
+  });
+
+  it("does not count a web page's markup: a picture copied in a browser comes with some", () => {
+    expect(pasteIsEmpty(paste(0, { "text/html": '<img src="https://example.com/a.png">' }))).toBe(true);
+  });
+
+  it("is false when there is text, even only spaces", () => {
+    expect(pasteIsEmpty(paste(0, { "text/plain": "hello" }))).toBe(false);
+    expect(pasteIsEmpty(paste(0, { "text/plain": " " }))).toBe(false);
+  });
+
+  it("is false when there is a file or a list of addresses", () => {
+    expect(pasteIsEmpty(paste(1, {}))).toBe(false);
+    expect(pasteIsEmpty(paste(0, { "text/uri-list": "file:///home/me/cat.png" }))).toBe(false);
   });
 });
 
@@ -173,6 +206,15 @@ describe("saveImages", () => {
     expect(written.get("/vault/attachments/pasted-image-20261117-185230.png")).toBe(
       Buffer.from(bytes).toString("base64")
     );
+  });
+
+  it("writes a picture the app handed over as base64 without touching it", async () => {
+    const { files, written } = fakeFiles(["pasted-image-20261118-101500.png"]);
+    const links = await saveImages(files, "/vault", "attachments", [
+      { name: "pasted-image-20261118-101500.png", base64: "iVBORw0KGgo=" },
+    ]);
+    expect(links).toEqual(["![](attachments/pasted-image-20261118-101500-1.png)"]);
+    expect(written.get("/vault/attachments/pasted-image-20261118-101500-1.png")).toBe("iVBORw0KGgo=");
   });
 
   it("leaves out a picture that could not be saved and keeps its name free", async () => {

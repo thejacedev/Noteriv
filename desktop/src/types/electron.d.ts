@@ -217,6 +217,15 @@ interface ElectronAPI {
   onVaultChanged: (callback: (filePath: string) => void) => () => void;
 
   /**
+   * What is on the clipboard, for a paste event that arrived with nothing in
+   * it, as it does on Linux with WebKitGTK 2.50 when the clipboard holds a
+   * picture: the text if there is any, else the picture as base64 PNG.
+   * Answered once, and only right after the paste keys were pressed in this
+   * window; otherwise, and on other systems, the answer is null.
+   */
+  takeClipboardPaste?: () => Promise<{ text: string } | { image: string } | null>;
+
+  /**
    * Files dragged onto this window from outside the app. The app takes these
    * drops itself, so the page gets no "drop" event for them. `paths` comes
    * with "enter" and "drop"; `x` and `y` are in the platform's own units

@@ -1,6 +1,7 @@
 mod auth;
 mod app_requests;
 mod cli;
+mod clipboard;
 mod clipper;
 mod commands_dialog;
 mod commands_fs;
@@ -45,6 +46,8 @@ pub struct AppState {
     pub scope: scope::PathScope,
     /// What a command line or a link asked for, waiting for the window. See `app_requests`.
     pub requests: app_requests::Pending,
+    /// Which windows saw the paste keys a moment ago. See `clipboard`.
+    pub paste_gate: clipboard::PasteGate,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -65,6 +68,7 @@ pub fn run() {
         watcher: Mutex::new(watcher::WatcherState::default()),
         scope: scope::PathScope::default(),
         requests: app_requests::Pending::default(),
+        paste_gate: clipboard::PasteGate::default(),
     };
 
     let mut builder = tauri::Builder::default().manage(app_state);
@@ -107,6 +111,7 @@ pub fn run() {
             commands_window::window_is_maximized,
             commands_window::window_set_title,
             commands_window::window_platform,
+            clipboard::clipboard_take_paste,
             commands_window::window_open_popout,
             app_requests::app_take_requests,
             // workspace
@@ -197,6 +202,11 @@ pub fn run() {
         .setup(move |app| {
             // What this launch was started to do, for the window to pick up.
             app_requests::deliver(app.handle(), startup, false);
+
+            // A picture pasted where the page is handed none: see `clipboard`.
+            if let Some(main) = app.get_webview_window("main") {
+                clipboard::watch_paste_keys(&main);
+            }
 
             // On macOS a clicked link arrives as an event rather than as an
             // argument. Elsewhere it is an argument, read above or handed

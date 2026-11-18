@@ -121,8 +121,31 @@ export function dropPoint(
   return { x: at.x / scale, y: at.y / scale };
 }
 
-/** A picture to put into a note: a file somewhere on the disk, or bytes from the clipboard. */
-export type ImageSource = { path: string } | { name: string; bytes: Uint8Array };
+/**
+ * True when a paste brought nothing the page can use: no file with anything
+ * in it, no text and no list of addresses. It is the moment to ask the app
+ * what is on the clipboard. On Linux this is what arrives with WebKitGTK 2.50
+ * when the clipboard holds a picture, and with WebKitGTK 2.54 when the
+ * picture is not a PNG: the page is then handed a file of no bytes.
+ * The types are not looked at: with 2.50 they are empty even for text.
+ */
+export function pasteIsEmpty(data: {
+  files: ArrayLike<{ size: number }> | null;
+  getData: (type: string) => string;
+}): boolean {
+  const files = Array.from(data.files ?? []);
+  return files.every((file) => file.size === 0) && data.getData("text/plain") === "" && data.getData("text/uri-list") === "";
+}
+
+/**
+ * A picture to put into a note: a file somewhere on the disk, bytes from the
+ * clipboard, or a picture the app read from the clipboard and handed over as
+ * base64.
+ */
+export type ImageSource =
+  | { path: string }
+  | { name: string; bytes: Uint8Array }
+  | { name: string; base64: string };
 
 /** The file calls that saving a picture needs. `window.electronAPI` has them. */
 export interface ImageFiles {
@@ -170,10 +193,8 @@ export async function saveImages(
     const target = `${directory}/${name}`;
     let saved = false;
     try {
-      saved =
-        "path" in image
-          ? await files.copyFile(image.path, target)
-          : await files.writeBinaryFile(target, bytesToBase64(image.bytes));
+      if ("path" in image) saved = await files.copyFile(image.path, target);
+      else saved = await files.writeBinaryFile(target, "base64" in image ? image.base64 : bytesToBase64(image.bytes));
     } catch {
       saved = false;
     }

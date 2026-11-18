@@ -2674,6 +2674,7 @@ dependencies = [
  "encoding_rs",
  "env_logger",
  "flate2",
+ "gtk",
  "html5ever 0.29.1",
  "log",
  "notify",

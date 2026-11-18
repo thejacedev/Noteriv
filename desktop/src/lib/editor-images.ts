@@ -13,6 +13,7 @@ import {
   imageExtensionFor,
   imageInsertion,
   isImageName,
+  pasteIsEmpty,
   pastedImageName,
   saveImages,
   type ImageSource,
@@ -32,17 +33,22 @@ function hasMadeUpName(name: string): boolean {
   return /^image\.[a-z0-9]+$/i.test(name);
 }
 
+/**
+ * Save pictures and write their links into the note. `note` is the note that
+ * was in front when the paste or the drop happened; `at` is where a drop
+ * landed.
+ */
 async function insertImages(
   view: EditorView,
   target: ImageTarget,
   images: ImageSource[],
+  note: string | undefined,
   at?: number
 ): Promise<void> {
   const files = window.electronAPI;
   const vault = target.vaultPath();
   if (!files || !vault || images.length === 0) return;
 
-  const note = target.notePath();
   const links = await saveImages(files, vault, attachmentFolderName(), images);
   // Another tab may have come to the front while the files were written.
   // The picture was for the note that was there, so nothing is written.
@@ -61,6 +67,12 @@ async function insertImages(
  *
  * When the clipboard holds text as well (cells copied from a spreadsheet
  * come as text and as a picture of it), the text is pasted as before.
+ *
+ * Not every system hands the picture to the page. On Linux with WebKitGTK
+ * 2.50 the paste arrives with nothing in it, and so does the text when the
+ * clipboard holds both. The app is then asked what is on the clipboard,
+ * which it tells once, right after the paste keys were pressed in this
+ * window (`src-tauri/src/clipboard.rs`).
  */
 export function imagePaste(target: ImageTarget): Extension {
   return EditorView.domEventHandlers({
@@ -68,24 +80,51 @@ export function imagePaste(target: ImageTarget): Extension {
       const data = event.clipboardData;
       if (!data || !window.electronAPI || !target.vaultPath()) return false;
 
+      const note = target.notePath();
+      const now = new Date();
+
+      // What the app finds on the clipboard, for a paste the page was handed
+      // nothing for: the text if there is any, else the picture.
+      const pasteFromApp = async () => {
+        const pasted = await window.electronAPI.takeClipboardPaste?.();
+        if (!pasted) return;
+        if ("image" in pasted) {
+          await insertImages(view, target, [{ name: pastedImageName(now, "png"), base64: pasted.image }], note);
+        } else if (target.notePath() === note && view.dom.isConnected) {
+          view.dispatch(view.state.replaceSelection(pasted.text), { scrollIntoView: true, userEvent: "input.paste" });
+        }
+      };
+
       const pictures: { file: File; extension: string }[] = [];
       for (const file of Array.from(data.files ?? [])) {
         const extension = imageExtensionFor(file);
-        if (extension) pictures.push({ file, extension });
+        if (extension && file.size > 0) pictures.push({ file, extension });
       }
-      if (pictures.length === 0) return false;
+
+      if (pictures.length === 0) {
+        if (!window.electronAPI.takeClipboardPaste || !pasteIsEmpty(data)) return false;
+        // Nothing came with the paste. Left to itself the editor would paste
+        // that nothing over the selection; the selection stays instead, for
+        // what the app finds on the clipboard to replace.
+        event.preventDefault();
+        void pasteFromApp().catch(() => {});
+        return true;
+      }
       if (data.getData("text/plain").trim() !== "") return false;
 
       event.preventDefault();
-      const now = new Date();
       void (async () => {
         const images: ImageSource[] = [];
         for (const { file, extension } of pictures) {
           const bytes = new Uint8Array(await file.arrayBuffer());
+          if (bytes.length === 0) continue;
           const name = hasMadeUpName(file.name) || !file.name ? pastedImageName(now, extension) : file.name;
           images.push({ name, bytes });
         }
-        await insertImages(view, target, images);
+        // A picture that turned out to have nothing in it: the app may be
+        // able to read what the page could not.
+        if (images.length === 0) await pasteFromApp();
+        else await insertImages(view, target, images, note);
       })().catch(() => {});
       return true;
     },
@@ -142,6 +181,6 @@ export function listenForImageDrops(
     const images = event.paths.filter((path) => isImageName(fileNameOf(path))).map((path) => ({ path }));
     if (images.length === 0) return;
     const at = view.posAtCoords(point, false);
-    insertImages(view, target, images, at).catch(() => {});
+    insertImages(view, target, images, target.notePath(), at).catch(() => {});
   });
 }

@@ -88,5 +88,10 @@ zeroize = "1"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
+# The version Tauri itself uses on Linux: the clipboard and the paste keys of
+# a window are read through it (src/clipboard.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
