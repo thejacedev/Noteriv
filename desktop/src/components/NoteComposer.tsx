@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { mergeNotes, splitByHeadings, sanitizeFileName } from "@/lib/note-composer-utils";
+import { childPath, fileNameOf, noteTitleOf, parentFolderOf } from "@/lib/file-path";
 import "@/styles/note-composer.css";
 
 interface NoteComposerProps {
@@ -108,7 +109,7 @@ export default function NoteComposer({
       for (const filePath of selectedFiles) {
         const content = await window.electronAPI.readFile(filePath);
         if (content !== null) {
-          const name = filePath.split("/").pop() || "Untitled";
+          const name = fileNameOf(filePath) || "Untitled";
           contents.push({ name, content });
         }
       }
@@ -140,14 +141,15 @@ export default function NoteComposer({
     setSplitting(true);
 
     try {
-      const dir = currentFile.substring(0, currentFile.lastIndexOf("/"));
+      const dir = parentFolderOf(currentFile);
+      const currentName = fileNameOf(currentFile);
 
       for (const section of splitPreview) {
         const fileName = sanitizeFileName(section.title) + ".md";
-        const filePath = `${dir}/${fileName}`;
+        const filePath = childPath(dir, fileName);
 
         // Avoid overwriting the current file
-        if (filePath === currentFile) continue;
+        if (fileName === currentName) continue;
 
         await window.electronAPI.writeFile(filePath, section.content + "\n");
       }
@@ -155,9 +157,9 @@ export default function NoteComposer({
       // Open the first created file
       const firstSection = splitPreview[0];
       if (firstSection) {
-        const firstPath = `${dir}/${sanitizeFileName(firstSection.title)}.md`;
-        if (firstPath !== currentFile) {
-          onFileSelect(firstPath);
+        const firstName = `${sanitizeFileName(firstSection.title)}.md`;
+        if (firstName !== currentName) {
+          onFileSelect(childPath(dir, firstName));
         }
       }
 
@@ -170,7 +172,7 @@ export default function NoteComposer({
   };
 
   const currentFileName = currentFile
-    ? (currentFile.split("/").pop() || "Untitled").replace(/\.(md|markdown)$/i, "")
+    ? noteTitleOf(currentFile) || "Untitled"
     : "No file selected";
 
   return (

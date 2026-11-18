@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { noteTitleOf } from "@/lib/file-path";
 import {
   extractAllCards,
   loadReviews,
@@ -205,7 +206,7 @@ export default function FlashcardReview({ vaultPath, onClose, onFileSelect }: Fl
                   color: "#585b70", fontSize: 10, cursor: "pointer",
                 }}
               >
-                {card.source.split("/").pop()?.replace(/\.(md|markdown)$/i, "")} &middot; {card.type}
+                {noteTitleOf(card.source)} &middot; {card.type}
               </button>
             </>
           )}

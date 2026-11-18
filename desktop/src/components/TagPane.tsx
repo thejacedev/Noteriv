@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getAllTags } from "@/lib/tag-utils";
+import { noteTitleOf } from "@/lib/file-path";
 
 interface TagPaneProps {
   vaultPath: string;
@@ -170,7 +171,7 @@ function TagTreeItem({
       {isSelected && node.fullTag && node.files.length > 0 && (
         <div className="tag-files-list">
           {node.files.map((filePath) => {
-            const fileName = filePath.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || filePath;
+            const fileName = noteTitleOf(filePath) || filePath;
             return (
               <button
                 key={filePath}

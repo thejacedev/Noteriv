@@ -2,6 +2,8 @@
  * PDF Annotation utilities — types, load/save, and markdown export.
  */
 
+import { fileNameOf, siblingPath } from "./file-path";
+
 export interface PDFAnnotation {
   id: string;
   page: number;
@@ -20,9 +22,8 @@ export interface PDFAnnotationFile {
 
 /** Derive the annotation sidecar path from a PDF path */
 export function annotationPath(pdfPath: string): string {
-  const dir = pdfPath.substring(0, pdfPath.lastIndexOf("/"));
-  const name = pdfPath.split("/").pop() || "file.pdf";
-  return `${dir}/.${name}-annotations.json`;
+  const name = fileNameOf(pdfPath) || "file.pdf";
+  return siblingPath(pdfPath, `.${name}-annotations.json`);
 }
 
 /** Load annotations from the sidecar JSON (returns empty array if none) */
@@ -52,7 +53,7 @@ export async function saveAnnotations(file: PDFAnnotationFile): Promise<boolean>
 
 /** Generate a markdown note from annotations */
 export function annotationsToMarkdown(file: PDFAnnotationFile): string {
-  const fileName = file.pdfPath.split("/").pop() || "file.pdf";
+  const fileName = fileNameOf(file.pdfPath) || "file.pdf";
   const sorted = [...file.annotations].sort((a, b) => a.page - b.page || a.created - b.created);
 
   const highlights = sorted.filter((a) => a.type === "highlight");
@@ -107,9 +108,8 @@ export function annotationsToMarkdown(file: PDFAnnotationFile): string {
 /** Export annotations as a linked markdown file next to the PDF */
 export async function exportAnnotationsAsMarkdown(file: PDFAnnotationFile): Promise<string | null> {
   if (!window.electronAPI) return null;
-  const dir = file.pdfPath.substring(0, file.pdfPath.lastIndexOf("/"));
-  const baseName = (file.pdfPath.split("/").pop() || "file.pdf").replace(/\.pdf$/i, "");
-  const mdPath = `${dir}/${baseName} - Annotations.md`;
+  const baseName = (fileNameOf(file.pdfPath) || "file.pdf").replace(/\.pdf$/i, "");
+  const mdPath = siblingPath(file.pdfPath, `${baseName} - Annotations.md`);
   const md = annotationsToMarkdown(file);
   const success = await window.electronAPI.writeFile(mdPath, md);
   return success ? mdPath : null;

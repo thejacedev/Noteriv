@@ -7,6 +7,7 @@
  */
 
 import type { EditorState, TransactionSpec } from "@codemirror/state";
+import { fileNameOf } from "./file-path";
 import { encodePath } from "./link-resolve";
 import { vaultRelative } from "./vault-links";
 
@@ -25,11 +26,6 @@ const EXTENSION_FOR_TYPE: Record<string, string> = {
   "image/svg+xml": "svg",
   "image/bmp": "bmp",
 };
-
-/** The last part of a path, whichever way its slashes lean. */
-export function fileNameOf(path: string): string {
-  return path.split(/[\\/]/).pop() || "";
-}
 
 /** The extension of a file name in lower case, without the dot. "" when there is none. */
 export function extensionOf(name: string): string {

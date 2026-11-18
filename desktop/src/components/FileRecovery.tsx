@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { getSnapshots, loadSnapshot } from "@/lib/file-recovery";
 import "@/styles/file-recovery.css";
+import { noteTitleOf } from "@/lib/file-path";
 
 interface FileRecoveryProps {
   vaultPath: string;
@@ -33,10 +34,7 @@ export default function FileRecovery({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const fileName = (currentFile.split("/").pop() || "Untitled").replace(
-    /\.(md|markdown)$/i,
-    ""
-  );
+  const fileName = noteTitleOf(currentFile) || "Untitled";
 
   // Load snapshots on mount
   useEffect(() => {

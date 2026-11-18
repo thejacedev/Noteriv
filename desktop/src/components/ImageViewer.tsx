@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fileNameOf } from "@/lib/file-path";
 
 const MIME: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
@@ -45,7 +46,7 @@ export default function ImageViewer({ filePath }: { filePath: string }) {
       ) : src ? (
         <img
           src={src}
-          alt={filePath.split("/").pop() || ""}
+          alt={fileNameOf(filePath)}
           onClick={() => setActualSize((s) => !s)}
           draggable={false}
           style={

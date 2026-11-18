@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { getSnapshots, loadSnapshot } from "@/lib/file-recovery";
+import { fileNameOf } from "@/lib/file-path";
 
 const ReadOnlyView = dynamic(() => import("./ReadOnlyView"), { ssr: false });
 
@@ -172,7 +173,7 @@ export default function TimeScrubber({
               Time Scrubber
             </div>
             <div className="text-[11px] text-[var(--text-muted)] truncate">
-              {filePath.split("/").pop()}
+              {fileNameOf(filePath)}
             </div>
           </div>
         </div>

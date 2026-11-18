@@ -24,6 +24,7 @@ import WorkspacesModal from "@/components/WorkspacesModal";
 import BaseView from "@/components/BaseView";
 import { addText, freeNoteName, headingLine, linkWriteQuestion, type AppRequest } from "@/lib/app-requests";
 import { fromVaultRelative, toVaultRelative } from "@/lib/vault-paths";
+import { ancestorFoldersOf, childPath, fileNameOf, noteTitleOf, parentFolderOf, pathAfterRename, siblingPath } from "@/lib/file-path";
 import ImportModal from "@/components/ImportModal";
 import { NEW_BASE, isBaseFile } from "@/lib/bases-data";
 import {
@@ -1453,23 +1454,17 @@ function Home() {
   }, [activeTab]);
 
   const handleFileRename = useCallback((oldPath: string, newPath: string) => {
-    // Update any open tabs that reference the old path
+    // Update any open tabs that reference the old path: the file itself,
+    // or the files inside it when a folder was renamed.
     setTabs((prev) =>
       prev.map((t) => {
-        if (t.filePath === oldPath) {
-          return { ...t, filePath: newPath };
-        }
-        // Handle files inside a renamed folder
-        if (t.filePath.startsWith(oldPath + "/")) {
-          return { ...t, filePath: t.filePath.replace(oldPath, newPath) };
-        }
-        return t;
+        const moved = pathAfterRename(t.filePath, oldPath, newPath);
+        return moved === t.filePath ? t : { ...t, filePath: moved };
       })
     );
-    if (activeTab === oldPath) {
-      setActiveTab(newPath);
-    } else if (activeTab?.startsWith(oldPath + "/")) {
-      setActiveTab(activeTab.replace(oldPath, newPath));
+    if (activeTab) {
+      const moved = pathAfterRename(activeTab, oldPath, newPath);
+      if (moved !== activeTab) setActiveTab(moved);
     }
     setBookmarks((b) => renameBookmarkPaths(b, oldPath, newPath));
   }, [activeTab]);
@@ -1535,12 +1530,12 @@ function Home() {
   const handleRenameCurrentFile = useCallback(async (newName: string) => {
     if (!window.electronAPI || !currentTab) return;
     const oldPath = currentTab.filePath;
-    const dir = oldPath.substring(0, oldPath.lastIndexOf("/"));
-    const oldFileName = oldPath.split("/").pop() || "";
+    const dir = parentFolderOf(oldPath);
+    const oldFileName = fileNameOf(oldPath);
     const ext = oldFileName.match(/\.(md|markdown)$/i)?.[0] || ".md";
     const newFileName = newName + ext;
-    const newPath = `${dir}/${newFileName}`;
-    if (newPath === oldPath) return;
+    if (newFileName === oldFileName) return;
+    const newPath = childPath(dir, newFileName);
     const success = await renamePath(oldPath, newPath);
     if (success) {
       handleFileRename(oldPath, newPath);
@@ -1556,8 +1551,8 @@ function Home() {
 
   const handleMoveFile = useCallback(async (sourcePath: string, destDir: string) => {
     if (!window.electronAPI) return;
-    const name = sourcePath.split("/").pop() || "";
-    const newPath = `${destDir}/${name}`;
+    const name = fileNameOf(sourcePath);
+    const newPath = childPath(destDir, name);
     if (newPath === sourcePath) return;
     const success = await renamePath(sourcePath, newPath);
     if (success) {
@@ -1901,7 +1896,7 @@ function Home() {
     await window.electronAPI.createDir(folder);
     const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
     const name = pickName((candidate) => existing.has(`${candidate}.md`.toLowerCase()));
-    const filePath = `${folder}/${name}.md`;
+    const filePath = childPath(folder, `${name}.md`);
     await window.electronAPI.createFile(filePath);
     setTabs((prev) => [...prev, { filePath, content: "", savedContent: "" }]);
     setActiveTab(filePath);
@@ -1961,7 +1956,7 @@ function Home() {
     const existing = new Set((await window.electronAPI.readDir(folder)).map((e) => e.name.toLowerCase()));
     let name = "Untitled";
     for (let counter = 2; existing.has(`${name}.base`.toLowerCase()); counter++) name = `Untitled ${counter}`;
-    const filePath = `${folder}/${name}.base`;
+    const filePath = childPath(folder, `${name}.base`);
     if (!await window.electronAPI.writeFile(filePath, NEW_BASE)) return;
     setTabs((prev) => [...prev, { filePath, content: "", savedContent: "", kind: "base" }]);
     setActiveTab(filePath);
@@ -2281,8 +2276,8 @@ function Home() {
     if (!window.electronAPI || !activeVault) return;
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const dailyDir = `${activeVault.path}/Daily`;
-    const filePath = `${dailyDir}/${dateStr}.md`;
+    const dailyDir = childPath(activeVault.path, "Daily");
+    const filePath = childPath(dailyDir, `${dateStr}.md`);
 
     // Create directory if needed
     await window.electronAPI.createDir(dailyDir);
@@ -2302,8 +2297,8 @@ function Home() {
   // Create daily note for a specific date (from calendar)
   const handleCreateDailyNote = useCallback(async (dateStr: string) => {
     if (!window.electronAPI || !activeVault) return;
-    const dailyDir = `${activeVault.path}/Daily`;
-    const filePath = `${dailyDir}/${dateStr}.md`;
+    const dailyDir = childPath(activeVault.path, "Daily");
+    const filePath = childPath(dailyDir, `${dateStr}.md`);
     await window.electronAPI.createDir(dailyDir);
     const existing = await window.electronAPI.readFile(filePath);
     if (existing === null) {
@@ -2321,7 +2316,7 @@ function Home() {
     let name = "Board.board.md";
     let counter = 1;
     while (names.includes(name)) { counter++; name = `Board ${counter}.board.md`; }
-    const filePath = `${activeVault.path}/${name}`;
+    const filePath = childPath(activeVault.path, name);
     await window.electronAPI.writeFile(filePath, createBoardContent());
     openFile(filePath);
     setSidebarRefresh((k) => k + 1);
@@ -2335,7 +2330,7 @@ function Home() {
     let name = "Canvas.canvas";
     let counter = 1;
     while (names.includes(name)) { counter++; name = `Canvas ${counter}.canvas`; }
-    const filePath = `${activeVault.path}/${name}`;
+    const filePath = childPath(activeVault.path, name);
     await window.electronAPI.writeFile(filePath, JSON.stringify({ nodes: [], edges: [] }, null, 2));
     openFile(filePath);
     setSidebarRefresh((k) => k + 1);
@@ -2347,7 +2342,7 @@ function Home() {
     const existing = await window.electronAPI.readDir(activeVault.path);
     const names = existing.map((e) => e.name);
     const name = generateDrawingName(names);
-    const filePath = `${activeVault.path}/${name}`;
+    const filePath = childPath(activeVault.path, name);
     await window.electronAPI.writeFile(filePath, serializeDrawing(createEmptyDrawing()));
     openFile(filePath);
     setSidebarRefresh((k) => k + 1);
@@ -2496,7 +2491,6 @@ function Home() {
     }
     const mode = request.action === "unique" ? "create" : request.mode ?? "create";
     const text = request.content ?? "";
-    const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
     const openTab = tabs.find((t) => t.filePath === full && !t.kind);
     const existingText = openTab ? openTab.content : await api.readFile(full);
 
@@ -2506,9 +2500,8 @@ function Home() {
     } else {
       if (existingText !== null && mode === "create") {
         // Creating never replaces: the new note takes the next free name.
-        const taken = await namesIn(parentOf(full));
-        const fileName = full.slice(parentOf(full).length + 1);
-        full = `${parentOf(full)}/${freeNoteName(fileName, (name) => taken.has(name.toLowerCase()))}`;
+        const taken = await namesIn(parentFolderOf(full));
+        full = siblingPath(full, freeNoteName(fileNameOf(full), (name) => taken.has(name.toLowerCase())));
       }
       next = text;
     }
@@ -2518,7 +2511,7 @@ function Home() {
       // The note is open with changes not saved yet: the text joins them.
       setTabs((prev) => prev.map((t) => (t.filePath === target ? { ...t, content: next } : t)));
     } else {
-      await api.createDir(parentOf(target));
+      await api.createDir(parentFolderOf(target));
       if (!await api.writeFile(target, next)) {
         showStatusNote("The note could not be written.");
         return;
@@ -2625,7 +2618,7 @@ function Home() {
       randomNote: async () => { if (activeVault) { const f = await getRandomNote(activeVault.path); if (f) openFile(f); } },
       noteComposer: () => setShowNoteComposer(true),
       fileRecovery: () => setShowFileRecovery(true),
-      exportPDF: () => { if (currentTab && !currentTab.kind) exportToPDF(content, currentTab.filePath.split("/").pop()?.replace(/\.md$/i, "") || "note"); },
+      exportPDF: () => { if (currentTab && !currentTab.kind) exportToPDF(content, noteTitleOf(currentTab.filePath) || "note"); },
       audioRecorder: () => setShowAudioRecorder(true),
       attachments: () => setShowAttachments(true),
       slidePresentation: () => setShowSlidePresentation(true),
@@ -2906,11 +2899,7 @@ function Home() {
           }}
           onRevealInSidebar={(filePath) => {
             // Expand parent folders and scroll to file
-            const parts = filePath.split("/");
-            const folders: string[] = [];
-            for (let i = 1; i < parts.length - 1; i++) {
-              folders.push(parts.slice(0, i + 1).join("/"));
-            }
+            const folders = ancestorFoldersOf(filePath);
             setExpandedFolders((prev) => {
               const next = new Set(prev);
               for (const f of folders) next.add(f);
@@ -3111,7 +3100,7 @@ function Home() {
                   <div className="flex flex-col h-full overflow-hidden">
                     <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
                       <span className="text-xs text-[var(--text-secondary)] truncate">
-                        {splitTabState.filePath.split("/").pop()}
+                        {fileNameOf(splitTabState.filePath)}
                       </span>
                       <button
                         onClick={handleCloseSplit}
@@ -3363,7 +3352,7 @@ function Home() {
             if (folder) {
               const first = folder.split("/")[0];
               setExpandedFolders((open) => {
-                const path = `${activeVault.path}/${first}`;
+                const path = childPath(activeVault.path, first);
                 return open.includes(path) ? open : [...open, path];
               });
             }
@@ -3421,7 +3410,7 @@ function Home() {
       {showTemplatePicker && activeVault && (
         <TemplatePicker
           vaultPath={activeVault.path}
-          noteTitle={currentTab?.filePath.split("/").pop()?.replace(/\.md$/i, "") || "Untitled"}
+          noteTitle={(currentTab && noteTitleOf(currentTab.filePath)) || "Untitled"}
           onInsert={(tpl) => {
             if (editorViewRef.current) {
               const view = editorViewRef.current;
@@ -3573,7 +3562,7 @@ function Home() {
       {showPublish && currentTab && activeVault && (
         <PublishPreview
           content={content}
-          title={currentTab.filePath.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "note"}
+          title={noteTitleOf(currentTab.filePath) || "note"}
           vaultPath={activeVault.path}
           onClose={() => setShowPublish(false)}
         />

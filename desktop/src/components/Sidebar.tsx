@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 import { FILE_SORTS, sortFileEntries, type FileSort } from "@/lib/file-list";
+import { childPath, fileNameOf, noteTitleOf, parentFolderOf } from "@/lib/file-path";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import { confirmDialog } from "./ConfirmDialog";
 
@@ -453,7 +454,7 @@ export default function Sidebar({
     filesToMove.add(source.entry.path);
 
     for (const filePath of filesToMove) {
-      const parent = filePath.substring(0, filePath.lastIndexOf("/"));
+      const parent = parentFolderOf(filePath);
       if (parent === folderPath) continue;
       onMoveFile(filePath, folderPath);
     }
@@ -477,7 +478,7 @@ export default function Sidebar({
       return;
     }
     const { dirPath, index } = indicator;
-    const sourceParent = source.entry.path.substring(0, source.entry.path.lastIndexOf("/"));
+    const sourceParent = parentFolderOf(source.entry.path);
 
     // Collect all files to move: selected files + dragged file
     const filesToMove = new Set(selectedFiles);
@@ -486,7 +487,7 @@ export default function Sidebar({
     if (sourceParent !== dirPath) {
       // Moving to a different directory — move all selected
       for (const filePath of filesToMove) {
-        const parent = filePath.substring(0, filePath.lastIndexOf("/"));
+        const parent = parentFolderOf(filePath);
         if (parent === dirPath) continue;
         onMoveFile(filePath, dirPath);
       }
@@ -581,15 +582,14 @@ export default function Sidebar({
       const c = await window.electronAPI.readFile(p);
       if (c !== null) {
         contents.push(c);
-        names.push(p.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "");
+        names.push(noteTitleOf(p));
       }
     }
     if (contents.length < 2) return;
 
     const merged = contents.join("\n\n---\n\n");
     const mergedName = `Merged - ${names[0]} + ${names.length - 1} more.md`;
-    const dir = paths[0].substring(0, paths[0].lastIndexOf("/"));
-    const mergedPath = `${dir}/${mergedName}`;
+    const mergedPath = childPath(parentFolderOf(paths[0]), mergedName);
     await window.electronAPI.writeFile(mergedPath, merged);
     await refreshEntries();
     setSelectedFiles(new Set());
@@ -631,12 +631,12 @@ export default function Sidebar({
       setRenamingPath(null);
       return;
     }
-    const dir = renamingPath.substring(0, renamingPath.lastIndexOf("/"));
-    const oldName = renamingPath.split("/").pop() || "";
+    const dir = parentFolderOf(renamingPath);
+    const oldName = fileNameOf(renamingPath);
     const ext = oldName.match(/\.(md|markdown)$/i)?.[0] || "";
     const newFileName = renameValue.trim() + ext;
-    const newPath = `${dir}/${newFileName}`;
-    if (newPath !== renamingPath) {
+    const newPath = childPath(dir, newFileName);
+    if (newFileName !== oldName) {
       const success = renamePath
         ? await renamePath(renamingPath, newPath)
         : await window.electronAPI.rename(renamingPath, newPath);
@@ -736,7 +736,7 @@ export default function Sidebar({
     const existing = await window.electronAPI.readDir(dirPath);
     const existingNames = existing.map((e) => e.name);
     while (existingNames.includes(name)) { counter++; name = `Untitled ${counter}.md`; }
-    const filePath = `${dirPath}/${name}`;
+    const filePath = childPath(dirPath, name);
     await window.electronAPI.createFile(filePath);
     if (vault && dirPath !== vault.path && !expandedFolders.includes(dirPath)) {
       onExpandedFoldersChange([...expandedFolders, dirPath]);
@@ -754,7 +754,7 @@ export default function Sidebar({
     const existing = await window.electronAPI.readDir(dirPath);
     const existingNames = existing.map((e) => e.name);
     while (existingNames.includes(name)) { counter++; name = `New Folder ${counter}`; }
-    const folderPath = `${dirPath}/${name}`;
+    const folderPath = childPath(dirPath, name);
     await window.electronAPI.createDir(folderPath);
     if (vault && dirPath !== vault.path && !expandedFolders.includes(dirPath)) {
       onExpandedFoldersChange([...expandedFolders, dirPath]);

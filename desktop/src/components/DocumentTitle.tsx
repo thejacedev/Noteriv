@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { noteTitleOf } from "@/lib/file-path";
 
 interface DocumentTitleProps {
   filePath: string;
@@ -8,8 +9,7 @@ interface DocumentTitleProps {
 }
 
 export default function DocumentTitle({ filePath, onRename }: DocumentTitleProps) {
-  const fileName = filePath.split("/").pop() || "";
-  const displayName = fileName.replace(/\.(md|markdown)$/i, "");
+  const displayName = noteTitleOf(filePath);
 
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(displayName);

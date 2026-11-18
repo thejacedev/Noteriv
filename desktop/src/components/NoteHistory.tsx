@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { noteTitleOf } from "@/lib/file-path";
 import {
   getFileHistory,
   getFileAtCommit,
@@ -115,7 +116,7 @@ export default function NoteHistory({
             </svg>
             <span className="nh-title">Note History</span>
             <span className="nh-file-name">
-              {filePath.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || ""}
+              {noteTitleOf(filePath)}
             </span>
           </div>
           <button onClick={onClose} className="nh-close" title="Close">

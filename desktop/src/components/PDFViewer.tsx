@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { fileNameOf } from "@/lib/file-path";
 import {
   type PDFAnnotation,
   type PDFAnnotationFile,
@@ -721,7 +722,7 @@ export default function PDFViewer({ filePath, vaultPath, onExportedNote, onClose
   // Sorted annotations for sidebar
   const sortedAnnotations = [...annotations].sort((a, b) => a.page - b.page || a.created - b.created);
 
-  const fileName = filePath.split("/").pop() || "PDF";
+  const fileName = fileNameOf(filePath) || "PDF";
 
   return (
     <div

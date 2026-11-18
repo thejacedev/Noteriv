@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { fileNameOf } from "@/lib/file-path";
 import {
   formatDate,
   buildCalendarMonth,
@@ -40,7 +41,7 @@ export default function CalendarView({ vaultPath, onFileSelect, onCreateDailyNot
 
       for (const file of files) {
         // Check for daily notes (YYYY-MM-DD.md)
-        const nameMatch = file.filePath.split("/").pop()?.match(/^(\d{4}-\d{2}-\d{2})\.(md|markdown)$/i);
+        const nameMatch = fileNameOf(file.filePath).match(/^(\d{4}-\d{2}-\d{2})\.(md|markdown)$/i);
         if (nameMatch) {
           daily.set(nameMatch[1], file.filePath);
         }
@@ -86,7 +87,7 @@ export default function CalendarView({ vaultPath, onFileSelect, onCreateDailyNot
         if (!content) continue;
 
         // Check daily note
-        const name = file.filePath.split("/").pop() || "";
+        const name = fileNameOf(file.filePath);
         if (name.startsWith(selectedDate)) {
           notesForDay.push({ name: name.replace(/\.(md|markdown)$/i, ""), path: file.filePath });
         }

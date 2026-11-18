@@ -7,9 +7,9 @@
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 import { attachmentFolderName } from "./vault-prefs";
+import { fileNameOf } from "./file-path";
 import {
   dropPoint,
-  fileNameOf,
   imageExtensionFor,
   imageInsertion,
   isImageName,

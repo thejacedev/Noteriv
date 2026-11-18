@@ -3,6 +3,8 @@
  * Moves files to .noteriv/trash/ instead of permanently deleting them.
  */
 
+import { fileNameOf, parentFolderOf } from "./file-path";
+
 export interface TrashItem {
   id: string;           // unique ID (timestamp-based filename in trash dir)
   fileName: string;     // original file name
@@ -21,7 +23,7 @@ export async function trashFile(vaultPath: string, filePath: string): Promise<bo
   const trashDir = `${vaultPath}/.noteriv/trash`;
   await window.electronAPI.createDir(trashDir);
 
-  const fileName = filePath.split("/").pop() || "unknown";
+  const fileName = fileNameOf(filePath) || "unknown";
   const id = `${Date.now()}-${fileName}`;
   const contentDest = `${trashDir}/${id}`;
   const metaDest = `${trashDir}/${id}.meta.json`;
@@ -119,7 +121,7 @@ export async function restoreFile(vaultPath: string, trashId: string): Promise<b
   if (content === null) return false;
 
   // Ensure parent directory exists
-  const parentDir = meta.originalPath.substring(0, meta.originalPath.lastIndexOf("/"));
+  const parentDir = parentFolderOf(meta.originalPath);
   if (parentDir) {
     await window.electronAPI.createDir(parentDir);
   }

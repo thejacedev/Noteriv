@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { confirmDialog } from "./ConfirmDialog";
+import { fileNameOf } from "@/lib/file-path";
 import {
   createEmptyDrawing,
   parseDrawing,
@@ -619,7 +620,7 @@ export default function DrawingEditor({ filePath, onClose, onSave }: DrawingEdit
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: "#181825", borderBottom: "1px solid #313244", flexShrink: 0 }}>
         <span style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 600, marginRight: 8 }}>
-          {filePath.split("/").pop()}
+          {fileNameOf(filePath)}
         </span>
 
         <div style={{ display: "flex", gap: 1, background: "#313244", borderRadius: 6, padding: 2 }}>

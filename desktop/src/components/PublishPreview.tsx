@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generatePublishHTML } from "@/lib/publish";
+import { noteTitleOf } from "@/lib/file-path";
 
 interface PublishPreviewProps {
   content: string;
@@ -52,7 +53,7 @@ export default function PublishPreview({ content, title, vaultPath, onClose }: P
       for (const fp of selectedFiles) {
         const noteContent = await window.electronAPI.readFile(fp);
         if (noteContent) {
-          const name = fp.split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "";
+          const name = noteTitleOf(fp);
           combined += `\n\n---\n\n# ${name}\n\n${noteContent}`;
         }
       }

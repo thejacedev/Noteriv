@@ -4,7 +4,6 @@ import {
   bytesToBase64,
   dropPoint,
   extensionOf,
-  fileNameOf,
   freeName,
   imageExtensionFor,
   imageInsertion,
@@ -17,12 +16,6 @@ import {
 } from "../image-insert";
 
 describe("names", () => {
-  it("reads the last part of a path with either slash", () => {
-    expect(fileNameOf("/home/me/Pictures/cat.png")).toBe("cat.png");
-    expect(fileNameOf("C:\\Users\\me\\cat.png")).toBe("cat.png");
-    expect(fileNameOf("cat.png")).toBe("cat.png");
-  });
-
   it("reads the extension in lower case", () => {
     expect(extensionOf("Photo.PNG")).toBe("png");
     expect(extensionOf("archive.tar.gz")).toBe("gz");
