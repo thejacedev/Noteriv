@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import VaultSwitcher from "./VaultSwitcher";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
+import { TAB_DRAG } from "@/lib/drag-kinds";
 
 interface Tab {
   filePath: string;
@@ -92,7 +93,8 @@ export default function TitleBar({
   const handleDragStart = (e: React.DragEvent, idx: number) => {
     setDragIdx(idx);
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(idx));
+    // Not as text, which would be typed into a note the tab is let go over.
+    e.dataTransfer.setData(TAB_DRAG, String(idx));
   };
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {

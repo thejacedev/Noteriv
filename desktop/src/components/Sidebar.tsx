@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 import { FILE_SORTS, sortFileEntries, type FileSort } from "@/lib/file-list";
 import { childPath, fileNameOf, noteTitleOf, parentFolderOf } from "@/lib/file-path";
+import { FILE_LIST_DRAG } from "@/lib/drag-kinds";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import { confirmDialog } from "./ConfirmDialog";
 
@@ -416,7 +417,8 @@ export default function Sidebar({
   const handleDragStart = useCallback((e: React.DragEvent, entry: FileEntry, parentDir: string) => {
     dragSourceRef.current = { entry, parentDir };
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", entry.path);
+    // Not as text, which would be typed into a note the row is let go over.
+    e.dataTransfer.setData(FILE_LIST_DRAG, entry.path);
     if (e.currentTarget instanceof HTMLElement) e.currentTarget.style.opacity = "0.4";
   }, []);
 
