@@ -138,9 +138,11 @@ pub const SHIM_JS: &str = r#"
       takeClipboardPaste: function () { return invoke("clipboard_take_paste"); },
 
       // ---- files dragged onto this window from outside the app
-      // The app takes these drops itself, so the page gets no "drop" event
-      // for them. `x` and `y` are as the platform gives them: see
-      // `dropPoint` in src/lib/image-insert.ts.
+      // On Linux and macOS the app takes these drops itself, so the page
+      // gets no "drop" event for them. `x` and `y` are as the platform
+      // gives them: see `dropPoint` in src/lib/image-insert.ts. On Windows
+      // nothing is reported here: the page gets the "drop" event itself
+      // (src/lib/outside-drops.ts).
       onFileDrag: function (cb) {
         var unlisten = null;
         var stopped = false;

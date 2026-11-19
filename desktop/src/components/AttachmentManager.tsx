@@ -12,6 +12,7 @@ import {
   type Attachment,
 } from "@/lib/attachment-utils";
 import { loadLinkIndex } from "@/lib/vault-links";
+import { startedInApp } from "@/lib/outside-drops";
 import "@/styles/attachments.css";
 
 interface AttachmentManagerProps {
@@ -111,7 +112,8 @@ export default function AttachmentManager({
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (e.dataTransfer.types.includes("Files")) {
+    // A picture dragged from this list carries files too, and is not a new file.
+    if (e.dataTransfer.types.includes("Files") && !startedInApp(e.dataTransfer)) {
       setIsDragging(true);
     }
   }, []);
@@ -136,6 +138,7 @@ export default function AttachmentManager({
       e.stopPropagation();
       setIsDragging(false);
       dragCounterRef.current = 0;
+      if (startedInApp(e.dataTransfer)) return;
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;

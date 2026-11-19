@@ -8,6 +8,7 @@ import {
   imageExtensionFor,
   imageInsertion,
   isImageName,
+  isImageType,
   pasteIsEmpty,
   pastedImageName,
   safeImageName,
@@ -28,6 +29,16 @@ describe("names", () => {
     expect(isImageName("a.SVG")).toBe(true);
     expect(isImageName("a.pdf")).toBe(false);
     expect(isImageName("png")).toBe(false);
+  });
+
+  it("knows a picture by its type, which is all a drag tells before the drop", () => {
+    expect(isImageType("image/png")).toBe(true);
+    expect(isImageType("IMAGE/SVG+XML")).toBe(true);
+    expect(isImageType("image/bmp")).toBe(true);
+    expect(isImageType("image/tiff")).toBe(false);
+    expect(isImageType("text/plain")).toBe(false);
+    expect(isImageType("")).toBe(false);
+    expect(isImageType("constructor")).toBe(false);
   });
 
   it("takes the extension of a clipboard file from its type first", () => {

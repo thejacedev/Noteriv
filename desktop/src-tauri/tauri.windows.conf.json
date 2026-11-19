@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Noteriv",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 500,
+        "decorations": false,
+        "transparent": false,
+        "backgroundColor": "#1e1e2e",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": -100,
+          "y": -100
+        },
+        "dragDropEnabled": false
+      }
+    ]
+  }
+}

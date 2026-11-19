@@ -226,10 +226,12 @@ interface ElectronAPI {
   takeClipboardPaste?: () => Promise<{ text: string } | { image: string } | null>;
 
   /**
-   * Files dragged onto this window from outside the app. The app takes these
-   * drops itself, so the page gets no "drop" event for them. `paths` comes
-   * with "enter" and "drop"; `x` and `y` are in the platform's own units
-   * (`dropPoint` in `lib/image-insert.ts` turns them into page coordinates).
+   * Files dragged onto this window from outside the app. On Linux and macOS
+   * the app takes these drops itself, so the page gets no "drop" event for
+   * them. `paths` comes with "enter" and "drop"; `x` and `y` are in the
+   * platform's own units (`dropPoint` in `lib/image-insert.ts` turns them
+   * into page coordinates). On Windows nothing is reported: the page gets
+   * the "drop" event itself (`lib/outside-drops.ts`).
    */
   onFileDrag?: (
     callback: (event: { type: "enter" | "over" | "drop" | "leave"; paths: string[]; x: number; y: number }) => void

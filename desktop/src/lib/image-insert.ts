@@ -49,6 +49,15 @@ export function imageExtensionFor(file: { name: string; type: string }): string 
   return IMAGE_EXTENSIONS.includes(byName) ? byName : null;
 }
 
+/**
+ * True for the type of a picture the editor shows. While a file is dragged
+ * over the page its type is all that is told of it; the name comes with the
+ * drop.
+ */
+export function isImageType(type: string): boolean {
+  return Object.keys(EXTENSION_FOR_TYPE).includes(type.toLowerCase());
+}
+
 /** The name for a picture that had none: `pasted-image-20261117-185230.png`. */
 export function pastedImageName(now: Date, extension: string): string {
   const two = (n: number) => String(n).padStart(2, "0");

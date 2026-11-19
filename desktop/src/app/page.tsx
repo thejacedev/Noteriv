@@ -67,6 +67,7 @@ import { splitWikiTarget, findAnchorLine, findLinkedFile, findLinkedNote, linkKe
 import { pdfPage } from "@/lib/embed-utils";
 import { linkUpdateMessage, updateOpenNote } from "@/lib/link-updates";
 import { linkPlace } from "@/lib/link-open";
+import { pageTakesOutsideDrops, refuseStrayDrops } from "@/lib/outside-drops";
 import { noteContaining } from "@/lib/note-path";
 import { countWords, plural } from "@/lib/text-stats";
 import { newNoteFolder, nextTimestampName } from "@/lib/file-list";
@@ -232,6 +233,21 @@ export default function Page() {
     () => window.__NOTERIV_POPOUT__?.path ?? null,
     () => undefined
   );
+
+  // Where the page is handed files dragged in from outside (Windows), one
+  // let go where nothing takes it would be opened in place of the app.
+  useEffect(() => {
+    let stop = () => {};
+    let gone = false;
+    window.electronAPI?.getPlatform?.().then((platform) => {
+      if (!gone && pageTakesOutsideDrops(platform)) stop = refuseStrayDrops();
+    }).catch(() => {});
+    return () => {
+      gone = true;
+      stop();
+    };
+  }, []);
+
   if (popout === undefined) return null;
   return popout ? <PopoutNote initialPath={popout} /> : <Home />;
 }

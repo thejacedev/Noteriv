@@ -13,11 +13,13 @@ import {
   imageExtensionFor,
   imageInsertion,
   isImageName,
+  isImageType,
   pasteIsEmpty,
   pastedImageName,
   saveImages,
   type ImageSource,
 } from "./image-insert";
+import { carriesFiles, pageTakesOutsideDrops, startedInApp } from "./outside-drops";
 
 /** What an editor knows about the note it shows, asked for at the moment of the paste or drop. */
 export interface ImageTarget {
@@ -136,9 +138,11 @@ export function imagePaste(target: ImageTarget): Extension {
  * in where the files are let go. `setActive` is told while such a drag is
  * over the editor, for the outline that shows where it will land.
  *
- * The app takes file drops itself and tells the page about them, which is
- * why this does not listen for "drop" on the element. One drop is reported
- * to every editor in the window; the one under the pointer takes it.
+ * On Linux and macOS the app takes file drops itself and tells the page
+ * about them, which is why this does not listen for "drop" on the element
+ * there. One drop is reported to every editor in the window; the one under
+ * the pointer takes it. On Windows the page is handed the drag like any web
+ * page (`outside-drops.ts` says why), and `listenOnPage` below takes it.
  *
  * Returns the function that stops listening.
  */
@@ -149,10 +153,15 @@ export function listenForImageDrops(
   setActive: (active: boolean) => void
 ): () => void {
   const api = window.electronAPI;
-  if (!api?.onFileDrag) return () => {};
+  if (!api) return () => {};
 
   let platform = "";
-  api.getPlatform?.().then((name) => { platform = name; }).catch(() => {});
+  let stopped = false;
+  let stopPage = () => {};
+  api.getPlatform?.().then((name) => {
+    platform = name;
+    if (!stopped && pageTakesOutsideDrops(name)) stopPage = listenOnPage(container, getView, target, setActive);
+  }).catch(() => {});
 
   let carriesImage = false;
   const pointOverEditor = (at: { x: number; y: number }) => {
@@ -161,7 +170,7 @@ export function listenForImageDrops(
     return element && container.contains(element) ? point : null;
   };
 
-  return api.onFileDrag((event) => {
+  const stopApp = api.onFileDrag?.((event) => {
     if (event.type === "leave") {
       carriesImage = false;
       setActive(false);
@@ -183,4 +192,86 @@ export function listenForImageDrops(
     const at = view.posAtCoords(point, false);
     insertImages(view, target, images, target.notePath(), at).catch(() => {});
   });
+
+  return () => {
+    stopped = true;
+    stopPage();
+    stopApp?.();
+  };
+}
+
+/**
+ * The same where the page is handed the drag itself: the files come with
+ * the "drop" event, to be read, and not as paths.
+ *
+ * The listeners hear the events on their way down to the editor, before it
+ * does. Left to itself the editor reads a dropped file as text and types
+ * that into the note, so every file dragged over it is taken here. What is
+ * not a picture is then let fall, as on the other systems.
+ *
+ * A picture shown in the app carries files too when it is dragged. It is
+ * not from outside, and is refused here: taken, it would be saved again.
+ *
+ * A picture that is already in the vault is copied like any other, where
+ * the other systems link it where it is: the page is not told where a
+ * dropped file came from.
+ */
+function listenOnPage(
+  container: HTMLElement,
+  getView: () => EditorView | null,
+  target: ImageTarget,
+  setActive: (active: boolean) => void
+): () => void {
+  const over = (event: DragEvent) => {
+    const data = event.dataTransfer;
+    if (!data || !carriesFiles(data)) return;
+    event.preventDefault();
+    if (startedInApp(data)) {
+      data.dropEffect = "none";
+      setActive(false);
+      return;
+    }
+    data.dropEffect = "copy";
+    setActive(Array.from(data.items ?? []).some((item) => item.kind === "file" && isImageType(item.type)));
+  };
+
+  const leave = (event: DragEvent) => {
+    // Going from one part of the editor to another is a "leave" too.
+    if (event.relatedTarget instanceof Node && container.contains(event.relatedTarget)) return;
+    setActive(false);
+  };
+
+  const drop = (event: DragEvent) => {
+    const data = event.dataTransfer;
+    if (!data || !carriesFiles(data)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setActive(false);
+    if (startedInApp(data)) return;
+
+    const view = getView();
+    const pictures = Array.from(data.files ?? []).filter((file) => file.size > 0 && imageExtensionFor(file) !== null);
+    if (!view || pictures.length === 0) return;
+    const at = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+    const note = target.notePath();
+    void (async () => {
+      const images: ImageSource[] = [];
+      for (const file of pictures) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (bytes.length > 0) images.push({ name: file.name || `image.${imageExtensionFor(file)}`, bytes });
+      }
+      await insertImages(view, target, images, note, at);
+    })().catch(() => {});
+  };
+
+  container.addEventListener("dragenter", over, true);
+  container.addEventListener("dragover", over, true);
+  container.addEventListener("dragleave", leave, true);
+  container.addEventListener("drop", drop, true);
+  return () => {
+    container.removeEventListener("dragenter", over, true);
+    container.removeEventListener("dragover", over, true);
+    container.removeEventListener("dragleave", leave, true);
+    container.removeEventListener("drop", drop, true);
+  };
 }

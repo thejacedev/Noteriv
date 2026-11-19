@@ -92,12 +92,18 @@ pub async fn window_open_popout(app: tauri::AppHandle, path: String) -> Result<(
     let target = serde_json::to_string(&path).map_err(|e| e.to_string())?;
     let init = format!("window.__NOTERIV_POPOUT__ = {{ path: {target} }};");
 
-    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+    let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
         .title(format!("{name} - Noteriv"))
         .inner_size(900.0, 700.0)
         .min_inner_size(420.0, 320.0)
         .initialization_script(&init)
-        .initialization_script(crate::shim::SHIM_JS)
+        .initialization_script(crate::shim::SHIM_JS);
+    // On Windows the app's own taking of file drops stops every drag inside
+    // the page from being dropped. The page takes dropped pictures itself
+    // there. `tauri.windows.conf.json` does the same for the main window.
+    #[cfg(target_os = "windows")]
+    let builder = builder.disable_drag_drop_handler();
+    builder
         .build()
         .map_err(|e| format!("The window could not be opened: {e}"))
         .map(|window| {
