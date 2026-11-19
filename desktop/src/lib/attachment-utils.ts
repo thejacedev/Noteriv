@@ -7,6 +7,7 @@
 
 import { attachmentFolderName } from "./vault-prefs";
 import { embedsInPlace } from "./embed-utils";
+import { bytesToBase64 } from "./image-insert";
 import type { LinkIndex } from "./link-resolve";
 import { vaultRelative, writeLink } from "./vault-links";
 
@@ -129,12 +130,11 @@ export async function deleteAttachment(filePath: string): Promise<boolean> {
 }
 
 /**
- * Copy a dropped/selected file into the attachments directory.
+ * Copy a dropped file into the attachments directory. Returns the relative
+ * markdown path.
  *
- * Since we are in a renderer context with contextIsolation, we cannot use
- * Node's fs directly. For drag-and-drop files we receive a browser File
- * object, which we read as a data-URL and write via IPC (same base64
- * approach as audio). Returns the relative markdown path.
+ * The page is handed what is in a dropped file and not where it is on the
+ * disk, so the bytes are read here and written through the app.
  */
 export async function importAttachment(
   file: File,
@@ -146,18 +146,8 @@ export async function importAttachment(
   const safeName = generateAttachmentName(file.name);
   const destPath = `${attachDir}/${safeName}`;
 
-  // Read file content as data-URL (base64)
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Failed to read file"));
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const success = await window.electronAPI.writeFile(destPath, dataUrl);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const success = await window.electronAPI.writeBinaryFile(destPath, bytesToBase64(bytes));
   if (!success) {
     throw new Error(`Failed to import attachment: ${safeName}`);
   }
