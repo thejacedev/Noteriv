@@ -281,7 +281,7 @@ The reverse is refused as well. If no password is set and the folder has no key 
 
 ### Other Apps
 
-- The mobile app does not sync over WebDAV, so it cannot use an encrypted folder.
+- The mobile app syncs over WebDAV (after 1.1.0) but cannot read an encrypted folder yet. It recognises one and refuses to sync with it, so it never writes readable notes beside the encrypted ones. See [Mobile Sync](./mobile-sync.md#webdav-sync).
 - Anything else that reads the remote folder, such as the server's own web interface, shows the file names but cannot show the contents.
 
 ## Server-Specific Setup
@@ -381,6 +381,6 @@ Update Noteriv on every device that syncs with the same server. A device still o
 - File types that [What Syncs](./what-syncs.md) does not list are never synced, and neither are empty folders.
 - A rename or move is synced as a deletion and a new file.
 - Encryption covers the contents of files only. File and folder names and file sizes stay readable on the server, and a forgotten encryption password cannot be recovered. See [Encryption](#encryption).
-- WebDAV sync is desktop-only. The mobile app does not support WebDAV.
+- The mobile app syncs over WebDAV too (after 1.1.0), into the same remote folder and by the same rules, with two limits: it cannot use an encrypted folder, and it always syncs notes, images and PDFs, because the choice of what syncs is only on the desktop. See [Mobile Sync](./mobile-sync.md#webdav-sync).
 - Some WebDAV servers have file size limits. Check your server configuration for `upload_max_filesize` or equivalent settings.
 - WebDAV sync does not use server-side versioning. Even if your WebDAV server (like Nextcloud) has file versioning, Noteriv does not interact with it. Use Git sync for version history.

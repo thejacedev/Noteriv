@@ -5,7 +5,9 @@ order: 5
 
 # Mobile Sync
 
-The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub, GitLab, Gitea, and Forgejo repositories. Since mobile platforms do not have a `git` binary available, the app communicates directly with each provider's REST API to push and pull files. The experience is designed to feel seamless: configure a repository once, then sync it in the background.
+The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub, GitLab, Gitea, and Forgejo repositories, and with a WebDAV server (after 1.1.0, see [WebDAV Sync](#webdav-sync)). Most of this page is about the Git providers.
+
+Since mobile platforms do not have a `git` binary available, the app communicates directly with each provider's REST API to push and pull files. The experience is designed to feel seamless: configure a repository once, then sync it in the background.
 
 ## How It Differs from Desktop Git Sync
 
@@ -182,7 +184,73 @@ The following paths are excluded from sync:
 
 All other files participate in sync.
 
+## WebDAV Sync
+
+> **Which builds have this.** WebDAV sync is in the mobile app after version 1.1.0. Version 1.1.0 and earlier sync with Git providers only.
+
+The mobile app can sync a vault with a folder on a WebDAV server: Nextcloud, ownCloud, a NAS, or any other server that speaks WebDAV. It follows the same rules as the desktop app's [WebDAV Sync](./webdav-sync.md) and uses the same layout on the server, so a phone and a computer can share one remote folder.
+
+It is separate from Git sync. A vault can be connected to both, but on the phone the two do not agree about deletions: Git sync on mobile never deletes from the repository and downloads again any note that is missing on the phone. A note deleted on another device therefore comes back, and WebDAV then carries it to the other devices again. Use one of the two for a vault on the phone if deletions matter to you.
+
+### Setting It Up
+
+1. Open Settings and scroll to **WebDAV Sync**.
+2. Enter the server address. For Nextcloud it is `https://cloud.example.com/remote.php/dav/files/your-name`. The [desktop page](./webdav-sync.md#server-specific-setup) lists the address for other servers.
+3. Enter the username and password. Where the server offers app passwords, use one.
+4. Enter the remote folder, for example `/Noteriv`. To share notes with the desktop app, enter the same server address and the same remote folder as on the computer.
+5. Tap **Save & Sync**.
+
+Before anything is saved the app asks the server. If the address, the username or the password is wrong, the reason is shown under the form and nothing is saved. A remote folder that does not exist yet is created.
+
+The address has to start with `https://`. The Android app does not make plain `http://` connections. A certificate from a private authority has to be trusted by the phone first: see [Your Own Server and Certificates](#your-own-server-and-certificates).
+
+### What Syncs
+
+Notes, images and PDFs: the file types the desktop app syncs when nothing else is chosen ([What Syncs](./what-syncs.md)). The choice of what syncs that the desktop app offers is not on the phone yet. Files of other kinds are left alone on both sides: they are never uploaded, downloaded or deleted.
+
+The app's own folders, `.noteriv/` and `.trash/`, are never synced.
+
+### When It Syncs
+
+- When the vault opens.
+- Once a minute while the app is open.
+- When the app leaves the foreground and when it comes back.
+- When you tap **Sync Now** in Settings.
+
+A server that cannot be reached is tried again a minute later. Nothing is lost meanwhile: the next sync that gets through carries everything that changed.
+
+### Edits, Deletions and Conflicts
+
+The rules are the desktop app's, described in full on the [WebDAV Sync](./webdav-sync.md) page:
+
+- A note changed on one device replaces the older copy on the others.
+- A note changed on two devices is kept twice: the newer version keeps the name, and the other is saved beside it as `Note (conflict 2026-11-21 14-30-05).md`, on every device.
+- A note deleted on another device is moved to the phone's trash, where it can be restored.
+- A note that was edited on one device and deleted on another is kept.
+- The first sync deletes nothing. Notes that are the same on the phone and on the server are left as they are, and a note that differs is kept twice.
+- A vault that is suddenly empty never empties the server. The notes are downloaded again.
+
+### What It Cannot Do Yet
+
+- **Encrypted folders.** A remote folder the desktop app [encrypted](./webdav-sync.md#encryption) cannot be read on the phone. The app recognises it and refuses to sync, with "This remote folder is encrypted", so readable notes are never written beside encrypted ones.
+- **Plain `http://`** on Android, as above.
+- **Redirects.** If the server answers with a redirect, the app stops and shows the address the server pointed to. Enter that address instead.
+- **Two vaults in one folder.** A second vault on the phone is not allowed the remote folder another vault already syncs with, or a folder inside it: their notes would be mixed.
+
+### Troubleshooting WebDAV
+
+| Message | What to do |
+|---|---|
+| "The server rejected the username or password (HTTP 401)" | Check both. On Nextcloud with two-factor sign-in, an app password is required. |
+| "Could not reach the server" | The phone is offline, the address is wrong, it starts with `http://`, or the certificate is not trusted by the phone. |
+| "The remote folder was not found on the server (HTTP 404)" | The folder was removed on the server and could not be created again. Check the remote folder in Settings. |
+| "This remote folder is encrypted" | The folder was encrypted from the desktop app. Use a remote folder that is not encrypted for the phone. |
+| "The server listed a different folder than the one asked for" | The server address is not the WebDAV address itself, or a proxy in front of the server rewrites it. |
+| "1 file could not be synced" | The message names the file and the reason. The other files were synced, and this one is tried again at the next sync. |
+
 ## Limitations
+
+These are the limits of Git sync on mobile. The limits of WebDAV sync are listed [above](#what-it-cannot-do-yet).
 
 - **Supported providers**: Mobile sync supports GitHub, GitLab, Gitea, and Forgejo. GitLab and Gitea/Forgejo can use self-hosted instances when their HTTPS clone URL is entered in Settings. Bitbucket and arbitrary Git servers are not supported.
 - **Fresh Clone is GitHub only**: for GitLab and Gitea/Forgejo, a new device gets its notes from the first sync instead.

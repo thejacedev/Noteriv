@@ -81,7 +81,6 @@ A few features are available only on the desktop app due to platform constraints
 | Real-time collaboration | WebRTC peer-to-peer connections require desktop networking APIs |
 | Audio recorder | Desktop microphone access via the OS portal |
 | Folder sync (Dropbox/Drive) | File system watcher requires native OS integration |
-| WebDAV sync | Desktop network stack handles authentication and large transfers |
 | Web clipper | Browser extension communicates with the desktop app |
 
 ## Architecture
@@ -126,7 +125,9 @@ The sync engine handles:
 - **Conflict detection** when the same file has been modified both locally and remotely.
 - **Auto-sync** at the configured interval when the app is in the foreground.
 
-Folder sync (Dropbox/Drive) and WebDAV sync are desktop-only features due to platform limitations.
+WebDAV sync (after 1.1.0) connects a vault to Nextcloud, ownCloud, a NAS or any other WebDAV server, and can share a remote folder with the desktop app. It is set up under **WebDAV Sync** in Settings: see [Mobile Sync](../sync/mobile-sync.md#webdav-sync). A folder the desktop app encrypted cannot be used on the phone yet.
+
+Folder sync (Dropbox/Drive) is a desktop-only feature due to platform limitations.
 
 ## Getting Started
 
