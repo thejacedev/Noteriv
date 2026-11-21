@@ -2443,6 +2443,47 @@ mod live {
         }
     }
 
+    /// One sync run for another program to drive. The phone app's tests use
+    /// it to put this code and the phone's own sync on the same remote
+    /// folder (`phone/tests/live/webdav.live.mjs`). The vault, the folder
+    /// for records and the remote path come from the environment, and
+    /// without them this does nothing, so it is harmless in a run of this
+    /// whole module. The outcome is printed as one line of JSON.
+    #[test]
+    #[ignore]
+    fn one_run_for_another_program() {
+        let (Ok(vault), Ok(records), Ok(remote)) = (
+            env::var("NOTERIV_WEBDAV_VAULT"),
+            env::var("NOTERIV_WEBDAV_RECORDS"),
+            env::var("NOTERIV_WEBDAV_REMOTE"),
+        ) else {
+            return;
+        };
+        let cfg = WebDavConfig {
+            url: var("NOTERIV_WEBDAV_URL"),
+            username: var("NOTERIV_WEBDAV_USER"),
+            password: var("NOTERIV_WEBDAV_PASS"),
+            remote_path: remote,
+            filter: SyncFilter::default(),
+            encryption_password: env::var("NOTERIV_WEBDAV_ENCRYPTION")
+                .ok()
+                .filter(|password| !password.is_empty()),
+        };
+        let line = match rt().block_on(sync(&vault, cfg, Path::new(&records))) {
+            Ok(outcome) => serde_json::json!({
+                "ok": true,
+                "pushed": outcome.pushed,
+                "pulled": outcome.pulled,
+                "deleted": outcome.deleted,
+                "conflicts": outcome.conflicts,
+                "copies": outcome.conflict_copies.iter().map(|c| c.copy.clone()).collect::<Vec<_>>(),
+                "errors": outcome.errors,
+            }),
+            Err(error) => serde_json::json!({ "ok": false, "error": error }),
+        };
+        println!("NOTERIV_OUTCOME {line}");
+    }
+
     fn server_tree(remote: &str) -> Vec<String> {
         let cfg = cfg(remote);
         let client = build_client(&cfg).unwrap();
