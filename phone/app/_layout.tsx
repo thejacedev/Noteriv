@@ -29,15 +29,20 @@ function AppThemeWrapper({ children }: { children: React.ReactNode }) {
 /**
  * Writes the open note when the app leaves the foreground. Android may close
  * an app in the background without a word, and the unsaved text with it.
+ *
+ * A vault that syncs over WebDAV is also synced at that moment, so what was
+ * just written leaves the phone if the system gives it the time, and again
+ * when the app comes back, so what other devices did meanwhile arrives.
  */
 function SaveOnBackground() {
-  const { flushFile } = useApp();
+  const { flushFile, requestWebDavSync } = useApp();
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') flushFile();
+      requestWebDavSync();
     });
     return () => subscription.remove();
-  }, [flushFile]);
+  }, [flushFile, requestWebDavSync]);
   return null;
 }
 

@@ -20,6 +20,7 @@ import { useApp } from '@/context/AppContext';
 import { useTheme } from '@/context/ThemeContext';
 import { KEYS, setItem } from '@/lib/storage';
 import * as GitSync from '@/lib/provider-sync';
+import * as WebDav from '@/lib/webdav-sync';
 import { GitProvider } from '@/types';
 import { loadSnippets } from '@/lib/css-snippets';
 import { getInstalledPlugins, getEnabledPluginIds } from '@/lib/plugins';
@@ -42,7 +43,7 @@ const AUTO_SAVE_OPTIONS = [
 const TAB_SIZE_OPTIONS = [2, 4, 8];
 
 export default function SettingsScreen() {
-  const { settings, updateSettings, vault, refreshFiles, refreshVaults } = useApp();
+  const { settings, updateSettings, vault, vaults, refreshFiles, refreshVaults, syncWebDav } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -75,6 +76,16 @@ export default function SettingsScreen() {
   const [showCommunityThemes, setShowCommunityThemes] = useState(false);
   const [loadingCommunityThemes, setLoadingCommunityThemes] = useState(false);
   const [installingThemeId, setInstallingThemeId] = useState<string | null>(null);
+
+  // WebDAV sync state
+  const [davUrl, setDavUrl] = useState('');
+  const [davUser, setDavUser] = useState('');
+  const [davPassword, setDavPassword] = useState('');
+  const [davPath, setDavPath] = useState('/Noteriv');
+  const [davBusy, setDavBusy] = useState(false);
+  const [davError, setDavError] = useState<string | null>(null);
+  const [davStatus, setDavStatus] = useState<string | null>(null);
+  const [davLastSync, setDavLastSync] = useState<string | null>(null);
 
   // Load the provider-neutral token, falling back to the legacy GitHub token.
   useEffect(() => {
@@ -232,6 +243,88 @@ export default function SettingsScreen() {
       setSyncing(false);
     }
   }, [vault, remoteInput, tokenInput, providerInput, refreshFiles, refreshVaults]);
+
+  const handleSaveWebDav = useCallback(async () => {
+    if (!vault || !davUrl.trim() || !davUser.trim() || !davPassword) return;
+    const cfg: WebDav.WebDavConfig = {
+      url: davUrl.trim(),
+      username: davUser.trim(),
+      password: davPassword,
+      remotePath: davPath.trim() || '/',
+    };
+    setDavError(null);
+    setDavStatus(null);
+    setDavBusy(true);
+    try {
+      const other = WebDav.vaultSharingFolder(vaults, vault.id, cfg);
+      if (other) {
+        setDavError(`The vault "${other}" already syncs with this folder. Two vaults in one folder would be mixed into each other: choose another remote folder.`);
+        return;
+      }
+      // Ask the server first: details that cannot work are not saved, and the
+      // reason is shown under the form instead of a "connected" vault that never syncs.
+      await WebDav.testConnection(cfg);
+      const { updateVault } = await import('@/lib/vault');
+      const webdav = { url: cfg.url, username: cfg.username, remotePath: cfg.remotePath };
+      await setItem(KEYS.WEBDAV_PASSWORD(vault.id), cfg.password);
+      await updateVault(vault.id, { webdav });
+      setDavPassword('');
+      try {
+        const outcome = await syncWebDav({ ...vault, webdav }, cfg);
+        setDavLastSync(new Date().toLocaleTimeString());
+        setDavStatus(WebDav.describeOutcome(outcome));
+        refreshFiles();
+      } catch (err) {
+        setDavStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // From here on the vault syncs by itself.
+      await refreshVaults();
+    } catch (err) {
+      setDavError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDavBusy(false);
+    }
+  }, [vault, vaults, davUrl, davUser, davPassword, davPath, syncWebDav, refreshFiles, refreshVaults]);
+
+  const handleWebDavSyncNow = useCallback(async () => {
+    if (!vault?.webdav) return;
+    setDavBusy(true);
+    setDavStatus(null);
+    try {
+      const cfg = await WebDav.vaultConfig(vault);
+      if (!cfg) {
+        setDavStatus('Sync failed: the password for this server is no longer stored. Disconnect and connect again.');
+        return;
+      }
+      const outcome = await syncWebDav(vault, cfg);
+      setDavLastSync(new Date().toLocaleTimeString());
+      setDavStatus(WebDav.describeOutcome(outcome));
+      refreshFiles();
+    } catch (err) {
+      setDavStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDavBusy(false);
+    }
+  }, [vault, syncWebDav, refreshFiles]);
+
+  const handleDisconnectWebDav = useCallback(() => {
+    if (!vault) return;
+    Alert.alert('Disconnect WebDAV', 'Stop syncing this vault with the server? Your notes stay on the phone and on the server.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect',
+        style: 'destructive',
+        onPress: async () => {
+          const { updateVault } = await import('@/lib/vault');
+          await updateVault(vault.id, { webdav: null });
+          await AsyncStorage.removeItem(KEYS.WEBDAV_PASSWORD(vault.id));
+          setDavStatus(null);
+          setDavLastSync(null);
+          await refreshVaults();
+        },
+      },
+    ]);
+  }, [vault, refreshVaults]);
 
   const handleFreshClone = useCallback(async () => {
     if (!vault || !ghToken || !vault.gitRemote) return;
@@ -854,6 +947,96 @@ export default function SettingsScreen() {
                 <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{syncing ? 'Saving...' : 'Save & Sync Remote'}</Text>
               </TouchableOpacity>
               {remoteError ? <Text style={[s.modalHint, { color: colors.red }]}>{remoteError}</Text> : null}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* WebDAV sync */}
+      {renderSectionHeader('WebDAV Sync', 'cloud-outline')}
+      <View style={[s.section, { backgroundColor: colors.bgTertiary }]}>
+        {vault?.webdav?.url ? (
+          <>
+            <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+              <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Status</Text>
+              <View style={s.statusRow}>
+                <View style={[s.statusDot, { backgroundColor: colors.green }]} />
+                <Text style={{ color: colors.green, fontSize: 14, fontWeight: '500' }}>Connected</Text>
+              </View>
+            </View>
+
+            <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }} numberOfLines={2}>
+                {vault.webdav.url.replace(/\/+$/, '')}/{vault.webdav.remotePath.replace(/^\/+|\/+$/g, '')} as {vault.webdav.username}
+              </Text>
+            </View>
+
+            {davLastSync && (
+              <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+                <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Last sync</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{davLastSync}</Text>
+              </View>
+            )}
+
+            {davStatus && (
+              <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+                <Text style={{ color: davStatus.includes('failed') || davStatus.includes('could not') ? colors.red : colors.textSecondary, fontSize: 13, flex: 1 }}>
+                  {davStatus}
+                </Text>
+              </View>
+            )}
+
+            <View style={[s.settingRow, { borderBottomColor: colors.border, gap: 8 }]}>
+              <TouchableOpacity
+                style={[s.syncButton, { backgroundColor: colors.accent }, davBusy && { opacity: 0.6 }]}
+                onPress={handleWebDavSyncNow}
+                disabled={davBusy}
+              >
+                {davBusy ? (
+                  <ActivityIndicator size="small" color={colors.bgPrimary} />
+                ) : (
+                  <Ionicons name="sync" size={18} color={colors.bgPrimary} />
+                )}
+                <Text style={[s.syncButtonText, { color: colors.bgPrimary }]}>{davBusy ? 'Syncing...' : 'Sync Now'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+              <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Auto-sync</Text>
+              <Text style={{ color: colors.green, fontSize: 13, fontWeight: '500' }}>Every minute</Text>
+            </View>
+
+            {gitConnected && (
+              <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
+                <Text style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>
+                  This vault also syncs with Git. On the phone, Git sync brings back a note that was deleted on another device, so deletions do not last while both are connected.
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={[s.settingRow, { borderBottomColor: colors.border }]} onPress={handleDisconnectWebDav}>
+              <Text style={{ color: colors.red, fontSize: 15, fontWeight: '500' }}>Disconnect WebDAV</Text>
+              <Ionicons name="close-circle-outline" size={20} color={colors.red} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <View style={s.gitDisconnected}>
+            <Text style={[s.gitDisconnectedText, { color: colors.textMuted }]}>
+              Sync this vault with a folder on a WebDAV server: Nextcloud, ownCloud, a NAS, or the same folder the desktop app syncs with.
+            </Text>
+            <View style={s.customRemoteForm}>
+              <Text style={[s.modalHint, { color: colors.textMuted }]}>
+                The server address has to start with https://. For Nextcloud it looks like https://cloud.example.com/remote.php/dav/files/your-name, and the password can be an app password. A folder the desktop app encrypted cannot be used yet.
+              </Text>
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="https://cloud.example.com/remote.php/dav/files/you" placeholderTextColor={colors.textMuted} value={davUrl} onChangeText={(text) => { setDavUrl(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Username" placeholderTextColor={colors.textMuted} value={davUser} onChangeText={(text) => { setDavUser(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Password or app password" placeholderTextColor={colors.textMuted} value={davPassword} onChangeText={(text) => { setDavPassword(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Remote folder, for example /Noteriv" placeholderTextColor={colors.textMuted} value={davPath} onChangeText={(text) => { setDavPath(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} />
+              <TouchableOpacity style={[s.connectButton, { backgroundColor: colors.accent }, (!davUrl.trim() || !davUser.trim() || !davPassword || davBusy) && { opacity: 0.5 }]} onPress={handleSaveWebDav} disabled={!davUrl.trim() || !davUser.trim() || !davPassword || davBusy}>
+                <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{davBusy ? 'Checking...' : 'Save & Sync'}</Text>
+              </TouchableOpacity>
+              {davError ? <Text style={[s.modalHint, { color: colors.red }]}>{davError}</Text> : null}
+              {davStatus ? <Text style={[s.modalHint, { color: colors.textMuted }]}>{davStatus}</Text> : null}
             </View>
           </View>
         )}

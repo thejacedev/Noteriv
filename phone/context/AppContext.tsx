@@ -6,6 +6,12 @@ import * as FS from '@/lib/file-system';
 import * as GitSync from '@/lib/provider-sync';
 import { NoteSession } from '@/lib/note-session';
 import { conflictCopyPath, vaultFileUri, vaultRelativePath } from '@/lib/sync-state';
+import * as WebDav from '@/lib/webdav-sync';
+
+/** The sync timers tick this often. */
+const SYNC_TICK_MS = 5_000;
+/** A vault syncs with its WebDAV folder every this many ticks: once a minute. */
+const WEBDAV_EVERY_TICKS = 12;
 
 interface AppContextType {
   // Vault
@@ -36,6 +42,12 @@ interface AppContextType {
   currentDir: string;
   setCurrentDir: (dir: string) => void;
   refreshFiles: () => void;
+
+  // WebDAV sync
+  /** Sync a vault with a WebDAV folder now, after any sync that is already running. Throws when the server cannot be used. */
+  syncWebDav: (vault: WebDav.SyncedVault, cfg: WebDav.WebDavConfig) => Promise<WebDav.Outcome>;
+  /** Ask for the open vault's WebDAV sync to run soon instead of at its next turn. */
+  requestWebDavSync: () => void;
 
   // Setup
   setupComplete: boolean;
@@ -74,6 +86,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // The sync timers outlive renders, so they read the open folder through a ref.
   const currentDirRef = useRef(currentDir);
   currentDirRef.current = currentDir;
+  const vaultIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    vaultIdRef.current = vault?.id ?? null;
+  }, [vault?.id]);
+  /** Set while the open vault syncs over WebDAV: makes its next sync due at once. */
+  const wakeWebDav = useRef<(() => void) | null>(null);
 
   // The open note's latest text lives outside React state. A timer, the back
   // button or a sync runs with the state of an older render, and used to save
@@ -228,7 +246,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } finally {
         syncInFlight.current = false;
       }
-    }, 5_000);
+    }, SYNC_TICK_MS);
 
     return () => {
       if (autoSyncTimer.current) {
@@ -237,6 +255,94 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [vault?.id, vault?.gitRemote, vault?.gitBranch]);
+
+  /**
+   * One WebDAV sync of a vault. Only one sync of any kind runs at a time:
+   * with `wait` this one takes its turn after the one that is running, and
+   * without it gives up (null) so a timer can try again at its next tick.
+   */
+  const runWebDav = useCallback(async (target: WebDav.SyncedVault, cfg: WebDav.WebDavConfig, wait: boolean): Promise<WebDav.Outcome | null> => {
+    while (syncInFlight.current) {
+      if (!wait) return null;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    syncInFlight.current = true;
+    try {
+      // Sync compares what is on disk, so the open note's latest text goes there first.
+      flushFile();
+      const outcome = await WebDav.syncVault(target, cfg);
+      // A note that was replaced, trashed or copied may be the one that is
+      // open, or one the list shows.
+      if (vaultIdRef.current === target.id && outcome.pulled + outcome.deleted + outcome.conflicts > 0) {
+        await takeOpenNoteFromDisk(target.path);
+        if (currentDirRef.current) setFiles(FS.readDir(currentDirRef.current));
+      }
+      return outcome;
+    } finally {
+      syncInFlight.current = false;
+    }
+  }, [flushFile, takeOpenNoteFromDisk]);
+
+  // WebDAV sync: when the vault opens, then once a minute while the app is open.
+  const davVaultId = vault?.id;
+  const davVaultPath = vault?.path;
+  const davUrl = vault?.webdav?.url;
+  const davUsername = vault?.webdav?.username;
+  const davRemotePath = vault?.webdav?.remotePath;
+  useEffect(() => {
+    if (!davVaultId || !davVaultPath || !davUrl) return;
+    const target: WebDav.SyncedVault = {
+      id: davVaultId,
+      path: davVaultPath,
+      webdav: { url: davUrl, username: davUsername ?? '', remotePath: davRemotePath ?? '/' },
+    };
+    let due = true;
+    let ticks = 0;
+    let stopped = false;
+
+    const attempt = async () => {
+      if (stopped || !due) return;
+      try {
+        // Read each time, so a changed password is used from the next sync on.
+        const cfg = await WebDav.vaultConfig(target);
+        if (stopped || !cfg || syncInFlight.current) return;
+        // Whatever happens next, the following try is a full turn away: a
+        // server that cannot be reached is not asked again every few seconds.
+        due = false;
+        ticks = 0;
+        const outcome = await runWebDav(target, cfg, false);
+        if (outcome === null) due = true;
+        else if (outcome.errors.length > 0) console.warn('[Noteriv] WebDAV sync errors:', outcome.errors);
+      } catch (err) {
+        console.warn('[Noteriv] WebDAV sync failed:', err);
+      }
+    };
+
+    attempt();
+    const timer = setInterval(() => {
+      ticks += 1;
+      if (ticks >= WEBDAV_EVERY_TICKS) due = true;
+      attempt();
+    }, SYNC_TICK_MS);
+    wakeWebDav.current = () => {
+      due = true;
+      attempt();
+    };
+
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      wakeWebDav.current = null;
+    };
+  }, [davVaultId, davVaultPath, davUrl, davUsername, davRemotePath, runWebDav]);
+
+  const syncWebDav = useCallback(async (target: WebDav.SyncedVault, cfg: WebDav.WebDavConfig): Promise<WebDav.Outcome> => {
+    return (await runWebDav(target, cfg, true)) as WebDav.Outcome;
+  }, [runWebDav]);
+
+  const requestWebDavSync = useCallback(() => {
+    wakeWebDav.current?.();
+  }, []);
 
   const refreshFiles = useCallback(() => {
     if (!currentDir) return;
@@ -380,6 +486,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentDir,
         setCurrentDir,
         refreshFiles,
+        syncWebDav,
+        requestWebDavSync,
         setupComplete,
         completeSetup,
         isLoading,

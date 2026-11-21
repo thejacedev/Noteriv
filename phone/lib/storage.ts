@@ -8,6 +8,7 @@ const KEYS = {
   WORKSPACE: (vaultId: string) => `noteriv:workspace:${vaultId}`,
   GITHUB_TOKEN: (vaultId: string) => `noteriv:ghToken:${vaultId}`,
   GIT_TOKEN: (vaultId: string) => `noteriv:gitToken:${vaultId}`,
+  WEBDAV_PASSWORD: (vaultId: string) => `noteriv:webdavPassword:${vaultId}`,
 };
 
 export async function getItem<T>(key: string): Promise<T | null> {

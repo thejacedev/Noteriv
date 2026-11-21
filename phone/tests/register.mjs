@@ -1,7 +1,7 @@
 // Lets `node --test` load the app's TypeScript sources without a bundler or a
 // test framework. "@/..." imports resolve the way the app resolves them, the
-// two modules that only exist on a phone (the file system and key-value
-// storage) are swapped for in-memory stand-ins, and .ts files are compiled
+// modules that only exist on a phone (the file system, key-value storage and
+// Expo's fetch) are swapped for stand-ins, and .ts files are compiled
 // with the TypeScript that is already a dev dependency. That covers .tsx
 // too, so a component that needs no phone (context/AppContext.tsx) can be
 // run as it is.
@@ -17,7 +17,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fakes = {
   '@/lib/file-system': 'tests/fakes/file-system.mjs',
   '@/lib/storage': 'tests/fakes/storage.mjs',
+  '@/lib/http': 'tests/fakes/http.mjs',
 };
+// The tests against a real server (tests/live) keep their vaults on a real disk.
+if (process.env.NOTERIV_LIVE) fakes['@/lib/file-system'] = 'tests/live/disk-file-system.mjs';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
