@@ -37,7 +37,8 @@
         }
       ],
       "./plugins/withAndroidDebugBundle.js",
-      "./plugins/withAndroidUserCertificates.js"
+      "./plugins/withAndroidUserCertificates.js",
+      "./plugins/withOptionalPortrait.js"
     ],
     "experiments": {
       "typedRoutes": true,
