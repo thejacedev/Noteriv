@@ -167,7 +167,7 @@ Most note apps lock you into their cloud, their format, or their platform. Noter
 - **Auto-sync every 5 seconds**: always-on background sync, pull first then push, no config needed
 - **Pull on open**: fetch the latest changes when a vault opens
 - **Folder sync**: Google Drive, Dropbox, OneDrive, iCloud (desktop)
-- **WebDAV sync**: Nextcloud, ownCloud or any WebDAV server (desktop, and the mobile app after 1.1.0)
+- **WebDAV sync**: Nextcloud, ownCloud or any WebDAV server (desktop, and the mobile app since 1.2.0)
 - **Vault file watcher**: picks up outside changes (the MCP server, git pulls, other editors). The sidebar refreshes on its own, open files without unsaved changes reload instantly, and open files with unsaved changes are saved first
 
 </details>

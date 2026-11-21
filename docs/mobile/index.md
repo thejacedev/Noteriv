@@ -125,7 +125,7 @@ The sync engine handles:
 - **Conflict detection** when the same file has been modified both locally and remotely.
 - **Auto-sync** at the configured interval when the app is in the foreground.
 
-WebDAV sync (after 1.1.0) connects a vault to Nextcloud, ownCloud, a NAS or any other WebDAV server, and can share a remote folder with the desktop app. It is set up under **WebDAV Sync** in Settings: see [Mobile Sync](../sync/mobile-sync.md#webdav-sync). A folder the desktop app encrypted cannot be used on the phone yet.
+WebDAV sync (since 1.2.0) connects a vault to Nextcloud, ownCloud, a NAS or any other WebDAV server, and can share a remote folder with the desktop app. It is set up under **WebDAV Sync** in Settings: see [Mobile Sync](../sync/mobile-sync.md#webdav-sync). A folder the desktop app encrypted cannot be used on the phone yet.
 
 Folder sync (Dropbox/Drive) is a desktop-only feature due to platform limitations.
 

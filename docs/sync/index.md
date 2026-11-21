@@ -100,7 +100,7 @@ WebDAV sync keeps both versions when a file changed on both sides since the last
 | Conflict handling | Merge/rebase | Keeps both versions | Keeps both versions |
 | Requires internet | For push/pull | No (local folder) | Yes |
 | Setup complexity | Moderate (token) | Low (pick folder) | Moderate (URL/auth) |
-| Mobile support | Yes (via the provider's API) | No | Yes (after 1.1.0, not encrypted folders) |
+| Mobile support | Yes (via the provider's API) | No | Yes (since 1.2.0, not encrypted folders) |
 | Self-hostable | Yes (any git server) | Yes | Yes |
 | Choosing what syncs | Through `.gitignore` | Yes (after 2.4.13) | Yes (after 2.4.13) |
 | Encrypts file contents | No | No | Optional (after 2.4.13) |
@@ -164,7 +164,7 @@ On mobile, the GitHub token is stored in the app's secure storage, tied to the s
 
 WebDAV username and password are stored in Noteriv's settings file on the device, not in the vault. They are transmitted over HTTPS to the WebDAV server. Ensure your WebDAV server uses HTTPS to prevent credential interception.
 
-On mobile (after 1.1.0), the server address and username are kept with the vault's entry in the app's settings and the password in the app's own storage on the phone. Neither is in the vault, so neither is synced. Disconnecting WebDAV in Settings, or deleting the vault from the app, removes the password.
+On mobile (since 1.2.0), the server address and username are kept with the vault's entry in the app's settings and the password in the app's own storage on the phone. Neither is in the vault, so neither is synced. Disconnecting WebDAV in Settings, or deleting the vault from the app, removes the password.
 
 ### WebDAV Encryption
 

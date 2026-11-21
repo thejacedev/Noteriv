@@ -5,7 +5,7 @@ order: 5
 
 # Mobile Sync
 
-The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub, GitLab, Gitea, and Forgejo repositories, and with a WebDAV server (after 1.1.0, see [WebDAV Sync](#webdav-sync)). Most of this page is about the Git providers.
+The Noteriv mobile app (iOS and Android, built with React Native and Expo) supports vault synchronization with GitHub, GitLab, Gitea, and Forgejo repositories, and with a WebDAV server (since 1.2.0, see [WebDAV Sync](#webdav-sync)). Most of this page is about the Git providers.
 
 Since mobile platforms do not have a `git` binary available, the app communicates directly with each provider's REST API to push and pull files. The experience is designed to feel seamless: configure a repository once, then sync it in the background.
 
