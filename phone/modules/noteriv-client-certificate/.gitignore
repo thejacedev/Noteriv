@@ -1,0 +1,2 @@
+# Gradle writes its output next to the sources when the app is built on this machine.
+android/build/

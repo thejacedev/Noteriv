@@ -16,6 +16,7 @@
  * The record of the last sync lives outside the vault, so it is never synced
  * itself: a record from another device would describe the wrong files.
  */
+import { ensureUsable, NONE_CHOSEN, serverAsks, supported as certificatesSupported } from '@/lib/client-certificate';
 import * as FS from '@/lib/file-system';
 import { getItem, KEYS } from '@/lib/storage';
 import {
@@ -43,7 +44,6 @@ import {
   dirUrl,
   ensureRoot,
   Expect,
-  explainStatus,
   fileUrl,
   foldersOverlap,
   get,
@@ -51,12 +51,14 @@ import {
   mkcol,
   propfind,
   put,
+  Refused,
   relUnder,
   decodedPath,
   remove,
   RemoteFolderMissing,
   rootUrl,
   statRemote,
+  Unreachable,
   WebDavConfig,
 } from '@/lib/webdav-client';
 import { Vault } from '@/types';
@@ -491,6 +493,50 @@ class Run {
   }
 }
 
+// ============================================================
+// Client certificates
+// ============================================================
+
+/**
+ * What a server in front of the folder answers when it wanted a client
+ * certificate and saw none it accepts. Most servers end the connection
+ * instead; nginx answers 400, and some setups 403.
+ */
+const CERTIFICATE_STATUSES = new Set([400, 403, 495, 496]);
+
+/**
+ * A failure, with the certificate named when the certificate is the reason.
+ *
+ * A server that wants a client certificate gives no useful answer to a phone
+ * that shows none: it hangs up, or says "400". So after such a failure the
+ * server is asked once more, and if it does ask for a certificate the message
+ * says that and where to choose one.
+ */
+async function aboutCertificate(cfg: WebDavConfig, error: unknown): Promise<unknown> {
+  if (!certificatesSupported()) return error;
+  const brokeOff = error instanceof Unreachable && !error.timedOut;
+  const turnedDown = error instanceof Refused && CERTIFICATE_STATUSES.has(error.status);
+  if (!brokeOff && !turnedDown) return error;
+  if (cfg.clientCertificate) {
+    // It was shown and the server still answered the way it does to a certificate it does not like.
+    return error instanceof Refused && error.status !== 403
+      ? new Error(`${error.message} The server may not accept the client certificate "${cfg.clientCertificate}".`)
+      : error;
+  }
+  if (!(await serverAsks(cfg.url))) return error;
+  return new Error(error instanceof Refused ? `${error.message} ${NONE_CHOSEN}` : NONE_CHOSEN);
+}
+
+/** Runs `work` for a vault, with the vault's certificate checked first and named in a failure it caused. */
+async function withCertificate<T>(cfg: WebDavConfig, work: () => Promise<T>): Promise<T> {
+  await ensureUsable(cfg.clientCertificate);
+  try {
+    return await work();
+  } catch (error) {
+    throw await aboutCertificate(cfg, error);
+  }
+}
+
 /**
  * Sync a vault with its WebDAV folder. `recordUri` is where this phone keeps
  * its record of the vault's earlier syncs.
@@ -499,12 +545,16 @@ class Run {
  * this throws. After that each file stands alone: one that fails is reported
  * in `errors` and does not stop the rest.
  */
-export async function sync(
+export function sync(
   vaultPath: string,
   cfg: WebDavConfig,
   recordUri: string,
   filter: SyncFilter = DEFAULT_FILTER,
 ): Promise<Outcome> {
+  return withCertificate(cfg, () => syncOnce(vaultPath, cfg, recordUri, filter));
+}
+
+async function syncOnce(vaultPath: string, cfg: WebDavConfig, recordUri: string, filter: SyncFilter): Promise<Outcome> {
   if (!FS.dirExists(vaultPath)) throw new Error('The vault folder is missing, so nothing was synced.');
 
   const root = rootUrl(cfg);
@@ -566,7 +616,11 @@ export async function sync(
  * remote folder exists, creating it if it does not. Throws with the reason
  * when something is wrong.
  */
-export async function testConnection(cfg: WebDavConfig): Promise<void> {
+export function testConnection(cfg: WebDavConfig): Promise<void> {
+  return withCertificate(cfg, () => testOnce(cfg));
+}
+
+async function testOnce(cfg: WebDavConfig): Promise<void> {
   const root = rootUrl(cfg);
   const client = buildClient(cfg);
   const url = dirUrl(root, '');
@@ -578,7 +632,7 @@ export async function testConnection(cfg: WebDavConfig): Promise<void> {
     if (encrypted) throw new Error(ENCRYPTED_FOLDER);
     return;
   }
-  if (first.status !== 404) throw new Error(explainStatus(first.status, 'Reaching the remote folder'));
+  if (first.status !== 404) throw new Refused(first.status, 'Reaching the remote folder');
 
   await ensureRoot(client, cfg);
   const { status } = await propfind(client, url, 0);
@@ -599,7 +653,9 @@ export async function vaultConfig(vault: SyncedVault): Promise<WebDavConfig | nu
   if (!vault.webdav?.url) return null;
   const password = await getItem<string>(KEYS.WEBDAV_PASSWORD(vault.id));
   if (password === null) return null;
-  return { url: vault.webdav.url, username: vault.webdav.username, remotePath: vault.webdav.remotePath, password };
+  const cfg: WebDavConfig = { url: vault.webdav.url, username: vault.webdav.username, remotePath: vault.webdav.remotePath, password };
+  if (vault.webdav.clientCertificate) cfg.clientCertificate = vault.webdav.clientCertificate;
+  return cfg;
 }
 
 /** Sync a vault with the WebDAV folder it is set up for. */

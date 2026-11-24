@@ -18,6 +18,11 @@ export interface VaultWebDav {
   username: string;
   /** The folder on the server, for example `/Noteriv`. */
   remotePath: string;
+  /**
+   * The name of the certificate in this phone's own store that is shown to the
+   * server when it asks for one. Android only; most servers never ask.
+   */
+  clientCertificate?: string | null;
 }
 
 export type GitProvider = 'github' | 'gitlab' | 'gitea';

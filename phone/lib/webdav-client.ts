@@ -6,6 +6,7 @@
  * Addresses are built exactly as the desktop app builds them, so both reach
  * the same files in the same folder.
  */
+import { certificateFetch, ClientCertificateProblem, Fetch } from '@/lib/client-certificate';
 import { fetch } from '@/lib/http';
 import { allows, enters, KEY_FILE, RemoteFile, safeRel, SyncFilter } from '@/lib/sync-plan';
 
@@ -16,6 +17,11 @@ export interface WebDavConfig {
   password: string;
   /** The folder on the server the vault syncs with, for example `/Noteriv`. */
   remotePath: string;
+  /**
+   * The name of a certificate in the phone's own store that is shown to the
+   * server when it asks for one (Android). Most servers never ask.
+   */
+  clientCertificate?: string | null;
 }
 
 // ============================================================
@@ -337,10 +343,19 @@ const TRANSFER_TIMEOUT_MS = 300_000;
 
 export interface Client {
   authorization: string;
+  /**
+   * Set when the vault has a client certificate: its requests then go over
+   * connections that show it to this one server. Without it the app's
+   * ordinary fetch is used, which can show nobody a certificate.
+   */
+  fetch?: Fetch;
 }
 
-export function buildClient(cfg: Pick<WebDavConfig, 'username' | 'password'>): Client {
-  return { authorization: `Basic ${base64OfText(`${cfg.username}:${cfg.password}`)}` };
+export function buildClient(cfg: Pick<WebDavConfig, 'username' | 'password'> & Partial<Pick<WebDavConfig, 'url' | 'clientCertificate'>>): Client {
+  const client: Client = { authorization: `Basic ${base64OfText(`${cfg.username}:${cfg.password}`)}` };
+  const withCertificate = cfg.url ? certificateFetch(cfg.url, cfg.clientCertificate) : null;
+  if (withCertificate) client.fetch = withCertificate;
+  return client;
 }
 
 interface Answer {
@@ -364,6 +379,27 @@ export class ServerMoved extends Error {
   }
 }
 
+/** No answer came back: the server could not be reached, or the connection broke or took too long. */
+export class Unreachable extends Error {
+  /** True when the app gave up waiting, false when the connection itself failed. */
+  timedOut: boolean;
+
+  constructor(message: string, timedOut: boolean) {
+    super(message);
+    this.timedOut = timedOut;
+  }
+}
+
+/** The server answered and turned the request down. `doing` reads like "Uploading". */
+export class Refused extends Error {
+  status: number;
+
+  constructor(status: number, doing: string) {
+    super(explainStatus(status, doing));
+    this.status = status;
+  }
+}
+
 async function send(
   client: Client,
   method: string,
@@ -373,23 +409,27 @@ async function send(
   const abort = typeof AbortController === 'function' ? new AbortController() : null;
   const timer = abort ? setTimeout(() => abort.abort(), options.timeoutMs ?? SHORT_TIMEOUT_MS) : null;
   try {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: client.authorization,
-        'User-Agent': 'Noteriv',
-        // A copy kept by the phone must never stand in for what the server holds now.
-        'Cache-Control': 'no-cache',
-        ...options.headers,
-      },
-      // Bytes are sent as they are; the type only lacks a name for them.
-      body: options.body as BodyInit | undefined,
-      // No cookies: every request signs in by itself, so a session the
-      // server started for another account can never be used by mistake.
-      credentials: 'omit',
-      redirect: 'manual',
-      signal: abort?.signal,
-    });
+    const headers = {
+      Authorization: client.authorization,
+      'User-Agent': 'Noteriv',
+      // A copy kept by the phone must never stand in for what the server holds now.
+      'Cache-Control': 'no-cache',
+      ...options.headers,
+    };
+    const response = client.fetch
+      ? // A vault with a client certificate: the same request, over the connections that show it.
+        await client.fetch(url, { method, headers, body: options.body, signal: abort?.signal })
+      : await fetch(url, {
+          method,
+          headers,
+          // Bytes are sent as they are; the type only lacks a name for them.
+          body: options.body as BodyInit | undefined,
+          // No cookies: every request signs in by itself, so a session the
+          // server started for another account can never be used by mistake.
+          credentials: 'omit',
+          redirect: 'manual',
+          signal: abort?.signal,
+        });
     const status = response.status;
     if (status >= 300 && status < 400) {
       await response.text().catch(() => '');
@@ -404,13 +444,13 @@ async function send(
     const text = await response.text().catch(() => '');
     return { status, text: ok && options.want === 'text' ? text : '', bytes: new Uint8Array(0) };
   } catch (error) {
-    if (error instanceof ServerMoved) throw error;
+    if (error instanceof ServerMoved || error instanceof ClientCertificateProblem) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     const timedOut = abort?.signal.aborted === true;
     const plain = /^http:\/\//i.test(url)
       ? ' The Android app does not make plain http:// connections: the address has to start with https://.'
       : '';
-    throw new Error(timedOut ? `The server did not answer in time.${plain}` : `Could not reach the server: ${reason}.${plain}`);
+    throw new Unreachable(timedOut ? `The server did not answer in time.${plain}` : `Could not reach the server: ${reason}.${plain}`, timedOut);
   } finally {
     if (timer !== null) clearTimeout(timer);
   }
@@ -441,7 +481,7 @@ export async function mkcol(client: Client, url: string): Promise<void> {
   const { status } = await send(client, 'MKCOL', url);
   // 405: the folder is already there.
   if ((status >= 200 && status < 300) || status === 405) return;
-  throw new Error(explainStatus(status, 'Creating a folder'));
+  throw new Refused(status, 'Creating a folder');
 }
 
 /** Create the remote folder and every folder above it that the remote path names. */
@@ -487,7 +527,7 @@ export async function listRemote(client: Client, root: string, filter: SyncFilte
       if (dir === '') throw new RemoteFolderMissing();
       throw new Error('A folder on the server disappeared while it was being listed, so nothing was synced.');
     }
-    if (status < 200 || status >= 300) throw new Error(explainStatus(status, 'Listing the remote folder'));
+    if (status < 200 || status >= 300) throw new Refused(status, 'Listing the remote folder');
 
     const base = decodedPath(url);
     let matched = 0;
@@ -518,7 +558,7 @@ export async function listRemote(client: Client, root: string, filter: SyncFilte
 export async function statRemote(client: Client, root: string, rel: string): Promise<RemoteFile | null> {
   const { status, entries } = await propfind(client, fileUrl(root, rel), 0);
   if (status === 404) return null;
-  if (status < 200 || status >= 300) throw new Error(explainStatus(status, 'Checking an uploaded file'));
+  if (status < 200 || status >= 300) throw new Refused(status, 'Checking an uploaded file');
   return entries.length > 0 ? toRemoteFile(entries[0]) : null;
 }
 
@@ -542,12 +582,12 @@ export async function put(client: Client, url: string, bytes: Uint8Array, expect
   const { status } = await send(client, 'PUT', url, { headers, body: bytes, timeoutMs: TRANSFER_TIMEOUT_MS });
   if (status >= 200 && status < 300) return true;
   if (status === 412 && expect.kind !== 'anything') return false;
-  throw new Error(explainStatus(status, 'Uploading'));
+  throw new Refused(status, 'Uploading');
 }
 
 export async function get(client: Client, url: string): Promise<Uint8Array> {
   const answer = await send(client, 'GET', url, { want: 'bytes', timeoutMs: TRANSFER_TIMEOUT_MS });
-  if (answer.status < 200 || answer.status >= 300) throw new Error(explainStatus(answer.status, 'Downloading'));
+  if (answer.status < 200 || answer.status >= 300) throw new Refused(answer.status, 'Downloading');
   return answer.bytes;
 }
 
@@ -555,5 +595,5 @@ export async function remove(client: Client, url: string): Promise<void> {
   const { status } = await send(client, 'DELETE', url);
   // 404: it is already gone, which is what was wanted.
   if ((status >= 200 && status < 300) || status === 404) return;
-  throw new Error(explainStatus(status, 'Deleting'));
+  throw new Refused(status, 'Deleting');
 }

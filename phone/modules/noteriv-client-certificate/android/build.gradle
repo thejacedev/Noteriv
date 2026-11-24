@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.ironstacksoftware.noteriv'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.noterivclientcertificate"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // The version React Native itself builds with (react-native/gradle/libs.versions.toml).
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+}

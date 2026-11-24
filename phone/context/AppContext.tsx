@@ -328,12 +328,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const davUrl = vault?.webdav?.url;
   const davUsername = vault?.webdav?.username;
   const davRemotePath = vault?.webdav?.remotePath;
+  const davCertificate = vault?.webdav?.clientCertificate ?? null;
   useEffect(() => {
     if (!davVaultId || !davVaultPath || !davUrl) return;
     const target: WebDav.SyncedVault = {
       id: davVaultId,
       path: davVaultPath,
-      webdav: { url: davUrl, username: davUsername ?? '', remotePath: davRemotePath ?? '/' },
+      webdav: {
+        url: davUrl,
+        username: davUsername ?? '',
+        remotePath: davRemotePath ?? '/',
+        ...(davCertificate ? { clientCertificate: davCertificate } : {}),
+      },
     };
     let due = true;
     let ticks = 0;
@@ -373,7 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clearInterval(timer);
       wakeWebDav.current = null;
     };
-  }, [davVaultId, davVaultPath, davUrl, davUsername, davRemotePath, runWebDav]);
+  }, [davVaultId, davVaultPath, davUrl, davUsername, davRemotePath, davCertificate, runWebDav]);
 
   const syncWebDav = useCallback(async (target: WebDav.SyncedVault, cfg: WebDav.WebDavConfig): Promise<WebDav.Outcome> => {
     return (await runWebDav(target, cfg, true)) as WebDav.Outcome;

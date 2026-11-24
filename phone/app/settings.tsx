@@ -21,6 +21,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { KEYS, setItem } from '@/lib/storage';
 import * as GitSync from '@/lib/provider-sync';
 import * as WebDav from '@/lib/webdav-sync';
+import * as Certificates from '@/lib/client-certificate';
 import { GitProvider } from '@/types';
 import { loadSnippets } from '@/lib/css-snippets';
 import { getInstalledPlugins, getEnabledPluginIds } from '@/lib/plugins';
@@ -86,6 +87,9 @@ export default function SettingsScreen() {
   const [davError, setDavError] = useState<string | null>(null);
   const [davStatus, setDavStatus] = useState<string | null>(null);
   const [davLastSync, setDavLastSync] = useState<string | null>(null);
+  // The client certificate picked in the form, before the vault is connected. Android only.
+  const [davCertificate, setDavCertificate] = useState<string | null>(null);
+  const certificatesSupported = Certificates.supported();
 
   // Load the provider-neutral token, falling back to the legacy GitHub token.
   useEffect(() => {
@@ -255,6 +259,7 @@ export default function SettingsScreen() {
       username: davUser.trim(),
       password: davPassword,
       remotePath: davPath.trim() || '/',
+      ...(davCertificate ? { clientCertificate: davCertificate } : {}),
     };
     setDavError(null);
     setDavStatus(null);
@@ -269,10 +274,16 @@ export default function SettingsScreen() {
       // reason is shown under the form instead of a "connected" vault that never syncs.
       await WebDav.testConnection(cfg);
       const { updateVault } = await import('@/lib/vault');
-      const webdav = { url: cfg.url, username: cfg.username, remotePath: cfg.remotePath };
+      const webdav = {
+        url: cfg.url,
+        username: cfg.username,
+        remotePath: cfg.remotePath,
+        ...(davCertificate ? { clientCertificate: davCertificate } : {}),
+      };
       await setItem(KEYS.WEBDAV_PASSWORD(vault.id), cfg.password);
       await updateVault(vault.id, { webdav });
       setDavPassword('');
+      setDavCertificate(null);
       try {
         const outcome = await syncWebDav({ ...vault, webdav }, cfg);
         setDavLastSync(new Date().toLocaleTimeString());
@@ -288,7 +299,75 @@ export default function SettingsScreen() {
     } finally {
       setDavBusy(false);
     }
-  }, [vault, vaults, davUrl, davUser, davPassword, davPath, syncWebDav, refreshFiles, refreshVaults]);
+  }, [vault, vaults, davUrl, davUser, davPassword, davPath, davCertificate, syncWebDav, refreshFiles, refreshVaults]);
+
+  /** The form's "Client certificate" row: open the phone's list of installed certificates. */
+  const handlePickFormCertificate = useCallback(async () => {
+    setDavError(null);
+    try {
+      const picked = await Certificates.choose(davUrl, davCertificate);
+      if (picked) {
+        setDavCertificate(picked);
+      } else if (!davCertificate) {
+        setDavError('No certificate was chosen. If the list was empty, install the certificate first in the phone\'s settings: Security > Encryption & credentials > Install a certificate > VPN & app user certificate.');
+      }
+    } catch (err) {
+      setDavError(err instanceof Error ? err.message : String(err));
+    }
+  }, [davUrl, davCertificate]);
+
+  /** Change or remove the certificate of a vault that is already connected, and try it at once. */
+  const applyVaultCertificate = useCallback(async (alias: string | null) => {
+    if (!vault?.webdav) return;
+    const { clientCertificate: _before, ...rest } = vault.webdav;
+    const webdav = alias ? { ...rest, clientCertificate: alias } : rest;
+    const { updateVault } = await import('@/lib/vault');
+    await updateVault(vault.id, { webdav });
+    if (!alias) await Certificates.forget();
+    await refreshVaults();
+    setDavBusy(true);
+    setDavStatus(null);
+    try {
+      const target = { ...vault, webdav };
+      const cfg = await WebDav.vaultConfig(target);
+      if (!cfg) return;
+      // So the line under the address says straight away whether the server accepts it.
+      const outcome = await syncWebDav(target, cfg);
+      setDavLastSync(new Date().toLocaleTimeString());
+      setDavStatus(WebDav.describeOutcome(outcome));
+      refreshFiles();
+    } catch (err) {
+      setDavStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDavBusy(false);
+    }
+  }, [vault, syncWebDav, refreshFiles, refreshVaults]);
+
+  const handleVaultCertificate = useCallback(async () => {
+    if (!vault?.webdav) return;
+    const current = vault.webdav.clientCertificate ?? null;
+    const pick = async () => {
+      try {
+        const picked = await Certificates.choose(vault.webdav?.url ?? '', current);
+        if (picked) {
+          await applyVaultCertificate(picked);
+        } else if (!current) {
+          setDavStatus('No certificate was chosen. If the list was empty, install the certificate first in the phone\'s settings: Security > Encryption & credentials > Install a certificate > VPN & app user certificate.');
+        }
+      } catch (err) {
+        setDavStatus(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    if (!current) {
+      await pick();
+      return;
+    }
+    Alert.alert('Client certificate', `This vault shows the certificate "${current}" to its WebDAV server.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => { applyVaultCertificate(null); } },
+      { text: 'Choose another', onPress: () => { pick(); } },
+    ]);
+  }, [vault, applyVaultCertificate]);
 
   const handleWebDavSyncNow = useCallback(async () => {
     if (!vault?.webdav) return;
@@ -322,6 +401,8 @@ export default function SettingsScreen() {
           const { updateVault } = await import('@/lib/vault');
           await updateVault(vault.id, { webdav: null });
           await AsyncStorage.removeItem(KEYS.WEBDAV_PASSWORD(vault.id));
+          // The connections that showed this vault's certificate are closed with it.
+          await Certificates.forget();
           setDavStatus(null);
           setDavLastSync(null);
           await refreshVaults();
@@ -975,6 +1056,15 @@ export default function SettingsScreen() {
               </Text>
             </View>
 
+            {certificatesSupported && (
+              <TouchableOpacity style={[s.settingRow, { borderBottomColor: colors.border, gap: 12 }]} onPress={handleVaultCertificate} disabled={davBusy}>
+                <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Client certificate</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 14, flexShrink: 1 }} numberOfLines={1}>
+                  {vault.webdav.clientCertificate ?? 'None'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {davLastSync && (
               <View style={[s.settingRow, { borderBottomColor: colors.border }]}>
                 <Text style={[s.settingLabel, { color: colors.textPrimary }]}>Last sync</Text>
@@ -1036,6 +1126,26 @@ export default function SettingsScreen() {
               <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Username" placeholderTextColor={colors.textMuted} value={davUser} onChangeText={(text) => { setDavUser(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} />
               <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Password or app password" placeholderTextColor={colors.textMuted} value={davPassword} onChangeText={(text) => { setDavPassword(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry />
               <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Remote folder, for example /Noteriv" placeholderTextColor={colors.textMuted} value={davPath} onChangeText={(text) => { setDavPath(text); setDavError(null); }} autoCapitalize="none" autoCorrect={false} />
+              {certificatesSupported && (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14, flex: 1 }} numberOfLines={1}>
+                      Client certificate: {davCertificate ?? 'None'}
+                    </Text>
+                    {davCertificate ? (
+                      <TouchableOpacity onPress={() => setDavCertificate(null)} disabled={davBusy}>
+                        <Text style={{ color: colors.red, fontSize: 14, fontWeight: '500' }}>Remove</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity onPress={handlePickFormCertificate} disabled={davBusy}>
+                      <Text style={{ color: colors.accent, fontSize: 14, fontWeight: '500' }}>{davCertificate ? 'Change' : 'Choose'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={[s.modalHint, { color: colors.textMuted }]}>
+                    Only for a server that asks for a client certificate. Install it in the phone&apos;s settings first; most servers need none.
+                  </Text>
+                </>
+              )}
               <TouchableOpacity style={[s.connectButton, { backgroundColor: colors.accent }, (!davUrl.trim() || !davUser.trim() || !davPassword || davBusy) && { opacity: 0.5 }]} onPress={handleSaveWebDav} disabled={!davUrl.trim() || !davUser.trim() || !davPassword || davBusy}>
                 <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{davBusy ? 'Checking...' : 'Save & Sync'}</Text>
               </TouchableOpacity>
