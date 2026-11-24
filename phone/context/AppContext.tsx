@@ -43,6 +43,13 @@ interface AppContextType {
   setCurrentDir: (dir: string) => void;
   refreshFiles: () => void;
 
+  /**
+   * Run a Git sync that a screen asks for (connecting a remote, "Sync Now"),
+   * after any sync that is already running and with the automatic ones held
+   * off until it ends.
+   */
+  syncGit: (work: () => Promise<GitSync.SyncResult>) => Promise<GitSync.SyncResult>;
+
   // WebDAV sync
   /** Sync a vault with a WebDAV folder now, after any sync that is already running. Throws when the server cannot be used. */
   syncWebDav: (vault: WebDav.SyncedVault, cfg: WebDav.WebDavConfig) => Promise<WebDav.Outcome>;
@@ -87,9 +94,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentDirRef = useRef(currentDir);
   currentDirRef.current = currentDir;
   const vaultIdRef = useRef<string | null>(null);
+  const vaultPathRef = useRef<string | null>(null);
   useEffect(() => {
     vaultIdRef.current = vault?.id ?? null;
-  }, [vault?.id]);
+    vaultPathRef.current = vault?.path ?? null;
+  }, [vault?.id, vault?.path]);
   /** Set while the open vault syncs over WebDAV: makes its next sync due at once. */
   const wakeWebDav = useRef<(() => void) | null>(null);
 
@@ -255,6 +264,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [vault?.id, vault?.gitRemote, vault?.gitBranch]);
+
+  /**
+   * A Git sync that a screen asks for. It takes its turn like every other
+   * sync. Until 1.2.0 the settings screen synced on its own while the pull of
+   * a vault that had just got its remote, and then the 5-second sync, ran
+   * beside it: two syncs of one vault each uploaded the notes the other was
+   * uploading, the server turned one of them down ("A file with this name
+   * already exists"), and the screen read "Sync failed" right after a remote
+   * was connected, though every note had arrived.
+   *
+   * `work` may also save the remote on the vault first: the automatic syncs
+   * it sets off then find this one running and leave the vault alone.
+   */
+  const syncGit = useCallback(async (work: () => Promise<GitSync.SyncResult>): Promise<GitSync.SyncResult> => {
+    while (syncInFlight.current) await new Promise((resolve) => setTimeout(resolve, 250));
+    syncInFlight.current = true;
+    try {
+      // Sync compares what is on disk, so the open note's latest text goes there first.
+      flushFile();
+      const result = await work();
+      const path = vaultPathRef.current;
+      if (result.pulled > 0 && path) {
+        await takeOpenNoteFromDisk(path);
+        if (currentDirRef.current) setFiles(FS.readDir(currentDirRef.current));
+      }
+      return result;
+    } finally {
+      syncInFlight.current = false;
+    }
+  }, [flushFile, takeOpenNoteFromDisk]);
 
   /**
    * One WebDAV sync of a vault. Only one sync of any kind runs at a time:
@@ -486,6 +525,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentDir,
         setCurrentDir,
         refreshFiles,
+        syncGit,
         syncWebDav,
         requestWebDavSync,
         setupComplete,

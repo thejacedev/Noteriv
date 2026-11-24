@@ -43,7 +43,7 @@ const AUTO_SAVE_OPTIONS = [
 const TAB_SIZE_OPTIONS = [2, 4, 8];
 
 export default function SettingsScreen() {
-  const { settings, updateSettings, vault, vaults, refreshFiles, refreshVaults, syncWebDav } = useApp();
+  const { settings, updateSettings, vault, vaults, refreshFiles, refreshVaults, syncGit, syncWebDav } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -144,9 +144,6 @@ export default function SettingsScreen() {
 
     // Save the repo URL on the vault
     const { updateVault } = await import('@/lib/vault');
-    // GitHub sync has always used "main"; say so, in case this vault last synced another provider's branch.
-    await updateVault(vault.id, { gitRemote: selectedRepoUrl, gitProvider: 'github', gitBranch: 'main' });
-    await refreshVaults();
 
     // Reset modal state
     setTokenInput('');
@@ -160,7 +157,14 @@ export default function SettingsScreen() {
     setSyncStatus('Syncing...');
     setSyncing(true);
     try {
-      const result = await GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, 'main', 'github');
+      // The remote is saved inside the sync's own turn: the automatic syncs
+      // that a vault with a remote sets off then wait for this one.
+      const result = await syncGit(async () => {
+        // GitHub sync has always used "main"; say so, in case this vault last synced another provider's branch.
+        await updateVault(vault.id, { gitRemote: selectedRepoUrl, gitProvider: 'github', gitBranch: 'main' });
+        await refreshVaults();
+        return GitSync.sync(vault.path, tokenInput.trim(), selectedRepoUrl, 'main', 'github');
+      });
       setLastSyncTime(new Date().toLocaleTimeString());
       setSyncStatus(GitSync.describeResult(result));
     } catch (err) {
@@ -168,7 +172,7 @@ export default function SettingsScreen() {
     } finally {
       setSyncing(false);
     }
-  }, [vault, tokenInput, selectedRepoUrl]);
+  }, [vault, tokenInput, selectedRepoUrl, refreshVaults, syncGit]);
 
   const handleDisconnectGitHub = useCallback(async () => {
     if (!vault) return;
@@ -191,13 +195,8 @@ export default function SettingsScreen() {
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const result = await GitSync.sync(
-        vault.path,
-        ghToken,
-        vault.gitRemote,
-        vault.gitBranch || undefined,
-        vault.gitProvider
-      );
+      const remote = vault.gitRemote;
+      const result = await syncGit(() => GitSync.sync(vault.path, ghToken, remote, vault.gitBranch || undefined, vault.gitProvider));
       refreshFiles();
       const now = new Date().toLocaleTimeString();
       setLastSyncTime(now);
@@ -209,7 +208,7 @@ export default function SettingsScreen() {
     } finally {
       setSyncing(false);
     }
-  }, [vault, ghToken, refreshFiles]);
+  }, [vault, ghToken, refreshFiles, syncGit]);
 
   const handleSaveCustomRemote = useCallback(async () => {
     if (!vault || !remoteInput.trim() || !tokenInput.trim()) return;
@@ -228,12 +227,17 @@ export default function SettingsScreen() {
       }
       await setItem(KEYS.GIT_TOKEN(vault.id), token);
       const { updateVault } = await import('@/lib/vault');
-      // Sync the branch the repository really has; a vault starts out assuming "main".
-      await updateVault(vault.id, { gitRemote: remoteInput.trim(), gitProvider: provider, gitBranch: check.branch });
-      setGhToken(token);
-      setTokenInput('');
-      await refreshVaults();
-      const result = await GitSync.sync(vault.path, token, remoteInput.trim(), check.branch, provider);
+      const remote = remoteInput.trim();
+      // The remote is saved inside the sync's own turn: the automatic syncs
+      // that a vault with a remote sets off then wait for this one.
+      const result = await syncGit(async () => {
+        // Sync the branch the repository really has; a vault starts out assuming "main".
+        await updateVault(vault.id, { gitRemote: remote, gitProvider: provider, gitBranch: check.branch });
+        setGhToken(token);
+        setTokenInput('');
+        await refreshVaults();
+        return GitSync.sync(vault.path, token, remote, check.branch, provider);
+      });
       refreshFiles();
       setLastSyncTime(new Date().toLocaleTimeString());
       setSyncStatus(GitSync.describeResult(result));
@@ -242,7 +246,7 @@ export default function SettingsScreen() {
     } finally {
       setSyncing(false);
     }
-  }, [vault, remoteInput, tokenInput, providerInput, refreshFiles, refreshVaults]);
+  }, [vault, remoteInput, tokenInput, providerInput, refreshFiles, refreshVaults, syncGit]);
 
   const handleSaveWebDav = useCallback(async () => {
     if (!vault || !davUrl.trim() || !davUser.trim() || !davPassword) return;
