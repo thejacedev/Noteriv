@@ -239,7 +239,8 @@ Plus community themes from [NoterivThemes](https://github.com/thejacedev/Noteriv
 | Font size | 12px – 24px |
 | Line height | 1.2 – 2.0 |
 | Tab size | 2, 4, 8 |
-| Editor font | JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, SF Mono, System Mono |
+| Text font | Inter, System, Serif, Monospace (note text in Live and View) |
+| Code font | JetBrains Mono, System Mono, and Fira Code, Cascadia Code, Source Code Pro, SF Mono when installed |
 | Theme | 10 built-in + community + custom |
 | Accent color | 8 options |
 | Spell check | On / Off |

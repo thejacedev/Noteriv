@@ -75,7 +75,7 @@ Removing a column deletes its heading and all cards under it from the Markdown f
 
 ### Default Columns
 
-When you create a new board file from the file menu ("New Board"), Noteriv generates a starter file with three columns: **To Do**, **In Progress**, and **Done**.
+When you create a new board with the **New board** button in the ribbon on the left edge of the window (since 3.0.7), or with **New Board** in the command palette (`Ctrl+Shift+P`), Noteriv generates a starter file with three columns: **To Do**, **In Progress**, and **Done**.
 
 ```markdown
 ---

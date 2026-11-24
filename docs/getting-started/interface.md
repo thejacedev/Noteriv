@@ -173,7 +173,11 @@ You can adjust many aspects of the interface from Settings (`Ctrl+,`):
 
 - **Font size** -- Editor font size from 11px to 24px. Use `Ctrl++` or `Ctrl+-` (`Cmd` on macOS) to adjust it while editing.
 - **Line height** -- From 1.2 to 2.0.
-- **Editor font** -- Choose from JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, SF Mono, or system monospace.
+- **Text font** -- The font for note text in Live and View: Inter (the default), the system font, a serif, or the code font if you prefer monospace throughout.
+- **Code font** -- The monospace font for Source mode and for code inside notes: JetBrains Mono (the default), the system monospace, or Fira Code, Cascadia Code, Source Code Pro and SF Mono when your computer has them.
+
+Inter and JetBrains Mono come with the app since 3.0.7, so notes look the same on every computer. Up to 3.0.6 the app only named these fonts and note text was monospace everywhere; on a computer without them it fell back to the system's default monospace.
+
 - **Tab size** -- 2, 4, or 8 spaces.
 - **Theme** -- 10 built-in themes (8 dark, 2 light) plus community themes and custom theme creation.
 - **Accent color** -- 8 options: Blue, Lavender, Mauve, Pink, Peach, Yellow, Green, Teal.
