@@ -260,6 +260,7 @@ export default function SettingsScreen() {
       password: davPassword,
       remotePath: davPath.trim() || '/',
       ...(davCertificate ? { clientCertificate: davCertificate } : {}),
+      canPromptForCertificate: true,
     };
     setDavError(null);
     setDavStatus(null);
@@ -379,7 +380,7 @@ export default function SettingsScreen() {
         setDavStatus('Sync failed: the password for this server is no longer stored. Disconnect and connect again.');
         return;
       }
-      const outcome = await syncWebDav(vault, cfg);
+      const outcome = await syncWebDav(vault, { ...cfg, canPromptForCertificate: true });
       setDavLastSync(new Date().toLocaleTimeString());
       setDavStatus(WebDav.describeOutcome(outcome));
       refreshFiles();

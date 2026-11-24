@@ -22,6 +22,8 @@ export interface WebDavConfig {
    * server when it asks for one (Android). Most servers never ask.
    */
   clientCertificate?: string | null;
+  /** Only user-initiated connections may open Android's certificate picker. Defaults to false. */
+  canPromptForCertificate?: boolean;
 }
 
 // ============================================================
@@ -343,6 +345,7 @@ const TRANSFER_TIMEOUT_MS = 300_000;
 
 export interface Client {
   authorization: string;
+  canPromptForCertificate: boolean;
   /**
    * Set when the vault has a client certificate: its requests then go over
    * connections that show it to this one server. Without it the app's
@@ -351,10 +354,15 @@ export interface Client {
   fetch?: Fetch;
 }
 
-export function buildClient(cfg: Pick<WebDavConfig, 'username' | 'password'> & Partial<Pick<WebDavConfig, 'url' | 'clientCertificate'>>): Client {
-  const client: Client = { authorization: `Basic ${base64OfText(`${cfg.username}:${cfg.password}`)}` };
+export function buildClient(cfg: Pick<WebDavConfig, 'username' | 'password' | 'canPromptForCertificate'> & Partial<Pick<WebDavConfig, 'url' | 'clientCertificate'>>): Client {
+  const client: Client = {
+    authorization: `Basic ${base64OfText(`${cfg.username}:${cfg.password}`)}`,
+    canPromptForCertificate: cfg.canPromptForCertificate ?? false,
+  };
   const withCertificate = cfg.url ? certificateFetch(cfg.url, cfg.clientCertificate) : null;
-  if (withCertificate) client.fetch = withCertificate;
+  if (withCertificate) {
+    client.fetch = withCertificate;
+  }
   return client;
 }
 
@@ -407,7 +415,8 @@ async function send(
   options: { headers?: Record<string, string>; body?: string | Uint8Array; want?: 'text' | 'bytes'; timeoutMs?: number } = {},
 ): Promise<Answer> {
   const abort = typeof AbortController === 'function' ? new AbortController() : null;
-  const timer = abort ? setTimeout(() => abort.abort(), options.timeoutMs ?? SHORT_TIMEOUT_MS) : null;
+  const timeoutMs = (options.timeoutMs ?? SHORT_TIMEOUT_MS) + (client.canPromptForCertificate ? 120_000 : 0);
+  const timer = abort ? setTimeout(() => abort.abort(), timeoutMs) : null;
   try {
     const headers = {
       Authorization: client.authorization,
@@ -429,7 +438,7 @@ async function send(
           credentials: 'omit',
           redirect: 'manual',
           signal: abort?.signal,
-        });
+        }, { canPromptForCertificate: client.canPromptForCertificate });
     const status = response.status;
     if (status >= 300 && status < 400) {
       await response.text().catch(() => '');

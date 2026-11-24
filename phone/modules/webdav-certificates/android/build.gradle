@@ -1,0 +1,24 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.webdavcertificates'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.webdavcertificates"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  testOptions {
+    unitTests.includeAndroidResources = true
+  }
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.16.1'
+  testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+  testImplementation 'com.squareup.okhttp3:okhttp-tls:4.12.0'
+}

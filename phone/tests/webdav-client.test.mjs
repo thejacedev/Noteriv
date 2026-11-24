@@ -5,11 +5,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  buildClient,
   decodedPath,
   dirUrl,
   explainStatus,
   fileUrl,
   foldersOverlap,
+  get,
   parsePropfind,
   parseWebdavDate,
   relUnder,
@@ -17,6 +19,27 @@ import {
   strongEtag,
   toRemoteFile,
 } from '@/lib/webdav-client';
+
+test('client-certificate requests retain Basic authentication and preserve downloaded bytes', async (context) => {
+  const bytes = new Uint8Array([0, 255, 128, 65]);
+  context.mock.method(globalThis, 'fetch', async (_url, init) => {
+    assert.equal(new Headers(init.headers).get('Authorization'), `Basic ${Buffer.from('alice:secret').toString('base64')}`);
+    assert.equal(init.credentials, 'omit');
+    assert.equal(init.redirect, 'manual');
+    return new Response(bytes);
+  });
+  const client = buildClient({ username: 'alice', password: 'secret', canPromptForCertificate: true });
+  assert.deepEqual(await get(client, 'https://example.com/dav/note.bin'), bytes);
+});
+
+test('client certificates can supplement existing Basic authentication', async (context) => {
+  context.mock.method(globalThis, 'fetch', async (_url, init) => {
+    assert.equal(new Headers(init.headers).get('Authorization'), `Basic ${Buffer.from('alice:secret').toString('base64')}`);
+    return new Response('note');
+  });
+  const client = buildClient({ username: 'alice', password: 'secret', canPromptForCertificate: true });
+  await get(client, 'https://example.com/dav/note.md');
+});
 
 // ── Reading the server's answers ──
 

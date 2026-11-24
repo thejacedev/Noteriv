@@ -9,4 +9,8 @@
  * It lives in a file of its own so the tests, which do not run on a phone,
  * can put the ordinary fetch in its place.
  */
-export { fetch } from 'expo/fetch';
+import { fetch as expoFetch } from 'expo/fetch';
+
+export function fetch(input: string, init: RequestInit, _options: { canPromptForCertificate: boolean }) {
+  return expoFetch(input, init);
+}

@@ -38,6 +38,7 @@
       ],
       "./plugins/withAndroidDebugBundle.js",
       "./plugins/withAndroidUserCertificates.js",
+      "./plugins/withAndroidClientCertificates.js",
       "./plugins/withOptionalPortrait.js"
     ],
     "experiments": {
