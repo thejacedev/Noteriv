@@ -2952,6 +2952,13 @@ function Home() {
                   <path d="M8 6v4M6 8h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
               </button>
+              <button className="ribbon-btn" title="New board" onClick={handleNewBoard}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="2.5" width="3.2" height="11" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="6.4" y="2.5" width="3.2" height="7" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="10.8" y="2.5" width="3.2" height="9" rx="0.8" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+              </button>
               <button className="ribbon-btn" title="Daily note" onClick={handleDailyNote}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
@@ -3272,7 +3279,7 @@ function Home() {
       {!zenMode && (
         <div className="flex items-center justify-between h-6 px-3 bg-[var(--bg-secondary)] border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] select-none shrink-0">
           <div className="flex items-center gap-3">
-            <span>{viewMode === "live" ? "Edit" : viewMode === "view" ? "View" : "Source"}</span>
+            <span>{viewMode === "live" ? "Live" : viewMode === "view" ? "View" : "Source"}</span>
             {activeVault && <span>{activeVault.name}</span>}
             {activeTab && (
               <span className="truncate max-w-md">

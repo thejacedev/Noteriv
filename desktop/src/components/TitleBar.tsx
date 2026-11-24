@@ -237,8 +237,9 @@ export default function TitleBar({
             <button
               onClick={() => onViewModeChange("live")}
               className={`view-toggle-btn ${viewMode === "live" ? "vt-active" : ""}`}
+              title="Live: the note is rendered as you write, and the line with the cursor shows its markdown"
             >
-              Edit
+              Live
             </button>
             <button
               onClick={() => onViewModeChange("view")}
