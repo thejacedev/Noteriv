@@ -14,6 +14,7 @@ import {
   DEFAULT_SETTINGS,
   ACCENT_COLORS,
   EDITOR_FONTS,
+  TEXT_FONTS,
   AUTO_SAVE_OPTIONS,
   SYNC_OPTIONS,
 } from "@/lib/settings";
@@ -420,7 +421,18 @@ export default function SettingsModal({
           onChange={(v) => update({ lineHeight: v })}
         />
       </Row>
-      <Row label="Editor font" desc="Monospace font used in the editor.">
+      <Row label="Text font" desc="Font for note text in Live and View.">
+        <select
+          className="st-select"
+          value={TEXT_FONTS.some((f) => f.value === settings.textFont) ? settings.textFont : "Inter"}
+          onChange={(e) => update({ textFont: e.target.value })}
+        >
+          {TEXT_FONTS.map((f) => (
+            <option key={f.value} value={f.value}>{f.name}</option>
+          ))}
+        </select>
+      </Row>
+      <Row label="Code font" desc="Monospace font for Source mode and for code in notes.">
         <select
           className="st-select"
           value={settings.editorFont}

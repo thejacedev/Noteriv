@@ -4,7 +4,10 @@ export interface AppSettings {
   accentColor: string;
   fontSize: number;
   lineHeight: number;
+  /** The monospace font: Source mode, and code inside notes. */
   editorFont: string;
+  /** The font for note text in Live and View: one of TEXT_FONTS. */
+  textFont: string;
   tabSize: number;
   gitSyncInterval: number; // minutes, 0 = disabled
   syncOnSave: boolean;     // git sync after every manual save
@@ -49,6 +52,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 15,
   lineHeight: 1.75,
   editorFont: "JetBrains Mono",
+  textFont: "Inter",
   tabSize: 4,
   gitSyncInterval: 5,
   syncOnSave: false,
@@ -86,14 +90,54 @@ export const ACCENT_COLORS = [
   { name: "Teal", value: "#94e2d5" },
 ];
 
+/**
+ * Monospace fonts, for Source mode and for code inside notes. JetBrains Mono
+ * ships with the app (src/app/fonts.css). The others are only there when the
+ * computer has them, and the list says so: until 3.0.6 it offered six names
+ * and on a computer with none of them installed every one gave the same
+ * system typewriter face (issue 56).
+ */
 export const EDITOR_FONTS = [
   { name: "JetBrains Mono", value: "JetBrains Mono" },
-  { name: "Fira Code", value: "Fira Code" },
-  { name: "Cascadia Code", value: "Cascadia Code" },
-  { name: "Source Code Pro", value: "Source Code Pro" },
-  { name: "SF Mono", value: "SF Mono" },
+  { name: "Fira Code (if installed)", value: "Fira Code" },
+  { name: "Cascadia Code (if installed)", value: "Cascadia Code" },
+  { name: "Source Code Pro (if installed)", value: "Source Code Pro" },
+  { name: "SF Mono (macOS)", value: "SF Mono" },
   { name: "System Mono", value: "monospace" },
 ];
+
+/** Fonts for note text in Live and View. Inter ships with the app; the rest are the computer's own. */
+export const TEXT_FONTS = [
+  { name: "Inter", value: "Inter" },
+  { name: "System", value: "system" },
+  { name: "Serif", value: "serif" },
+  { name: "Monospace (the code font)", value: "mono" },
+];
+
+/** The system's own monospace font: `ui-monospace` is how a web view reaches SF Mono on a Mac. */
+const SYSTEM_MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+
+/** The font list for code. A font the computer lacks falls back to the one the app ships, never to a bare `monospace`. */
+export function codeFontStack(font: string): string {
+  if (font === "monospace") return SYSTEM_MONO;
+  if (font === "SF Mono") return `ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace`;
+  if (!font || font === "JetBrains Mono") return `'JetBrains Mono', ${SYSTEM_MONO}`;
+  return `'${font.replace(/['"\\;{}]/g, "")}', 'JetBrains Mono', ${SYSTEM_MONO}`;
+}
+
+/** The font list for note text in Live and View. An unknown choice reads as the default. */
+export function textFontStack(font: string, codeFont: string): string {
+  switch (font) {
+    case "mono":
+      return codeFontStack(codeFont);
+    case "serif":
+      return "ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Noto Serif', serif";
+    case "system":
+      return "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    default:
+      return "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
+  }
+}
 
 export const AUTO_SAVE_OPTIONS = [
   { label: "Off", value: 0 },
@@ -116,7 +160,8 @@ export function applySettings(s: AppSettings) {
   root.setProperty("--accent", s.accentColor);
   root.setProperty("--editor-font-size", `${s.fontSize}px`);
   root.setProperty("--editor-line-height", String(s.lineHeight));
-  root.setProperty("--editor-font", `'${s.editorFont}', 'Fira Code', monospace`);
+  root.setProperty("--editor-font", codeFontStack(s.editorFont));
+  root.setProperty("--text-font", textFontStack(s.textFont, s.editorFont));
 }
 
 export function mergeSettings(saved: Partial<AppSettings>): AppSettings {

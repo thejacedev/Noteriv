@@ -24,7 +24,7 @@ const sourceHighlight = HighlightStyle.define([
   { tag: tags.strong, fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.monospace, color: "var(--mauve)", fontFamily: "monospace" },
+  { tag: tags.monospace, color: "var(--mauve)" },
   { tag: tags.link, color: "var(--accent)" },
   { tag: tags.url, color: "var(--accent)", opacity: "0.7" },
   { tag: tags.quote, color: "var(--text-secondary)" },

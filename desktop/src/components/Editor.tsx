@@ -74,6 +74,8 @@ export default function Editor({ content, onChange, onViewReady, vaultPath, note
         folding("inline", { foldProperties: true }),
         syntaxHighlighting(mdHighlightStyle),
         editorTheme,
+        // Note text is set in the text font (globals.css); Source mode is not.
+        EditorView.editorAttributes.of({ class: "cm-prose" }),
         markdownRenderTheme,
         liveMarkdownPlugin,
         mathExtension(),

@@ -15,6 +15,11 @@
   --red: #f38ba8;
   --yellow: #f9e2af;
   --mauve: #cba6f7;
+  /* Inter and JetBrains Mono ship with the app (fonts.css). Settings sets --editor-font and --text-font. */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --editor-font: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --text-font: var(--font-sans);
+  --font-mono: var(--editor-font);
 }
 
 * {
@@ -86,9 +91,16 @@ body {
 }
 
 .cm-editor .cm-scroller {
-  font-family: var(--editor-font, "JetBrains Mono", "Fira Code", "Cascadia Code", monospace);
+  font-family: var(--cm-font, var(--editor-font, "JetBrains Mono", "Fira Code", "Cascadia Code", monospace));
   line-height: var(--editor-line-height, 1.7);
   padding: 1rem;
+}
+
+/* Live and View show a note as text, in the text font; Source mode and code keep the code font.
+   The choice travels in a variable, not in a stronger rule, so a snippet that sets a font on
+   `.cm-editor .cm-scroller` still has the last word. */
+.cm-editor.cm-prose {
+  --cm-font: var(--text-font, "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
 }
 
 .cm-editor .cm-content {

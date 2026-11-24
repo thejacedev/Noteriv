@@ -33,7 +33,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     background: "var(--bg-tertiary)",
     padding: "0.15em 0.4em",
     borderRadius: "4px",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "0.9em",
     color: "var(--mauve)",
   },
@@ -109,7 +109,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
   },
   ".md-code-block-line": {
     background: "color-mix(in srgb, var(--bg-secondary) 60%, transparent)",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "0.9em",
   },
 
@@ -132,7 +132,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
   },
   "& .md-codeblock-lang": {
     color: "var(--text-muted)",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "11px",
     textTransform: "uppercase" as const,
     letterSpacing: "0.04em",
@@ -148,7 +148,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     cursor: "pointer",
     padding: "2px 8px",
     fontSize: "11px",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     transition: "all 0.15s ease",
   },
   "& .md-codeblock-copy:hover": {
@@ -159,6 +159,11 @@ export const markdownRenderTheme = EditorView.baseTheme({
   "& .md-codeblock-copy.copied": {
     color: "var(--green)",
     borderColor: "color-mix(in srgb, var(--green) 40%, transparent)",
+  },
+  // A code block that is being edited shows its lines as they are, in the code font.
+  ".md-codeblock-raw": {
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
+    fontSize: "0.9em",
   },
   ".md-codeblock-hidden": {
     fontSize: "0 !important",
@@ -177,7 +182,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     overflow: "auto",
   },
   "& .md-codeblock-code": {
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "13px",
     lineHeight: "1.35",
     color: "var(--text-primary)",
@@ -201,7 +206,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     border: "1px solid color-mix(in srgb, var(--red) 40%, transparent)",
     background: "color-mix(in srgb, var(--red) 8%, transparent)",
     color: "var(--red)",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "12px",
   },
 
@@ -313,12 +318,12 @@ export const markdownRenderTheme = EditorView.baseTheme({
   },
   ".md-math-block-line": {
     background: "color-mix(in srgb, var(--mauve) 4%, transparent)",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "0.9em",
     color: "var(--mauve)",
   },
   "& .md-math-inline": {
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     fontSize: "0.9em",
     color: "var(--mauve)",
     background: "color-mix(in srgb, var(--mauve) 8%, transparent)",
@@ -490,7 +495,7 @@ export const markdownRenderTheme = EditorView.baseTheme({
     display: "inline-block",
     padding: "0.1em 0.45em",
     fontSize: "0.85em",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)",
     color: "var(--text-primary)",
     background: "var(--bg-tertiary)",
     border: "1px solid var(--border)",
@@ -571,7 +576,7 @@ export const mdHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, color: "var(--text-primary)", fontWeight: "bold" },
   { tag: tags.emphasis, color: "var(--text-primary)", fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through", opacity: "0.6" },
-  { tag: tags.monospace, color: "var(--mauve)", fontFamily: "monospace" },
+  { tag: tags.monospace, color: "var(--mauve)", fontFamily: "var(--editor-font, 'JetBrains Mono', monospace)" },
   { tag: tags.link, color: "var(--accent)" },
   { tag: tags.url, color: "var(--accent)", opacity: "0.7" },
   { tag: tags.quote, color: "var(--text-secondary)" },
@@ -587,8 +592,9 @@ export const editorTheme = EditorView.theme({
     color: "var(--text-primary)",
     fontSize: "var(--editor-font-size, 15px)",
   },
+  // Note text. Code inside it asks for the code font by name (see above).
   ".cm-scroller": {
-    fontFamily: "var(--editor-font, 'JetBrains Mono', 'Fira Code', monospace)",
+    fontFamily: "var(--text-font, 'Inter', system-ui, sans-serif)",
     lineHeight: "var(--editor-line-height, 1.7)",
     padding: "1rem 2rem",
     overflow: "auto",

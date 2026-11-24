@@ -639,6 +639,12 @@ export class CodeBlockTracker {
     // If ANY line in this block has the cursor, show raw markdown for the whole block
     const blockEditing = cursorLines ? this.blockHasCursor(info, cursorLines) : isCursorLine;
 
+    // A block that is being edited shows its own lines, and they are code:
+    // they keep the code font while the note around them is set as text.
+    if (blockEditing) {
+      ctx.builder.add(ctx.line.from, ctx.line.from, Decoration.line({ class: "md-codeblock-raw" }));
+    }
+
     if (ctx.lineNumber === info.openLine) {
       this.inCodeBlock = true;
 
