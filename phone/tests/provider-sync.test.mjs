@@ -147,20 +147,100 @@ test('a refused token is explained with the scope GitLab wants', async () => {
   assert.equal(project.files.has('Inbox.md'), false);
 });
 
-test('a refusal that is not about scope keeps the reason the server gave', async () => {
+test('the check turns away a token whose role cannot read a private repository', async () => {
+  gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  // A project access token made with the Guest role: the "api" scope is there, and it can read nothing.
+  const guest = gitlab.token('glpat-guest', ['api'], 10);
+  const refused = await problem(gitlab.url(PROJECT), guest);
+  assert.match(refused, /may not read the files/);
+  assert.match(refused, /Guest role/);
+  assert.match(refused, /Maintainer role/);
+});
+
+test('the check turns away a token that can read and never write', async () => {
+  gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  const reporter = gitlab.token('glpat-reporter', ['api'], 20);
+  const refused = await problem(gitlab.url(PROJECT), reporter);
+  assert.match(refused, /may read this repository but not write to its branch "main"/);
+  assert.match(refused, /Reporter role/);
+
+  // In a public project Guest reads too, and still cannot write.
+  gitlab.project('me/public', { 'README.md': '# notes\n' }).public = true;
+  const guest = gitlab.token('glpat-guest', ['api'], 10);
+  assert.match(await problem(gitlab.url('me/public'), guest), /not write to its branch "main".*Guest role/);
+});
+
+test('the check names the protected branch for a Developer, and passes once Developers may push', async () => {
   const project = gitlab.project(PROJECT, { 'README.md': '# notes\n' });
-  // A Developer on a project whose default branch only Maintainers may push to.
-  const developer = gitlab.token('glpat-developer', ['api']);
-  project.protectedFrom = [developer];
+  const developer = gitlab.token('glpat-developer', ['api'], 30);
+  const refused = await problem(gitlab.url(PROJECT), developer);
+  assert.match(refused, /not write to its branch "main"/);
+  assert.match(refused, /branch is protected and the token has the Developer role/);
+  assert.match(refused, /Protected branches/);
+
+  project.protected = false;
+  assert.deepEqual(await check(gitlab.url(PROJECT), developer), { ok: true, branch: 'main' });
+  note('Inbox.md', 'from the phone\n');
+  assert.deepEqual(await sync(developer), { pulled: 1, pushed: 1, errors: [] });
+});
+
+test('the check passes a Maintainer and an Owner', async () => {
+  gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  assert.deepEqual(await check(gitlab.url(PROJECT), gitlab.token('glpat-maintainer', ['api'], 40)), { ok: true, branch: 'main' });
+  assert.deepEqual(await check(gitlab.url(PROJECT), api), { ok: true, branch: 'main' });
+});
+
+test('a project with no commits has no branch to ask: only a role that can never write is turned away', async () => {
+  gitlab.project(PROJECT);
+  assert.match(await problem(gitlab.url(PROJECT), gitlab.token('glpat-guest', ['api'], 10)), /may not read the files/);
+  const refused = await problem(gitlab.url(PROJECT), gitlab.token('glpat-reporter', ['api'], 20));
+  assert.match(refused, /may read this repository but not write to it,/);
+  assert.match(refused, /Reporter role/);
+  assert.equal((await check(gitlab.url(PROJECT), gitlab.token('glpat-developer', ['api'], 30))).ok, true);
+  assert.equal((await check(gitlab.url(PROJECT), gitlab.token('glpat-maintainer', ['api'], 40))).ok, true);
+});
+
+test('the check passes a server that does not tell the role', async () => {
+  // An older or stricter GitLab may leave permissions out or refuse the branch question
+  // for a reason of its own: a check that cannot ask must not block a remote that works.
+  gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  const plain = gitlab.fetch;
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(String(input));
+    if (url.pathname.includes('/repository/branches/')) return new Response('{"message":"500 Internal Server Error"}', { status: 500 });
+    const response = await plain(input, options);
+    if (!url.pathname.endsWith(encodeURIComponent(PROJECT))) return response;
+    const { permissions, ...rest } = await response.json();
+    return new Response(JSON.stringify(rest), { status: 200 });
+  };
+  assert.deepEqual(await check(gitlab.url(PROJECT)), { ok: true, branch: 'main' });
+});
+
+test('a refused push names the role and the branch protection, not the scope', async () => {
+  const project = gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  // A vault connected before the check asked about roles: a Developer on a
+  // project whose default branch only Maintainers may push to.
+  const developer = gitlab.token('glpat-developer', ['api'], 30);
   note('Inbox.md', 'from the phone\n');
 
-  assert.equal((await check(gitlab.url(PROJECT), developer)).ok, true);
   const result = await sync(developer);
   assert.equal(result.pulled, 1);
   assert.equal(result.pushed, 0);
-  assert.match(result.errors[0], /You are not allowed to push into this branch/);
+  assert.match(result.errors[0], /Push Inbox\.md: Failed to write file Inbox\.md: the token may not write to this branch \(403\)/);
+  assert.match(result.errors[0], /Maintainer role/);
+  assert.match(result.errors[0], /Protected branches/);
   assert.doesNotMatch(result.errors[0], /"api" scope/);
   assert.equal(notes()['Inbox.md'], 'from the phone\n');
+  assert.equal(project.files.has('Inbox.md'), false);
+});
+
+test('a refused read points at the role as well', async () => {
+  gitlab.project(PROJECT, { 'README.md': '# notes\n' });
+  const guest = gitlab.token('glpat-guest', ['api'], 10);
+  const result = await sync(guest);
+  assert.equal(result.pulled + result.pushed, 0);
+  assert.match(GitSync.describeResult(result), /^Sync failed: Failed to get repository tree: the server refused this \(403: 403 Forbidden\)/);
+  assert.match(result.errors[0], /Guest cannot read a private repository/);
 });
 
 test('notes sync both ways with a project that has commits', async () => {

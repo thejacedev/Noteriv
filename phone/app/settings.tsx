@@ -931,7 +931,7 @@ export default function SettingsScreen() {
             <View style={s.customRemoteForm}>
               <Text style={[s.modalHint, { color: colors.textMuted }]}>
                 {providerInput === 'gitlab'
-                  ? 'For GitLab, enter the HTTPS clone URL and an access token with the "api" scope. A token with only read_repository and write_repository will not work here.'
+                  ? 'For GitLab, enter the HTTPS clone URL and an access token with the "api" scope. A token with only read_repository and write_repository will not work here. A project or group access token also needs the Maintainer role (Developer if the branch is not protected).'
                   : 'For Gitea or Forgejo, enter the HTTPS clone URL and an access token with read and write access to repositories.'}
               </Text>
               <View style={s.providerRow}>
@@ -942,7 +942,7 @@ export default function SettingsScreen() {
                 ))}
               </View>
               <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="https://git.example.com/group/repo.git" placeholderTextColor={colors.textMuted} value={remoteInput} onChangeText={(text) => { setRemoteInput(text); setRemoteError(null); }} autoCapitalize="none" autoCorrect={false} />
-              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Personal access token" placeholderTextColor={colors.textMuted} value={tokenInput} onChangeText={(text) => { setTokenInput(text); setRemoteError(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+              <TextInput style={[s.tokenInput, { color: colors.textPrimary, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} placeholder="Access token" placeholderTextColor={colors.textMuted} value={tokenInput} onChangeText={(text) => { setTokenInput(text); setRemoteError(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry />
               <TouchableOpacity style={[s.connectButton, { backgroundColor: colors.accent }, (!remoteInput.trim() || !tokenInput.trim() || syncing) && { opacity: 0.5 }]} onPress={handleSaveCustomRemote} disabled={!remoteInput.trim() || !tokenInput.trim() || syncing}>
                 <Text style={[s.connectButtonText, { color: colors.bgPrimary }]}>{syncing ? 'Saving...' : 'Save & Sync Remote'}</Text>
               </TouchableOpacity>

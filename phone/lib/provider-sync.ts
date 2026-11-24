@@ -124,8 +124,15 @@ export function explainStatus(provider: SyncProvider, status: number, body = '')
   if (status === 403 && provider === 'gitlab' && body.includes('insufficient_scope')) {
     return 'the token is not allowed to do this (403). A GitLab token needs the "api" scope; read_repository and write_repository are not enough for the phone app.';
   }
+  // GitLab's words for a token whose role may not write to the branch.
+  if (status === 403 && provider === 'gitlab' && body.includes('not allowed to push into this branch')) {
+    return 'the token may not write to this branch (403). Its role is too low, or the branch is protected: give the token the Maintainer role, or allow its role to push under Settings > Repository > Protected branches on GitLab.';
+  }
   const said = serverMessage(body);
-  if (status === 403) return `the server refused this (403${said ? `: ${said}` : ''}). The token or its account may not be allowed to read or change this repository.`;
+  if (status === 403) {
+    const role = provider === 'gitlab' ? ' On GitLab, check the role of the token: Guest cannot read a private repository, and writing needs Developer or Maintainer.' : '';
+    return `the server refused this (403${said ? `: ${said}` : ''}). The token or its account may not be allowed to read or change this repository.${role}`;
+  }
   return `the server answered ${status}${said ? `: ${said}` : ''}.`;
 }
 
@@ -137,10 +144,68 @@ function repositoryPath(remote: Remote): string {
   return remote.provider === 'gitlab' ? `/projects/${encodeURIComponent(remote.project)}` : `/repos/${remote.project}`;
 }
 
-async function branch(remote: Remote, token: string): Promise<string> {
+/** The parts of a repository's own description that the app reads (GitLab's project, Gitea's repository). */
+interface RepositoryInfo {
+  default_branch?: string | null;
+  permissions?: {
+    project_access?: { access_level?: number } | null;
+    group_access?: { access_level?: number } | null;
+  } | null;
+}
+
+/** What the server says about the repository itself: its default branch, and what this token may do with it. */
+async function describeRepository(remote: Remote, token: string): Promise<RepositoryInfo> {
   const response = await api(remote, repositoryPath(remote), token);
   if (!response.ok) throw new Error(`Could not read the repository: ${await refusal(remote, response)}`);
-  return (await response.json()).default_branch ?? 'main';
+  return response.json();
+}
+
+async function branch(remote: Remote, token: string): Promise<string> {
+  return (await describeRepository(remote, token)).default_branch ?? 'main';
+}
+
+const GITLAB_ROLES: Record<number, string> = { 5: 'Minimal Access', 10: 'Guest', 15: 'Planner', 20: 'Reporter', 30: 'Developer', 40: 'Maintainer', 50: 'Owner' };
+
+/** The role a GitLab token has in a project: its own or the one its group gives it, whichever is higher. */
+function gitlabRole(info: RepositoryInfo): number | null {
+  const levels = [info.permissions?.project_access?.access_level, info.permissions?.group_access?.access_level]
+    .filter((level): level is number => typeof level === 'number');
+  return levels.length > 0 ? Math.max(...levels) : null;
+}
+
+/**
+ * What stops a GitLab token from syncing this repository, or null when
+ * nothing does. The "api" scope is not all a token needs. A project or group
+ * access token also has a role, picked when it is created. Guest cannot read
+ * a private repository at all, Reporter reads and cannot write, and Developer
+ * cannot write to a protected branch, which the default branch is unless
+ * someone changed that. Every one of them can read the project's
+ * description, so before this check they all "connected" and then failed on
+ * every sync (issue 51).
+ *
+ * GitLab answers the question itself: a branch says whether this token may
+ * push to it. A repository with no commits has no branch to ask, so there
+ * only a role that can never write is turned away.
+ */
+async function gitlabAccessProblem(remote: Remote, token: string, info: RepositoryInfo, ref: string): Promise<string | null> {
+  const level = gitlabRole(info);
+  const role = level === null ? null : GITLAB_ROLES[level] ?? null;
+  const needs = 'Syncing needs the Maintainer role (Developer is enough when the branch is not protected). For a project or group access token the role is chosen when the token is created.';
+  const response = await api(remote, `${repositoryPath(remote)}/repository/branches/${encodeURIComponent(ref)}`, token);
+  if (response.status === 403) {
+    return `This token may not read the files in this repository.${role ? ` It has the ${role} role.` : ''} ${needs}`;
+  }
+  const readOnly = `This token may read this repository but not write to ${response.ok ? `its branch "${ref}"` : 'it'}, so notes from the phone could not be saved there.`;
+  if (response.ok) {
+    const found = await response.json();
+    if (found.can_push !== false) return null;
+    if (level !== null && level >= 30 && found.protected) {
+      return `${readOnly} The branch is protected and the token has the ${role} role: use a token with the Maintainer role, or allow ${role}s to push under Settings > Repository > Protected branches on GitLab.`;
+    }
+    return `${readOnly}${role ? ` It has the ${role} role.` : ''} ${needs}`;
+  }
+  if (level !== null && level < 30) return `${readOnly} It has the ${role ?? 'a low'} role. ${needs}`;
+  return null;
 }
 
 /**
@@ -221,8 +286,8 @@ export type RemoteCheck = { ok: true; branch: string } | { ok: false; problem: s
  * is saved. A remote that works comes back with its default branch, which is
  * the one to sync (not every repository calls it "main"). One that does not
  * comes back with what is wrong in a sentence. Without this a wrong address, a
- * wrong token and a token with too little scope all looked the same:
- * "connected", and nothing synced.
+ * wrong token, a token with too little scope and a token with too low a role
+ * all looked the same: "connected", and nothing synced.
  */
 export async function checkRemote(remoteUrl: string, token: string, hint?: SyncProvider): Promise<RemoteCheck> {
   const no = (problem: string): RemoteCheck => ({ ok: false, problem });
@@ -241,7 +306,13 @@ export async function checkRemote(remoteUrl: string, token: string, hint?: SyncP
         }
       }
     }
-    return { ok: true, branch: await branch(remote, token) };
+    const info = await describeRepository(remote, token);
+    const ref = info.default_branch ?? 'main';
+    if (remote.provider === 'gitlab') {
+      const problem = await gitlabAccessProblem(remote, token, info, ref);
+      if (problem) return no(problem);
+    }
+    return { ok: true, branch: ref };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith('Could not read the repository')) return no(message);
